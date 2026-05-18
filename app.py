@@ -134,11 +134,8 @@ PLOTLY_LAYOUT = dict(
 )
 
 # ─────────────────────────────────────────────
-#  COLUMNAS REQUERIDAS
+#  HELPERS BÁSICOS
 # ─────────────────────────────────────────────
-REQUIRED_CARTERA = ["Número de Dama", "Año Campaña Saldo"]
-REQUIRED_SALDOS  = ["Número de Dama", "Año Proceso", "Campaña Proceso"]
-
 
 def clean_str(series: pd.Series) -> pd.Series:
     return series.astype(str).str.strip()
@@ -153,46 +150,111 @@ def _find_col(df: pd.DataFrame, candidates: list) -> str | None:
     return None
 
 
+def read_excel_safe(file) -> pd.DataFrame:
+    """Lee el Excel y normaliza nombres de columnas."""
+    df = pd.read_excel(file)
+    df.columns = [str(c).strip() for c in df.columns]
+    return df
+
+
+# ─────────────────────────────────────────────
+#  MAPEO INTERACTIVO DE COLUMNAS
+# ─────────────────────────────────────────────
+
+def render_column_mapper(df_cartera: pd.DataFrame, df_saldos: pd.DataFrame) -> dict | None:
+    """
+    Muestra selectores para que el usuario indique qué columna
+    de su Excel corresponde a cada campo requerido.
+    Retorna el mapping o None si el usuario aún no confirmó.
+    """
+    cols_c = list(df_cartera.columns)
+    cols_s = list(df_saldos.columns)
+
+    st.markdown(
+        f"<div class='card' style='border-left:4px solid {COLORS['warning']};'>"
+        "<b>⚙️ Mapeo de columnas</b> — Selecciona qué columna de tu Excel "
+        "corresponde a cada campo requerido.</div>",
+        unsafe_allow_html=True,
+    )
+
+    col_a, col_b = st.columns(2)
+
+    with col_a:
+        st.markdown("**Cartera**")
+        c_dama = st.selectbox(
+            "Número de Dama →", cols_c,
+            index=_best_guess(cols_c, ["dama", "numero", "nro", "id"]),
+            key="map_c_dama",
+        )
+        c_anio = st.selectbox(
+            "Año Campaña Saldo →", cols_c,
+            index=_best_guess(cols_c, ["año", "anio", "campaña", "saldo"]),
+            key="map_c_anio",
+        )
+
+    with col_b:
+        st.markdown("**Saldos Actualizados**")
+        s_dama = st.selectbox(
+            "Número de Dama →", cols_s,
+            index=_best_guess(cols_s, ["dama", "numero", "nro", "id"]),
+            key="map_s_dama",
+        )
+        s_anio = st.selectbox(
+            "Año Proceso →", cols_s,
+            index=_best_guess(cols_s, ["año", "anio", "proceso"]),
+            key="map_s_anio",
+        )
+        s_camp = st.selectbox(
+            "Campaña Proceso →", cols_s,
+            index=_best_guess(cols_s, ["campaña", "camp", "periodo", "proceso"]),
+            key="map_s_camp",
+        )
+
+    if st.button("✅ Confirmar mapeo y procesar", type="primary"):
+        return {
+            "c_dama": c_dama,
+            "c_anio": c_anio,
+            "s_dama": s_dama,
+            "s_anio": s_anio,
+            "s_camp": s_camp,
+        }
+    return None
+
+
+def _best_guess(cols: list, keywords: list) -> int:
+    """Devuelve el índice de la columna que mejor coincide con las keywords."""
+    for kw in keywords:
+        for i, c in enumerate(cols):
+            if kw in c.lower():
+                return i
+    return 0
+
+
 # ─────────────────────────────────────────────
 #  CARGA Y CRUCE DE DATOS
 # ─────────────────────────────────────────────
 
-def load_and_clean_data(file_cartera, file_saldos) -> dict:
+def load_and_clean_data(df_cartera: pd.DataFrame, df_saldos: pd.DataFrame,
+                        mapping: dict) -> dict:
     """
-    Carga dos archivos Excel separados, aplica las reglas de
-    concatenación y hace el merge entre ambos.
+    Aplica las reglas de concatenación usando el mapping elegido
+    por el usuario y hace el merge entre ambos DataFrames.
     """
-    # ── Leer archivos ─────────────────────────────────────────────────
-    df_cartera = pd.read_excel(file_cartera)
-    df_saldos  = pd.read_excel(file_saldos)
-
-    # ── Normalizar columnas ───────────────────────────────────────────
-    df_cartera.columns = [c.strip() for c in df_cartera.columns]
-    df_saldos.columns  = [c.strip() for c in df_saldos.columns]
-
-    # ── Validar columnas requeridas ───────────────────────────────────
-    missing_c = [c for c in REQUIRED_CARTERA if c not in df_cartera.columns]
-    missing_s = [c for c in REQUIRED_SALDOS  if c not in df_saldos.columns]
-    if missing_c:
-        raise ValueError(f"Columnas faltantes en Cartera: {missing_c}")
-    if missing_s:
-        raise ValueError(f"Columnas faltantes en Saldos: {missing_s}")
-
     # ── Regla 1: Llave Cartera ────────────────────────────────────────
     # [Número de Dama] + [Año Campaña Saldo]
     df_cartera["_key"] = (
-        clean_str(df_cartera["Número de Dama"])
+        clean_str(df_cartera[mapping["c_dama"]])
         + "_"
-        + clean_str(df_cartera["Año Campaña Saldo"])
+        + clean_str(df_cartera[mapping["c_anio"]])
     )
 
     # ── Regla 2: Llave Saldos ─────────────────────────────────────────
     # [Número de Dama] + [Año Proceso] + [Campaña Proceso]
     df_saldos["_key"] = (
-        clean_str(df_saldos["Número de Dama"])
+        clean_str(df_saldos[mapping["s_dama"]])
         + "_"
-        + clean_str(df_saldos["Año Proceso"])
-        + clean_str(df_saldos["Campaña Proceso"])
+        + clean_str(df_saldos[mapping["s_anio"]])
+        + clean_str(df_saldos[mapping["s_camp"]])
     )
 
     # ── Merge ─────────────────────────────────────────────────────────
@@ -835,8 +897,10 @@ def render_welcome():
 # ─────────────────────────────────────────────
 
 def main():
-    if "data" not in st.session_state:
-        st.session_state.data = None
+    if "data"       not in st.session_state: st.session_state.data       = None
+    if "df_cartera" not in st.session_state: st.session_state.df_cartera = None
+    if "df_saldos"  not in st.session_state: st.session_state.df_saldos  = None
+    if "mapping"    not in st.session_state: st.session_state.mapping     = None
 
     filters = render_sidebar(st.session_state.data)
 
@@ -848,31 +912,57 @@ def main():
         col_up1, col_up2 = st.columns(2)
         with col_up1:
             st.markdown("**Archivo 1 — Cartera**")
-            st.caption("Debe contener: `Número de Dama`, `Año Campaña Saldo`")
+            st.caption("Columna de Número de Dama + Año/Campaña de saldo")
             file_cartera = st.file_uploader(
                 "Cartera", type=["xlsx", "xls"], label_visibility="collapsed", key="up_cartera"
             )
         with col_up2:
             st.markdown("**Archivo 2 — Saldos Actualizados**")
-            st.caption("Debe contener: `Número de Dama`, `Año Proceso`, `Campaña Proceso`")
+            st.caption("Columna de Número de Dama + Año Proceso + Campaña Proceso")
             file_saldos = st.file_uploader(
                 "Saldos", type=["xlsx", "xls"], label_visibility="collapsed", key="up_saldos"
             )
 
         if file_cartera and file_saldos:
+            # Leer DFs si no están en sesión o si cambiaron los archivos
+            try:
+                df_c = read_excel_safe(file_cartera)
+                df_s = read_excel_safe(file_saldos)
+                st.session_state.df_cartera = df_c
+                st.session_state.df_saldos  = df_s
+                st.session_state.data       = None  # forzar remapeo si cambian archivos
+                st.session_state.mapping    = None
+            except Exception as e:
+                st.error(f"❌ No se pudo leer el archivo: {e}")
+
+        elif file_cartera or file_saldos:
+            st.info("⏳ Sube los **dos** archivos para continuar.")
+
+    # ── Mapeo de columnas ─────────────────────────────────────────────
+    if (st.session_state.df_cartera is not None
+            and st.session_state.df_saldos is not None
+            and st.session_state.data is None):
+
+        st.divider()
+        mapping = render_column_mapper(
+            st.session_state.df_cartera,
+            st.session_state.df_saldos,
+        )
+        if mapping:
             with st.spinner("Cruzando Cartera × Saldos Actualizados…"):
                 try:
-                    st.session_state.data = load_and_clean_data(file_cartera, file_saldos)
+                    st.session_state.data = load_and_clean_data(
+                        st.session_state.df_cartera.copy(),
+                        st.session_state.df_saldos.copy(),
+                        mapping,
+                    )
+                    st.session_state.mapping = mapping
                     n = len(st.session_state.data["merged"])
                     st.success(f"✅ Cruce completado — **{n:,}** registros consolidados.")
-                except ValueError as e:
-                    st.error(f"❌ Error de validación: {e}")
-                    st.session_state.data = None
+                    st.rerun()
                 except Exception as e:
-                    st.error(f"❌ Error inesperado: {e}")
-                    st.session_state.data = None
-        elif file_cartera or file_saldos:
-            st.info("⏳ Sube los **dos** archivos para procesar el cruce.")
+                    st.error(f"❌ Error al cruzar datos: {e}")
+        return  # esperar confirmación del mapeo antes de mostrar dashboard
 
     # ── Sin datos ─────────────────────────────────────────────────────
     if st.session_state.data is None:
