@@ -897,10 +897,13 @@ def render_welcome():
 # ─────────────────────────────────────────────
 
 def main():
-    if "data"       not in st.session_state: st.session_state.data       = None
-    if "df_cartera" not in st.session_state: st.session_state.df_cartera = None
-    if "df_saldos"  not in st.session_state: st.session_state.df_saldos  = None
-    if "mapping"    not in st.session_state: st.session_state.mapping     = None
+    # ── Inicializar session_state ─────────────────────────────────────
+    for key, default in [
+        ("data", None), ("df_cartera", None), ("df_saldos", None),
+        ("mapping", None), ("file_names", (None, None)),
+    ]:
+        if key not in st.session_state:
+            st.session_state[key] = default
 
     filters = render_sidebar(st.session_state.data)
 
@@ -924,17 +927,17 @@ def main():
             )
 
         if file_cartera and file_saldos:
-            # Leer DFs si no están en sesión o si cambiaron los archivos
-            try:
-                df_c = read_excel_safe(file_cartera)
-                df_s = read_excel_safe(file_saldos)
-                st.session_state.df_cartera = df_c
-                st.session_state.df_saldos  = df_s
-                st.session_state.data       = None  # forzar remapeo si cambian archivos
-                st.session_state.mapping    = None
-            except Exception as e:
-                st.error(f"❌ No se pudo leer el archivo: {e}")
-
+            new_names = (file_cartera.name, file_saldos.name)
+            # Solo re-leer si los archivos cambiaron realmente
+            if new_names != st.session_state.file_names:
+                try:
+                    st.session_state.df_cartera = read_excel_safe(file_cartera)
+                    st.session_state.df_saldos  = read_excel_safe(file_saldos)
+                    st.session_state.data        = None
+                    st.session_state.mapping     = None
+                    st.session_state.file_names  = new_names
+                except Exception as e:
+                    st.error(f"❌ No se pudo leer el archivo: {e}")
         elif file_cartera or file_saldos:
             st.info("⏳ Sube los **dos** archivos para continuar.")
 
