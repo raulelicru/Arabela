@@ -330,16 +330,10 @@ def calculate_metrics(data: dict) -> dict:
     if valor_col and valor_col in df.columns:
         df[valor_col] = pd.to_numeric(df[valor_col], errors="coerce").fillna(0)
         monto_total = df[valor_col].sum()
-
-    if saldo_col and saldo_col in df.columns:
-        # Saldo pendiente = suma de registros donde saldo > 0
-        monto_pendiente = df.loc[df["Estado_Pago"] == "Pendiente", saldo_col].sum()
-        # Cobrado = suma del valor original de quienes ya tienen saldo = 0
-        if valor_col and valor_col in df.columns:
-            monto_cobrado = df.loc[df["Estado_Pago"] == "Pagado", valor_col].sum()
-        else:
-            # Si no hay columna de valor original, cobrado = total - pendiente
-            monto_cobrado = max(0.0, monto_total - monto_pendiente)
+        # Cobrado = suma de Cartera donde Saldos indica saldo = 0 (ya pagaron)
+        monto_cobrado   = df.loc[df["Estado_Pago"] == "Pagado",   valor_col].sum()
+        # Pendiente = Total Cartera - Cobrado (siempre cuadra)
+        monto_pendiente = max(0.0, monto_total - monto_cobrado)
 
     # ── Serie por campaña: eje X = etiqueta de campaña (string) ──────
     camp_col = _find_col(df, ["aniocampaña", "aniocampana", "campaña", "anio", "año", "campaign"])
