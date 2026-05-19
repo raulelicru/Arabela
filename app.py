@@ -616,48 +616,109 @@ def plot_top_damas(df: pd.DataFrame, saldo_col: str, n: int = 15) -> go.Figure:
     return fig
 
 
-def plot_distribucion_saldos(df: pd.DataFrame, saldo_col: str) -> go.Figure:
-    if not saldo_col:
+def plot_cobrado_vs_pendiente(df: pd.DataFrame, valor_col: str) -> go.Figure:
+    """Barras apiladas: cobrado vs pendiente por campaña."""
+    camp_col = _find_col(df, ["aniocampaña", "aniocampana", "anio", "año", "campaña"])
+    if not camp_col or not valor_col or camp_col not in df.columns:
         return _base_fig()
-    vals = df[saldo_col].replace(0, np.nan).dropna()
-    fig  = go.Figure()
-    fig.add_trace(go.Histogram(
-        x=vals, nbinsx=30,
-        marker_color=COLORS["accent"], opacity=0.75,
-        hovertemplate="Rango: %{x}<br>Frecuencia: %{y}<extra></extra>",
+
+    df[valor_col] = pd.to_numeric(df[valor_col], errors="coerce").fillna(0)
+    grp = df.groupby([camp_col, "Estado_Pago"])[valor_col].sum().reset_index()
+    grp[camp_col] = grp[camp_col].astype(str)
+    camps = sorted(grp[camp_col].unique())
+
+    pagado   = grp[grp["Estado_Pago"] == "Pagado"].set_index(camp_col)[valor_col].reindex(camps, fill_value=0)
+    pendiente = grp[grp["Estado_Pago"] == "Pendiente"].set_index(camp_col)[valor_col].reindex(camps, fill_value=0)
+
+    fig = go.Figure()
+    fig.add_trace(go.Bar(
+        x=camps, y=pagado,
+        name="Cobrado", marker_color=COLORS["success"],
+        hovertemplate="<b>Campaña %{x}</b><br>Cobrado: $%{y:,.0f}<extra></extra>",
     ))
-    fig.add_vline(x=vals.mean(), line_dash="dash", line_color=COLORS["warning"],
-                  annotation_text=f"Media: ${vals.mean():,.0f}",
-                  annotation_font=dict(color=COLORS["warning"]))
+    fig.add_trace(go.Bar(
+        x=camps, y=pendiente,
+        name="Pendiente", marker_color=COLORS["danger"],
+        hovertemplate="<b>Campaña %{x}</b><br>Pendiente: $%{y:,.0f}<extra></extra>",
+    ))
     fig.update_layout(
         **PLOTLY_LAYOUT,
-        title_text="Distribución de Saldos Pendientes",
+        title_text="Cobrado vs Pendiente por Campaña",
         title_font=dict(size=14, color=COLORS["primary"]),
-        height=340, xaxis_title="Monto ($)", yaxis_title="Frecuencia",
+        barmode="stack",
+        xaxis_title="Campaña", yaxis_title="Monto ($)",
+        height=380,
     )
     return fig
 
 
-def plot_campana_saldo(df: pd.DataFrame, saldo_col: str) -> go.Figure:
-    camp_col = _find_col(df, ["campaña", "campaign", "año campaña"])
-    if not camp_col or not saldo_col:
+def plot_pagadas_vs_pendientes_campana(df: pd.DataFrame) -> go.Figure:
+    """Cantidad de Damas pagadas vs pendientes por campaña."""
+    camp_col = _find_col(df, ["aniocampaña", "aniocampana", "anio", "año", "campaña"])
+    if not camp_col or camp_col not in df.columns:
         return _base_fig()
-    grp = df.groupby(camp_col)[saldo_col].sum().reset_index().sort_values(camp_col)
+
+    grp = df.groupby([camp_col, "Estado_Pago"]).size().reset_index(name="count")
+    grp[camp_col] = grp[camp_col].astype(str)
+    camps = sorted(grp[camp_col].unique())
+
+    pagado    = grp[grp["Estado_Pago"] == "Pagado"].set_index(camp_col)["count"].reindex(camps, fill_value=0)
+    pendiente = grp[grp["Estado_Pago"] == "Pendiente"].set_index(camp_col)["count"].reindex(camps, fill_value=0)
+
     fig = go.Figure()
     fig.add_trace(go.Bar(
-        x=grp[camp_col].astype(str), y=grp[saldo_col],
-        marker=dict(
-            color=grp[saldo_col],
-            colorscale=[[0, COLORS["success"]], [0.5, COLORS["warning"]], [1, COLORS["danger"]]],
-            showscale=False,
-        ),
-        hovertemplate="Campaña: %{x}<br>Saldo: $%{y:,.2f}<extra></extra>",
+        x=camps, y=pagado,
+        name="Pagadas", marker_color=COLORS["success"],
+        hovertemplate="<b>Campaña %{x}</b><br>Pagadas: %{y:,}<extra></extra>",
+    ))
+    fig.add_trace(go.Bar(
+        x=camps, y=pendiente,
+        name="Pendientes", marker_color=COLORS["danger"],
+        hovertemplate="<b>Campaña %{x}</b><br>Pendientes: %{y:,}<extra></extra>",
     ))
     fig.update_layout(
         **PLOTLY_LAYOUT,
-        title_text="Saldo Pendiente por Campaña",
+        title_text="Damas Pagadas vs Pendientes por Campaña",
         title_font=dict(size=14, color=COLORS["primary"]),
-        xaxis_title="Campaña", yaxis_title="Saldo ($)", height=340,
+        barmode="group",
+        xaxis_title="Campaña", yaxis_title="Número de Damas",
+        height=360,
+    )
+    return fig
+
+
+def plot_pct_cumplimiento_campana(df: pd.DataFrame) -> go.Figure:
+    """% de cumplimiento por campaña."""
+    camp_col = _find_col(df, ["aniocampaña", "aniocampana", "anio", "año", "campaña"])
+    if not camp_col or camp_col not in df.columns:
+        return _base_fig()
+
+    total   = df.groupby(camp_col).size()
+    pagadas = df[df["Estado_Pago"] == "Pagado"].groupby(camp_col).size()
+    pct     = (pagadas / total * 100).fillna(0).reset_index()
+    pct.columns = ["campaña", "pct"]
+    pct["campaña"] = pct["campaña"].astype(str)
+    pct = pct.sort_values("campaña")
+
+    fig = go.Figure()
+    fig.add_trace(go.Bar(
+        x=pct["campaña"], y=pct["pct"],
+        marker=dict(
+            color=pct["pct"],
+            colorscale=[[0, COLORS["danger"]], [0.5, COLORS["warning"]], [1, COLORS["success"]]],
+            showscale=False,
+        ),
+        hovertemplate="<b>Campaña %{x}</b><br>Cumplimiento: %{y:.1f}%<extra></extra>",
+    ))
+    fig.add_hline(y=50, line_dash="dash", line_color=COLORS["muted"],
+                  annotation_text="50%", annotation_font_color=COLORS["muted"])
+    fig.update_layout(
+        **PLOTLY_LAYOUT,
+        title_text="% de Cumplimiento de Pago por Campaña",
+        title_font=dict(size=14, color=COLORS["primary"]),
+        xaxis_title="Campaña", yaxis_title="% Cumplimiento",
+        yaxis_range=[0, 105],
+        height=340,
     )
     return fig
 
@@ -690,7 +751,7 @@ def section_header(title: str, subtitle: str = ""):
 def render_sidebar(data: dict | None) -> dict:
     filters = {}
     with st.sidebar:
-        st.markdown(f"## 💼 Cartera Dashboard")
+        st.markdown("## 💼 Cartera Dashboard")
         st.markdown(
             f"<span style='color:{COLORS['muted']};font-size:0.8rem'>Gestión Financiera Profesional</span>",
             unsafe_allow_html=True,
@@ -699,27 +760,36 @@ def render_sidebar(data: dict | None) -> dict:
 
         if data:
             df = data["merged"]
-            st.markdown("#### Filtros Globales")
+            st.markdown("#### Filtros")
 
-            estados = ["Todos"] + sorted(df["Estado_Pago"].unique().tolist())
+            # ── Filtro principal: Año Campaña Saldo (multiselect) ─────
+            camp_col = _find_col(df, ["aniocampaña", "aniocampana", "anio", "año", "campaña"])
+            if camp_col and camp_col in df.columns:
+                camps_disponibles = sorted(df[camp_col].astype(str).unique().tolist())
+                seleccion = st.multiselect(
+                    "Año Campaña Saldo",
+                    options=camps_disponibles,
+                    default=[],
+                    placeholder="Todas las campañas",
+                )
+                filters["campañas"] = seleccion
+                filters["camp_col"] = camp_col
+
+            # ── Filtro: Estado de Pago ─────────────────────────────────
+            estados = ["Todos", "Pagado", "Pendiente"]
             filters["estado"] = st.selectbox("Estado de Pago", estados)
 
-            dama_col = "Número de Dama_cartera" if "Número de Dama_cartera" in df.columns else "Número de Dama"
-            if dama_col in df.columns:
-                damas = ["Todos"] + sorted(df[dama_col].astype(str).unique().tolist())
-                filters["dama"] = st.selectbox("Número de Dama", damas)
-
-            camp_col = _find_col(df, ["campaña", "campaign", "año campaña"])
-            if camp_col:
-                camps = ["Todos"] + sorted(df[camp_col].astype(str).unique().tolist())
-                filters["campaña"] = st.selectbox("Campaña", camps)
-
             st.divider()
+
+            # ── Resumen en tiempo real ─────────────────────────────────
+            total    = len(df)
+            pagados  = (df["Estado_Pago"] == "Pagado").sum()
+            pend     = total - pagados
             st.markdown(
                 f"<small style='color:{COLORS['muted']}'>"
-                f"📊 Registros cruzados: <b>{len(df):,}</b><br>"
-                f"✅ Pagados: <b>{(df['Estado_Pago']=='Pagado').sum():,}</b><br>"
-                f"⏳ Pendientes: <b>{(df['Estado_Pago']=='Pendiente').sum():,}</b>"
+                f"📊 Total registros: <b>{total:,}</b><br>"
+                f"✅ Pagadas: <b>{pagados:,}</b><br>"
+                f"🔴 Pendientes: <b>{pend:,}</b>"
                 f"</small>",
                 unsafe_allow_html=True,
             )
@@ -728,7 +798,7 @@ def render_sidebar(data: dict | None) -> dict:
 
         st.divider()
         st.markdown(
-            f"<small style='color:{COLORS['muted']}'>RSI: 14 períodos<br>Proyección: 30 días<br>Modelo: Regresión Lineal</small>",
+            f"<small style='color:{COLORS['muted']}'>Proyección: Regresión Lineal</small>",
             unsafe_allow_html=True,
         )
     return filters
@@ -736,16 +806,14 @@ def render_sidebar(data: dict | None) -> dict:
 
 def apply_filters(df: pd.DataFrame, filters: dict) -> pd.DataFrame:
     dff = df.copy()
+    # Filtro por Año Campaña Saldo (multiselect)
+    camp_col = filters.get("camp_col")
+    seleccion = filters.get("campañas", [])
+    if camp_col and seleccion and camp_col in dff.columns:
+        dff = dff[dff[camp_col].astype(str).isin(seleccion)]
+    # Filtro por estado
     if filters.get("estado") and filters["estado"] != "Todos":
         dff = dff[dff["Estado_Pago"] == filters["estado"]]
-    if filters.get("dama") and filters["dama"] != "Todos":
-        col = "Número de Dama_cartera" if "Número de Dama_cartera" in dff.columns else "Número de Dama"
-        if col in dff.columns:
-            dff = dff[dff[col].astype(str) == filters["dama"]]
-    if filters.get("campaña") and filters["campaña"] != "Todos":
-        camp_col = _find_col(dff, ["campaña", "campaign", "año campaña"])
-        if camp_col:
-            dff = dff[dff[camp_col].astype(str) == filters["campaña"]]
     return dff
 
 
@@ -762,74 +830,65 @@ def tab_resumen(metrics: dict, filters: dict):
     with c2:
         st.metric("Total Cartera", fmt_currency(metrics["monto_total"]))
     with c3:
-        st.metric(
-            "Total Cobrado",
-            fmt_currency(metrics["monto_cobrado"]),
-            delta=f"+{metrics['monto_cobrado']/metrics['monto_total']*100:.1f}%" if metrics["monto_total"] else None,
-        )
+        st.metric("Total Cobrado", fmt_currency(metrics["monto_cobrado"]),
+                  delta=f"+{metrics['monto_cobrado']/metrics['monto_total']*100:.1f}%" if metrics["monto_total"] else None)
     with c4:
-        st.metric(
-            "Saldo Pendiente",
-            fmt_currency(metrics["monto_pendiente"]),
-            delta=f"-{metrics['pendientes']} registros",
-            delta_color="inverse",
-        )
+        st.metric("Saldo Pendiente", fmt_currency(metrics["monto_pendiente"]),
+                  delta=f"{metrics['pendientes']:,} damas", delta_color="inverse")
     with c5:
-        st.metric(
-            "% Cumplimiento",
-            f"{metrics['pct_cumplimiento']:.1f}%",
-            delta=f"{metrics['pagados']} pagadas",
-        )
+        st.metric("% Cumplimiento", f"{metrics['pct_cumplimiento']:.1f}%",
+                  delta=f"{metrics['pagados']:,} pagadas")
 
-    st.markdown("")
+    st.divider()
+
+    # ── Fila 1: Donut + Cobrado vs Pendiente por campaña ──────────────
     col_a, col_b = st.columns([1, 2])
     with col_a:
         st.plotly_chart(plot_kpi_donut(metrics["pagados"], metrics["pendientes"]),
                         use_container_width=True, config={"displayModeBar": False},
                         key="chart_donut")
     with col_b:
-        st.plotly_chart(plot_saldo_por_estado(metrics["df"], metrics["saldo_col"]),
-                        use_container_width=True, key="chart_estado")
+        st.plotly_chart(plot_cobrado_vs_pendiente(metrics["df"], metrics["valor_col"]),
+                        use_container_width=True, key="chart_cobrado")
 
     st.divider()
+
+    # ── Fila 2: % Cumplimiento + Damas por campaña ────────────────────
     col_c, col_d = st.columns(2)
     with col_c:
-        st.plotly_chart(plot_campana_saldo(metrics["df"], metrics["saldo_col"]),
-                        use_container_width=True, key="chart_campana")
+        st.plotly_chart(plot_pct_cumplimiento_campana(metrics["df"]),
+                        use_container_width=True, key="chart_pct")
     with col_d:
-        st.plotly_chart(plot_distribucion_saldos(metrics["df"], metrics["saldo_col"]),
-                        use_container_width=True, key="chart_dist")
+        st.plotly_chart(plot_pagadas_vs_pendientes_campana(metrics["df"]),
+                        use_container_width=True, key="chart_damas_camp")
 
     st.divider()
-    section_header("Datos Consolidados", "Primeros 200 registros del cruce Cartera × Saldos")
-    st.dataframe(metrics["df"].head(200), use_container_width=True, height=320)
+    section_header("Datos Consolidados", "Primeros 200 registros")
+    st.dataframe(metrics["df"].head(200), use_container_width=True, height=300)
 
 
 def tab_pagos(metrics: dict):
-    section_header("Análisis de Pagos y Saldos", "Detalle por Dama, campaña y evolución")
+    section_header("Análisis de Pagos", "Detalle por Dama y campaña")
 
-    st.plotly_chart(plot_time_series(metrics["ts"]), use_container_width=True,
-                    key="chart_timeseries")
-
-    st.divider()
+    # ── Top Damas pendientes ──────────────────────────────────────────
     col_l, col_r = st.columns([2, 1])
     with col_l:
         top_n = st.slider("Número de Damas a mostrar", 5, 30, 15)
-        st.plotly_chart(plot_top_damas(metrics["df"], metrics["saldo_col"], top_n),
+        st.plotly_chart(plot_top_damas(metrics["df"], metrics["valor_col"], top_n),
                         use_container_width=True, key="chart_topdamas")
     with col_r:
-        section_header("Estadísticas de Saldo")
-        if metrics["saldo_col"]:
-            s = metrics["df"][metrics["saldo_col"]]
-            st.metric("Promedio",   fmt_currency(s.mean()))
-            st.metric("Mediana",    fmt_currency(s.median()))
-            st.metric("Máximo",     fmt_currency(s.max()))
-            st.metric("Desv. Est.", fmt_currency(s.std()))
+        section_header("Estadísticas")
+        if metrics["valor_col"] and metrics["valor_col"] in metrics["df"].columns:
+            s = metrics["df"][metrics["valor_col"]]
+            st.metric("Promedio por Dama", fmt_currency(s.mean()))
+            st.metric("Máximo",            fmt_currency(s.max()))
+            st.metric("Total Damas",       f"{metrics['total_registros']:,}")
+            st.metric("Ya Pagaron",        f"{metrics['pagados']:,}")
         else:
-            st.info("Sin columna de saldo detectada.")
+            st.info("Sin columna de valor detectada.")
 
     st.divider()
-    section_header("Exportar Datos Filtrados")
+    section_header("Exportar datos filtrados")
     buf = io.BytesIO()
     metrics["df"].to_excel(buf, index=False)
     buf.seek(0)
@@ -841,57 +900,38 @@ def tab_pagos(metrics: dict):
     )
 
 
-def tab_tecnico(metrics: dict):
-    section_header("Indicadores Técnicos y Predicciones", "RSI 14 períodos · Proyección 30 días")
+def tab_proyeccion(metrics: dict):
+    section_header("Proyección de Recuperación", "Estimación de saldos por campaña · Regresión Lineal")
 
-    st.plotly_chart(plot_rsi(metrics["ts"]), use_container_width=True, key="chart_rsi")
-
-    rsi_serie  = calculate_rsi(metrics["ts"]["valor"])
-    rsi_actual = rsi_serie.dropna().iloc[-1] if not rsi_serie.dropna().empty else 50
-    zona       = "Sobrecompra ⚠" if rsi_actual > 70 else ("Sobreventa ✅" if rsi_actual < 30 else "Zona Neutral")
-
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.metric("RSI Actual (14)", f"{rsi_actual:.1f}", delta=zona)
-    with col2:
-        st.metric("Señal",
-                  "Venta / Alta Recaudación" if rsi_actual > 70
-                  else ("Compra / Baja Recaudación" if rsi_actual < 30 else "Neutral"))
-    with col3:
-        pct = (
-            (metrics["ts"]["valor"].iloc[-1] - metrics["ts"]["valor"].iloc[-2])
-            / metrics["ts"]["valor"].iloc[-2] * 100
-            if len(metrics["ts"]) >= 2 and metrics["ts"]["valor"].iloc[-2] != 0 else 0.0
-        )
-        st.metric("Variación Último Período", f"{pct:+.2f}%")
-
-    st.divider()
-    section_header("Proyección de Recuperación", "Regresión Lineal · scikit-learn")
     pred_df = predict_recovery(metrics["ts"])
-    st.plotly_chart(plot_prediction(metrics["ts"], pred_df), use_container_width=True,
-                    key="chart_prediction")
+    st.plotly_chart(plot_prediction(metrics["ts"], pred_df),
+                    use_container_width=True, key="chart_prediction")
 
     if not pred_df.empty:
-        col_p1, col_p2, col_p3 = st.columns(3)
-        with col_p1:
-            st.metric("Proyección en 30 días", fmt_currency(pred_df["prediccion"].iloc[-1]))
-        with col_p2:
-            st.metric("Límite Superior (IC)",  fmt_currency(pred_df["upper"].iloc[-1]))
-        with col_p3:
-            st.metric("Límite Inferior (IC)",  fmt_currency(pred_df["lower"].iloc[-1]))
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Proyección próxima campaña", fmt_currency(pred_df["prediccion"].iloc[0]))
+        with col2:
+            st.metric("Límite Superior",  fmt_currency(pred_df["upper"].iloc[0]))
+        with col3:
+            st.metric("Límite Inferior",  fmt_currency(pred_df["lower"].iloc[0]))
 
         tendencia = (
-            "📈 Tendencia Alcista · Mejora en Recaudación"
+            "📈 Tendencia Alcista · Los saldos van subiendo"
             if pred_df["prediccion"].iloc[-1] > pred_df["prediccion"].iloc[0]
-            else "📉 Tendencia Bajista · Saldos en Aumento"
+            else "📉 Tendencia Bajista · Los saldos van bajando (mejora en cobro)"
         )
         st.markdown(
-            f"<div class='card' style='border-left: 4px solid {COLORS['accent']};'>"
-            f"<b style='color:{COLORS['primary']}'>Diagnóstico Predictivo</b><br>"
-            f"<span style='font-size:1rem'>{tendencia}</span>"
+            f"<div class='card' style='border-left:4px solid {COLORS['accent']};'>"
+            f"<b style='color:{COLORS['primary']}'>Diagnóstico</b><br>{tendencia}"
             f"</div>",
             unsafe_allow_html=True,
         )
+
+    st.divider()
+    section_header("Saldo Pendiente por Campaña", "Histórico real")
+    st.plotly_chart(plot_time_series(metrics["ts"]), use_container_width=True,
+                    key="chart_timeseries")
 
 
 # ─────────────────────────────────────────────
@@ -1013,22 +1053,29 @@ def main():
     filtered_data   = {**st.session_state.data, "merged": filtered_merged}
     metrics         = calculate_metrics(filtered_data)
 
-    active = [f"**{k}**: {v}" for k, v in filters.items() if v and v != "Todos"]
-    if active:
-        st.info("🔍 Filtros activos: " + " · ".join(active))
+    # Banner de filtros activos
+    campañas_sel = filters.get("campañas", [])
+    estado_sel   = filters.get("estado", "Todos")
+    partes = []
+    if campañas_sel:
+        partes.append(f"Campaña: **{', '.join(campañas_sel)}**")
+    if estado_sel != "Todos":
+        partes.append(f"Estado: **{estado_sel}**")
+    if partes:
+        st.info("🔍 Filtros activos — " + " · ".join(partes))
 
     # ── Tabs ──────────────────────────────────────────────────────────
     tab1, tab2, tab3 = st.tabs([
         "📊 Resumen General (KPIs)",
-        "💳 Análisis de Pagos y Saldos",
-        "🔬 Indicadores Técnicos y Predicciones",
+        "💳 Análisis de Pagos",
+        "📈 Proyección de Recuperación",
     ])
     with tab1:
         tab_resumen(metrics, filters)
     with tab2:
         tab_pagos(metrics)
     with tab3:
-        tab_tecnico(metrics)
+        tab_proyeccion(metrics)
 
 
 if __name__ == "__main__":
