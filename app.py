@@ -312,8 +312,7 @@ def load_and_clean_data(df_cartera: pd.DataFrame, df_saldos: pd.DataFrame,
 def calculate_metrics(data: dict) -> dict:
     df        = data["merged"]
     saldo_col = data["saldo_col"]
-    # Usar valor_col del mapping; si no hay, intentar autodetectar
-    valor_col = data.get("valor_col") or _find_col(df, ["valor", "monto", "deuda", "total"])
+    valor_col = data.get("valor_col") or _find_col(df, ["saldocampaña", "saldocampana", "valor", "monto", "deuda", "total"])
 
     total_registros  = len(df)
     pagados          = (df["Estado_Pago"] == "Pagado").sum()
@@ -327,31 +326,38 @@ def calculate_metrics(data: dict) -> dict:
     if valor_col and valor_col in df.columns:
         df[valor_col] = pd.to_numeric(df[valor_col], errors="coerce").fillna(0)
         monto_total = df[valor_col].sum()
-    if saldo_col and saldo_col in df.columns:
-        monto_pendiente = df[saldo_col].sum()
-        monto_cobrado   = monto_total - monto_pendiente if valor_col else 0
 
-    # ── Serie temporal ────────────────────────────────────────────────
-    fecha_col = _find_col(df, ["fecha", "date", "periodo", "mes"])
-    if fecha_col and saldo_col:
-        df[fecha_col] = pd.to_datetime(df[fecha_col], errors="coerce")
+    if saldo_col and saldo_col in df.columns:
+        # Saldo pendiente = suma de registros donde saldo > 0
+        monto_pendiente = df.loc[df["Estado_Pago"] == "Pendiente", saldo_col].sum()
+        # Cobrado = suma del valor original de quienes ya tienen saldo = 0
+        if valor_col and valor_col in df.columns:
+            monto_cobrado = df.loc[df["Estado_Pago"] == "Pagado", valor_col].sum()
+        else:
+            # Si no hay columna de valor original, cobrado = total - pendiente
+            monto_cobrado = max(0.0, monto_total - monto_pendiente)
+
+    # ── Serie temporal por campaña (saldo pendiente acumulado) ────────
+    camp_col = _find_col(df, ["aniocampaña", "aniocampana", "campaña", "anio", "año", "campaign"])
+    if camp_col and saldo_col and camp_col in df.columns:
         ts = (
-            df.dropna(subset=[fecha_col])
-            .sort_values(fecha_col)
-            .groupby(fecha_col)[saldo_col]
+            df.groupby(camp_col)[saldo_col]
             .sum()
             .reset_index()
+            .sort_values(camp_col)
+            .rename(columns={camp_col: "fecha", saldo_col: "valor"})
         )
-        ts.columns = ["fecha", "valor"]
     else:
-        camp_col = _find_col(df, ["campaña", "campaign", "año campaña"])
-        if camp_col and saldo_col:
+        fecha_col = _find_col(df, ["fecha", "date", "periodo", "mes"])
+        if fecha_col and saldo_col and fecha_col in df.columns:
+            df[fecha_col] = pd.to_datetime(df[fecha_col], errors="coerce")
             ts = (
-                df.groupby(camp_col)[saldo_col]
+                df.dropna(subset=[fecha_col])
+                .sort_values(fecha_col)
+                .groupby(fecha_col)[saldo_col]
                 .sum()
                 .reset_index()
-                .sort_values(camp_col)
-                .rename(columns={camp_col: "fecha", saldo_col: "valor"})
+                .rename(columns={fecha_col: "fecha", saldo_col: "valor"})
             )
         else:
             n  = min(60, total_registros)
