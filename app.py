@@ -224,7 +224,7 @@ def render_column_mapper(df_cartera: pd.DataFrame, df_saldos: pd.DataFrame) -> d
     c_monto = st.selectbox(
         "Columna con la deuda original de Cartera",
         ["(ninguna)"] + cols_c,
-        index=_best_guess(["(ninguna)"] + cols_c, ["valor", "monto", "deuda", "total"]),
+        index=_best_guess(["(ninguna)"] + cols_c, ["saldocampaña", "saldocampana", "valor", "monto", "deuda", "total"]),
         key="map_c_monto",
         help="Si existe, permite calcular Total Cartera y Total Cobrado.",
     )
