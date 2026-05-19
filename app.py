@@ -167,8 +167,9 @@ def render_column_mapper(df_cartera: pd.DataFrame, df_saldos: pd.DataFrame) -> d
     de su Excel corresponde a cada campo requerido.
     Retorna el mapping o None si el usuario aún no confirmó.
     """
-    cols_c = list(df_cartera.columns)
-    cols_s = list(df_saldos.columns)
+    cols_c   = list(df_cartera.columns)
+    cols_s   = list(df_saldos.columns)
+    ninguna  = ["(ninguna)"]
 
     st.markdown(
         f"<div class='card' style='border-left:4px solid {COLORS['warning']};'>"
@@ -177,6 +178,8 @@ def render_column_mapper(df_cartera: pd.DataFrame, df_saldos: pd.DataFrame) -> d
         unsafe_allow_html=True,
     )
 
+    # ── Fila 1: llaves de cruce ───────────────────────────────────────
+    st.markdown("##### 🔑 Llaves de cruce")
     col_a, col_b = st.columns(2)
 
     with col_a:
@@ -210,13 +213,47 @@ def render_column_mapper(df_cartera: pd.DataFrame, df_saldos: pd.DataFrame) -> d
             key="map_s_camp",
         )
 
+    # ── Fila 2: columnas de valor ─────────────────────────────────────
+    st.markdown("##### 💰 Columnas de valor (para KPIs y gráficas)")
+    col_c, col_d = st.columns(2)
+
+    with col_c:
+        st.markdown("**Cartera — Monto / Deuda original**")
+        c_monto = st.selectbox(
+            "Columna de monto total →",
+            ninguna + cols_c,
+            index=_best_guess(ninguna + cols_c, ["valor", "monto", "deuda", "total", "saldo"]),
+            key="map_c_monto",
+            help="La columna que contiene el valor original de la deuda de cada Dama.",
+        )
+
+    with col_d:
+        st.markdown("**Saldos — Saldo actualizado / pendiente**")
+        s_saldo = st.selectbox(
+            "Columna de saldo actualizado →",
+            ninguna + cols_s,
+            index=_best_guess(ninguna + cols_s, ["saldo", "pendiente", "valor", "monto"]),
+            key="map_s_saldo",
+            help="La columna con el saldo vigente que aún deben las Damas.",
+        )
+        s_estado = st.selectbox(
+            "Columna de estado (opcional) →",
+            ninguna + cols_s,
+            index=_best_guess(ninguna + cols_s, ["estado", "status", "liquidado", "pagado"]),
+            key="map_s_estado",
+            help="Columna que indica si la Dama ya pagó (ej. 'Liquidado', 'Pagado').",
+        )
+
     if st.button("✅ Confirmar mapeo y procesar", type="primary"):
         return {
-            "c_dama": c_dama,
-            "c_anio": c_anio,
-            "s_dama": s_dama,
-            "s_anio": s_anio,
-            "s_camp": s_camp,
+            "c_dama":   c_dama,
+            "c_anio":   c_anio,
+            "c_monto":  None if c_monto == "(ninguna)" else c_monto,
+            "s_dama":   s_dama,
+            "s_anio":   s_anio,
+            "s_camp":   s_camp,
+            "s_saldo":  None if s_saldo  == "(ninguna)" else s_saldo,
+            "s_estado": None if s_estado == "(ninguna)" else s_estado,
         }
     return None
 
@@ -266,10 +303,23 @@ def load_and_clean_data(df_cartera: pd.DataFrame, df_saldos: pd.DataFrame,
         suffixes=("_cartera", "_saldos"),
     )
 
-    # ── Estado de pago ────────────────────────────────────────────────
-    saldo_col  = _find_col(df_merged, ["saldo actualizado", "saldo_actualizado", "saldo"])
-    estado_col = _find_col(df_merged, ["estado", "status", "liquidado"])
+    # ── Resolver nombres reales de columnas tras el merge ─────────────
+    # Las columnas de saldos pueden quedar con sufijo _saldos si colisionan
+    def resolve(col, suffix="_saldos"):
+        if col is None:
+            return None
+        if col in df_merged.columns:
+            return col
+        candidate = col + suffix
+        if candidate in df_merged.columns:
+            return candidate
+        return None
 
+    saldo_col  = resolve(mapping.get("s_saldo"))
+    estado_col = resolve(mapping.get("s_estado"))
+    valor_col  = resolve(mapping.get("c_monto"), suffix="_cartera")
+
+    # ── Estado de pago ────────────────────────────────────────────────
     if saldo_col:
         df_merged[saldo_col] = pd.to_numeric(df_merged[saldo_col], errors="coerce").fillna(0)
         pagado_mask = df_merged[saldo_col] == 0
@@ -284,9 +334,10 @@ def load_and_clean_data(df_cartera: pd.DataFrame, df_saldos: pd.DataFrame,
     df_merged["Estado_Pago"] = np.where(pagado_mask, "Pagado", "Pendiente")
 
     return {
-        "cartera":  df_cartera,
-        "saldos":   df_saldos,
-        "merged":   df_merged,
+        "cartera":   df_cartera,
+        "saldos":    df_saldos,
+        "merged":    df_merged,
+        "valor_col": valor_col,
         "saldo_col":  saldo_col,
         "estado_col": estado_col,
     }
@@ -299,21 +350,22 @@ def load_and_clean_data(df_cartera: pd.DataFrame, df_saldos: pd.DataFrame,
 def calculate_metrics(data: dict) -> dict:
     df        = data["merged"]
     saldo_col = data["saldo_col"]
+    # Usar valor_col del mapping; si no hay, intentar autodetectar
+    valor_col = data.get("valor_col") or _find_col(df, ["valor", "monto", "deuda", "total"])
 
     total_registros  = len(df)
     pagados          = (df["Estado_Pago"] == "Pagado").sum()
     pendientes       = total_registros - pagados
     pct_cumplimiento = pagados / total_registros * 100 if total_registros else 0
 
-    valor_col       = _find_col(df, ["valor", "monto", "deuda", "total"])
     monto_total     = 0.0
     monto_pendiente = 0.0
     monto_cobrado   = 0.0
 
-    if valor_col:
+    if valor_col and valor_col in df.columns:
         df[valor_col] = pd.to_numeric(df[valor_col], errors="coerce").fillna(0)
         monto_total = df[valor_col].sum()
-    if saldo_col:
+    if saldo_col and saldo_col in df.columns:
         monto_pendiente = df[saldo_col].sum()
         monto_cobrado   = monto_total - monto_pendiente if valor_col else 0
 
