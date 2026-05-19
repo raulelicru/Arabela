@@ -596,7 +596,9 @@ def plot_prediction(ts: pd.DataFrame, pred_df: pd.DataFrame) -> go.Figure:
         hovertemplate="Proyección: $%{y:,.2f}<extra></extra>",
     ))
     last_hist = ts["fecha"].iloc[-1] if not pd.api.types.is_integer_dtype(ts["fecha"]) else pd.Timestamp("today")
-    fig.add_vline(x=last_hist, line_dash="dot", line_color=COLORS["muted"],
+    # Convertir a string ISO para evitar error de Timestamp en Plotly con pandas moderno
+    last_hist_str = str(pd.Timestamp(last_hist))[:10]
+    fig.add_vline(x=last_hist_str, line_dash="dot", line_color=COLORS["muted"],
                   annotation_text="Hoy", annotation_position="top",
                   annotation_font=dict(color=COLORS["muted"]))
     fig.update_layout(
