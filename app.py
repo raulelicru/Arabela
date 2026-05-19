@@ -337,17 +337,19 @@ def calculate_metrics(data: dict) -> dict:
             # Si no hay columna de valor original, cobrado = total - pendiente
             monto_cobrado = max(0.0, monto_total - monto_pendiente)
 
-    # ── Serie temporal por campaña (saldo pendiente acumulado) ────────
+    # ── Serie por campaña: eje X = etiqueta de campaña (string) ──────
     camp_col = _find_col(df, ["aniocampaña", "aniocampana", "campaña", "anio", "año", "campaign"])
     if camp_col and saldo_col and camp_col in df.columns:
-        ts = (
+        grp = (
             df.groupby(camp_col)[saldo_col]
             .sum()
             .reset_index()
             .sort_values(camp_col)
-            .rename(columns={camp_col: "fecha", saldo_col: "valor"})
         )
+        grp[camp_col] = grp[camp_col].astype(str)   # siempre string → sin fechas falsas
+        ts = grp.rename(columns={camp_col: "fecha", saldo_col: "valor"})
     else:
+        # Fallback: serie con fechas reales si existe columna de fecha
         fecha_col = _find_col(df, ["fecha", "date", "periodo", "mes"])
         if fecha_col and saldo_col and fecha_col in df.columns:
             df[fecha_col] = pd.to_datetime(df[fecha_col], errors="coerce")
@@ -362,7 +364,7 @@ def calculate_metrics(data: dict) -> dict:
         else:
             n  = min(60, total_registros)
             ts = pd.DataFrame({
-                "fecha": pd.date_range("2024-01-01", periods=n, freq="W"),
+                "fecha": [f"Semana {i+1}" for i in range(n)],
                 "valor": np.cumsum(np.random.normal(500, 200, n)),
             })
 
@@ -476,24 +478,33 @@ def plot_saldo_por_estado(df: pd.DataFrame, saldo_col: str) -> go.Figure:
 
 def plot_time_series(ts: pd.DataFrame) -> go.Figure:
     fig = _base_fig()
-    fig.add_trace(go.Scatter(
+
+    # Barras de saldo pendiente por campaña
+    fig.add_trace(go.Bar(
         x=ts["fecha"], y=ts["valor"],
-        mode="lines+markers", name="Saldo / Recaudación",
-        line=dict(color=COLORS["accent"], width=2),
-        marker=dict(size=5, color=COLORS["accent"]),
-        hovertemplate="<b>%{x}</b><br>Valor: $%{y:,.2f}<extra></extra>",
+        name="Saldo Pendiente",
+        marker_color=COLORS["accent"],
+        opacity=0.85,
+        hovertemplate="<b>Campaña %{x}</b><br>Saldo: $%{y:,.0f}<extra></extra>",
     ))
-    if len(ts) >= 7:
-        ma = ts["valor"].rolling(7).mean()
+
+    # Línea de tendencia encima
+    if len(ts) >= 3:
         fig.add_trace(go.Scatter(
-            x=ts["fecha"], y=ma,
-            mode="lines", name="Media Móvil (7)",
-            line=dict(color=COLORS["warning"], width=1.5, dash="dot"),
+            x=ts["fecha"], y=ts["valor"].rolling(3, min_periods=1).mean(),
+            mode="lines", name="Tendencia",
+            line=dict(color=COLORS["warning"], width=2, dash="dot"),
+            hovertemplate="Tendencia: $%{y:,.0f}<extra></extra>",
         ))
+
     fig.update_layout(
-        title_text="Evolución Histórica de Saldos / Recaudación",
+        title_text="Saldo Pendiente por Campaña",
         title_font=dict(size=14, color=COLORS["primary"]),
-        height=350, dragmode="zoom",
+        xaxis_title="Campaña",
+        yaxis_title="Saldo ($)",
+        height=380,
+        dragmode="zoom",
+        bargap=0.2,
     )
     return fig
 
@@ -539,11 +550,12 @@ def plot_rsi(ts: pd.DataFrame) -> go.Figure:
 
 def plot_prediction(ts: pd.DataFrame, pred_df: pd.DataFrame) -> go.Figure:
     fig = _base_fig()
-    fig.add_trace(go.Scatter(
+    fig.add_trace(go.Bar(
         x=ts["fecha"], y=ts["valor"],
-        mode="lines+markers", name="Histórico",
-        line=dict(color=COLORS["accent"], width=2),
-        marker=dict(size=4),
+        name="Histórico por Campaña",
+        marker_color=COLORS["accent"],
+        opacity=0.8,
+        hovertemplate="<b>Campaña %{x}</b><br>Saldo: $%{y:,.0f}<extra></extra>",
     ))
     if pred_df.empty:
         fig.update_layout(title_text="Predicción (datos insuficientes)", height=400)
@@ -563,24 +575,14 @@ def plot_prediction(ts: pd.DataFrame, pred_df: pd.DataFrame) -> go.Figure:
         line=dict(color=COLORS["warning"], width=2.5, dash="dash"),
         hovertemplate="Proyección: $%{y:,.2f}<extra></extra>",
     ))
-    last_hist = ts["fecha"].iloc[-1]
-    # Usar add_shape en lugar de add_vline para evitar conflictos de tipo en eje X
-    fig.add_shape(
-        type="line",
-        x0=last_hist, x1=last_hist,
-        y0=0, y1=1, yref="paper",
-        line=dict(dash="dot", color=COLORS["muted"], width=1.5),
-    )
-    fig.add_annotation(
-        x=last_hist, y=1, yref="paper",
-        text="Hoy", showarrow=False,
-        font=dict(color=COLORS["muted"], size=11),
-        yshift=10,
-    )
+    last_hist = str(ts["fecha"].iloc[-1])
     fig.update_layout(
-        title_text="Proyección de Recuperación · Próximos 30 días",
+        title_text="Proyección de Recuperación · Próximas Campañas",
         title_font=dict(size=14, color=COLORS["primary"]),
+        xaxis_title="Campaña",
+        yaxis_title="Saldo ($)",
         height=420, dragmode="zoom",
+        bargap=0.2,
     )
     return fig
 
