@@ -752,19 +752,20 @@ def tab_resumen(metrics: dict, filters: dict):
     col_a, col_b = st.columns([1, 2])
     with col_a:
         st.plotly_chart(plot_kpi_donut(metrics["pagados"], metrics["pendientes"]),
-                        use_container_width=True, config={"displayModeBar": False})
+                        use_container_width=True, config={"displayModeBar": False},
+                        key="chart_donut")
     with col_b:
         st.plotly_chart(plot_saldo_por_estado(metrics["df"], metrics["saldo_col"]),
-                        use_container_width=True)
+                        use_container_width=True, key="chart_estado")
 
     st.divider()
     col_c, col_d = st.columns(2)
     with col_c:
         st.plotly_chart(plot_campana_saldo(metrics["df"], metrics["saldo_col"]),
-                        use_container_width=True)
+                        use_container_width=True, key="chart_campana")
     with col_d:
         st.plotly_chart(plot_distribucion_saldos(metrics["df"], metrics["saldo_col"]),
-                        use_container_width=True)
+                        use_container_width=True, key="chart_dist")
 
     st.divider()
     section_header("Datos Consolidados", "Primeros 200 registros del cruce Cartera × Saldos")
@@ -774,14 +775,15 @@ def tab_resumen(metrics: dict, filters: dict):
 def tab_pagos(metrics: dict):
     section_header("Análisis de Pagos y Saldos", "Detalle por Dama, campaña y evolución")
 
-    st.plotly_chart(plot_time_series(metrics["ts"]), use_container_width=True)
+    st.plotly_chart(plot_time_series(metrics["ts"]), use_container_width=True,
+                    key="chart_timeseries")
 
     st.divider()
     col_l, col_r = st.columns([2, 1])
     with col_l:
         top_n = st.slider("Número de Damas a mostrar", 5, 30, 15)
         st.plotly_chart(plot_top_damas(metrics["df"], metrics["saldo_col"], top_n),
-                        use_container_width=True)
+                        use_container_width=True, key="chart_topdamas")
     with col_r:
         section_header("Estadísticas de Saldo")
         if metrics["saldo_col"]:
@@ -809,7 +811,7 @@ def tab_pagos(metrics: dict):
 def tab_tecnico(metrics: dict):
     section_header("Indicadores Técnicos y Predicciones", "RSI 14 períodos · Proyección 30 días")
 
-    st.plotly_chart(plot_rsi(metrics["ts"]), use_container_width=True)
+    st.plotly_chart(plot_rsi(metrics["ts"]), use_container_width=True, key="chart_rsi")
 
     rsi_serie  = calculate_rsi(metrics["ts"]["valor"])
     rsi_actual = rsi_serie.dropna().iloc[-1] if not rsi_serie.dropna().empty else 50
@@ -833,7 +835,8 @@ def tab_tecnico(metrics: dict):
     st.divider()
     section_header("Proyección de Recuperación", "Regresión Lineal · scikit-learn")
     pred_df = predict_recovery(metrics["ts"])
-    st.plotly_chart(plot_prediction(metrics["ts"], pred_df), use_container_width=True)
+    st.plotly_chart(plot_prediction(metrics["ts"], pred_df), use_container_width=True,
+                    key="chart_prediction")
 
     if not pred_df.empty:
         col_p1, col_p2, col_p3 = st.columns(3)
