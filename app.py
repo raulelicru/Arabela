@@ -595,12 +595,20 @@ def plot_prediction(ts: pd.DataFrame, pred_df: pd.DataFrame) -> go.Figure:
         line=dict(color=COLORS["warning"], width=2.5, dash="dash"),
         hovertemplate="Proyección: $%{y:,.2f}<extra></extra>",
     ))
-    last_hist = ts["fecha"].iloc[-1] if not pd.api.types.is_integer_dtype(ts["fecha"]) else pd.Timestamp("today")
-    # Convertir a string ISO para evitar error de Timestamp en Plotly con pandas moderno
-    last_hist_str = str(pd.Timestamp(last_hist))[:10]
-    fig.add_vline(x=last_hist_str, line_dash="dot", line_color=COLORS["muted"],
-                  annotation_text="Hoy", annotation_position="top",
-                  annotation_font=dict(color=COLORS["muted"]))
+    last_hist = ts["fecha"].iloc[-1]
+    # Usar add_shape en lugar de add_vline para evitar conflictos de tipo en eje X
+    fig.add_shape(
+        type="line",
+        x0=last_hist, x1=last_hist,
+        y0=0, y1=1, yref="paper",
+        line=dict(dash="dot", color=COLORS["muted"], width=1.5),
+    )
+    fig.add_annotation(
+        x=last_hist, y=1, yref="paper",
+        text="Hoy", showarrow=False,
+        font=dict(color=COLORS["muted"], size=11),
+        yshift=10,
+    )
     fig.update_layout(
         title_text="Proyección de Recuperación · Próximos 30 días",
         title_font=dict(size=14, color=COLORS["primary"]),
