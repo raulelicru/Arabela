@@ -210,7 +210,7 @@ def render_column_mapper(df_cartera: pd.DataFrame, df_saldos: pd.DataFrame) -> d
     with col_c:
         s_saldo = st.selectbox(
             "Columna con el saldo / deuda ⭐", cols_s,
-            index=_best_guess(cols_s, ["saldo", "deuda", "valor", "monto", "pendiente"]),
+            index=_best_guess(cols_s, ["saldocampaña", "saldocampana", "saldo", "deuda", "valor", "monto", "pendiente"]),
             key="map_s_saldo",
         )
     with col_d:
