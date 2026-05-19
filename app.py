@@ -162,86 +162,71 @@ def read_excel_safe(file) -> pd.DataFrame:
 # ─────────────────────────────────────────────
 
 def render_column_mapper(df_cartera: pd.DataFrame, df_saldos: pd.DataFrame) -> dict | None:
-    cols_c  = list(df_cartera.columns)
-    cols_s  = list(df_saldos.columns)
+    cols_c = list(df_cartera.columns)
+    cols_s = list(df_saldos.columns)
 
     st.markdown(
         f"<div class='card' style='border-left:4px solid {COLORS['warning']};'>"
-        "<b>⚙️ Mapeo de columnas</b> — Selecciona qué columna de tu Excel "
-        "corresponde a cada campo.</div>",
+        "<b>⚙️ Mapeo de columnas</b> — Selecciona las columnas de cada archivo.</div>",
         unsafe_allow_html=True,
     )
 
-    # ── Sección 1: Llaves de cruce ────────────────────────────────────
-    st.markdown("##### 🔑 Columnas para unir los dos archivos")
-    st.caption("Cartera: NumDama + AñoCampañaSaldo  ·  Saldos: NumDama + AñoProceso + CampañaProceso")
-    col_a, col_b = st.columns(2)
+    # ── Llave de cruce (misma estructura en ambos archivos) ───────────
+    st.markdown("##### 🔑 Llave de cruce — *igual en ambos archivos*")
+    st.caption("Se concatena **Número de Dama + Año Campaña Saldo** en los dos Excel para unirlos.")
 
+    col_a, col_b = st.columns(2)
     with col_a:
         st.markdown("**📁 Cartera**")
         c_dama = st.selectbox(
-            "Número de Dama",
-            cols_c, index=_best_guess(cols_c, ["dama", "numero", "nro", "id"]),
+            "Número de Dama", cols_c,
+            index=_best_guess(cols_c, ["dama", "num", "nro", "id"]),
             key="map_c_dama",
         )
         c_anio = st.selectbox(
-            "Año Campaña Saldo",
-            cols_c, index=_best_guess(cols_c, ["anio", "año", "campaña", "saldo"]),
+            "Año Campaña Saldo", cols_c,
+            index=_best_guess(cols_c, ["anio", "año", "campaña", "saldo"]),
             key="map_c_anio",
         )
 
     with col_b:
         st.markdown("**📁 Saldos Actualizados**")
         s_dama = st.selectbox(
-            "Número de Dama",
-            cols_s, index=_best_guess(cols_s, ["dama", "numero", "nro", "id"]),
+            "Número de Dama", cols_s,
+            index=_best_guess(cols_s, ["dama", "num", "nro", "id"]),
             key="map_s_dama",
         )
         s_anio = st.selectbox(
-            "Año Proceso",
-            cols_s, index=_best_guess(cols_s, ["anio", "año", "proceso"]),
+            "Año Campaña Saldo", cols_s,
+            index=_best_guess(cols_s, ["anio", "año", "campaña", "saldo"]),
             key="map_s_anio",
         )
-        s_camp = st.selectbox(
-            "Campaña Proceso",
-            cols_s, index=_best_guess(cols_s, ["campaña", "camp", "nro", "periodo"]),
-            key="map_s_camp",
-        )
 
     st.divider()
 
-    # ── Sección 2: Columna de saldo (la más importante) ───────────────
+    # ── Columna de saldo (determina quién pagó y cuánto debe) ─────────
     st.markdown("##### 💰 Columna de saldo en Saldos Actualizados")
-    st.caption("Si el valor es **0** → la Dama ya pagó. Si tiene número → esa es su deuda.")
     col_c, col_d = st.columns(2)
-
     with col_c:
         s_saldo = st.selectbox(
-            "Columna con el saldo / deuda actual ⭐",
-            cols_s,
+            "Columna con el saldo / deuda ⭐", cols_s,
             index=_best_guess(cols_s, ["saldo", "deuda", "valor", "monto", "pendiente"]),
             key="map_s_saldo",
-            help="Esta columna determina si la Dama pagó (0) o cuánto debe (>0).",
         )
-
     with col_d:
         st.markdown("")
-        st.markdown("")
-        st.info(
-            f"✅ **Saldo = 0** → Estado: **Pagado**\n\n"
-            f"🔴 **Saldo > 0** → Estado: **Pendiente** (ese número es la deuda)"
-        )
+        st.info("**Saldo = 0** → ✅ Pagado\n\n**Saldo > 0** → 🔴 Pendiente (ese valor es la deuda)")
 
     st.divider()
 
-    # ── Sección 3: Monto original en Cartera (opcional) ───────────────
+    # ── Monto original en Cartera (opcional) ─────────────────────────
     st.markdown("##### 📊 Monto original en Cartera *(opcional)*")
-    st.caption("Sirve para calcular Total Cartera y Total Cobrado. Si no existe déjalo en (ninguna).")
     c_monto = st.selectbox(
-        "Columna con el monto/deuda original",
+        "Columna con la deuda original de Cartera",
         ["(ninguna)"] + cols_c,
         index=_best_guess(["(ninguna)"] + cols_c, ["valor", "monto", "deuda", "total"]),
         key="map_c_monto",
+        help="Si existe, permite calcular Total Cartera y Total Cobrado.",
     )
 
     st.markdown("")
@@ -252,7 +237,6 @@ def render_column_mapper(df_cartera: pd.DataFrame, df_saldos: pd.DataFrame) -> d
             "c_monto": None if c_monto == "(ninguna)" else c_monto,
             "s_dama":  s_dama,
             "s_anio":  s_anio,
-            "s_camp":  s_camp,
             "s_saldo": s_saldo,
         }
     return None
@@ -272,19 +256,16 @@ def _best_guess(cols: list, keywords: list) -> int:
 
 def load_and_clean_data(df_cartera: pd.DataFrame, df_saldos: pd.DataFrame,
                         mapping: dict) -> dict:
-    # ── Llave Cartera: NumDama + AñoCampañaSaldo ──────────────────────
+    # ── Llave: NumDama + AñoCampañaSaldo (igual en ambos archivos) ────
     df_cartera["_key"] = (
         clean_str(df_cartera[mapping["c_dama"]])
         + "_"
         + clean_str(df_cartera[mapping["c_anio"]])
     )
-
-    # ── Llave Saldos: NumDama + AñoProceso + CampañaProceso ───────────
     df_saldos["_key"] = (
         clean_str(df_saldos[mapping["s_dama"]])
         + "_"
         + clean_str(df_saldos[mapping["s_anio"]])
-        + clean_str(df_saldos[mapping["s_camp"]])
     )
 
     # ── Merge LEFT desde Cartera ──────────────────────────────────────
@@ -294,7 +275,7 @@ def load_and_clean_data(df_cartera: pd.DataFrame, df_saldos: pd.DataFrame,
         suffixes=("_cartera", "_saldos"),
     )
 
-    # ── Resolver nombre real de la columna de saldo tras el merge ─────
+    # ── Resolver columna de saldo tras el merge ───────────────────────
     s_saldo = mapping["s_saldo"]
     saldo_col = (
         s_saldo if s_saldo in df_merged.columns
@@ -314,11 +295,7 @@ def load_and_clean_data(df_cartera: pd.DataFrame, df_saldos: pd.DataFrame,
         df_merged[saldo_col] = pd.to_numeric(df_merged[saldo_col], errors="coerce").fillna(0)
 
     # ── Estado de pago: saldo == 0 → Pagado, saldo > 0 → Pendiente ───
-    if saldo_col:
-        pagado_mask = df_merged[saldo_col] == 0
-    else:
-        pagado_mask = pd.Series([False] * len(df_merged))
-
+    pagado_mask = df_merged[saldo_col] == 0 if saldo_col else pd.Series([False] * len(df_merged))
     df_merged["Estado_Pago"] = np.where(pagado_mask, "Pagado", "Pendiente")
 
     return {
