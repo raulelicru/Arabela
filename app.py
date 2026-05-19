@@ -268,7 +268,11 @@ def load_and_clean_data(df_cartera: pd.DataFrame, df_saldos: pd.DataFrame,
         + clean_str(df_saldos[mapping["s_anio"]])
     )
 
-    # ── Merge LEFT desde Cartera ──────────────────────────────────────
+    # ── Deduplicar Saldos: una sola fila por llave (conserva la última)
+    # Esto evita que el merge duplique registros de Cartera
+    df_saldos = df_saldos.drop_duplicates(subset="_key", keep="last")
+
+    # ── Merge LEFT desde Cartera → siempre conserva los 68,467 registros
     df_merged = pd.merge(
         df_cartera, df_saldos,
         on="_key", how="left",
