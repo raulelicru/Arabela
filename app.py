@@ -399,7 +399,8 @@ def calculate_rsi(series: pd.Series, period: int = 14) -> pd.Series:
 #  PREDICCIÓN
 # ─────────────────────────────────────────────
 
-def predict_recovery(ts: pd.DataFrame, horizon: int = 30) -> pd.DataFrame:
+def predict_recovery(ts: pd.DataFrame, horizon: int = 10) -> pd.DataFrame:
+    """Proyecta las próximas campañas usando regresión lineal."""
     df = ts.copy().dropna()
     if len(df) < 3:
         return pd.DataFrame()
@@ -411,22 +412,23 @@ def predict_recovery(ts: pd.DataFrame, horizon: int = 30) -> pd.DataFrame:
     future_x = np.arange(len(df), len(df) + horizon).reshape(-1, 1)
     future_y = model.predict(future_x)
 
-    last_date = (
-        pd.to_datetime(df["fecha"].iloc[-1])
-        if not pd.api.types.is_integer_dtype(df["fecha"])
-        else pd.Timestamp("today")
-    )
-    future_dates = pd.date_range(last_date, periods=horizon + 1, freq="D")[1:]
-    residuals    = df["valor"].values - model.predict(df[["x"]])
-    std_err      = np.std(residuals) * 1.5
+    # Etiquetas de campaña proyectadas (siguientes números después del último)
+    last_label = str(df["fecha"].iloc[-1])
+    try:
+        last_num = int(last_label)
+        future_labels = [str(last_num + i + 1) for i in range(horizon)]
+    except ValueError:
+        future_labels = [f"Proy.{i+1}" for i in range(horizon)]
 
-    pred_df = pd.DataFrame({
-        "fecha":      future_dates,
+    residuals = df["valor"].values - model.predict(df[["x"]])
+    std_err   = np.std(residuals) * 1.5
+
+    return pd.DataFrame({
+        "fecha":      future_labels,
         "prediccion": future_y,
         "upper":      future_y + std_err,
         "lower":      future_y - std_err,
     })
-    return pred_df
 
 
 # ─────────────────────────────────────────────
@@ -558,20 +560,21 @@ def plot_prediction(ts: pd.DataFrame, pred_df: pd.DataFrame) -> go.Figure:
     if pred_df.empty:
         fig.update_layout(title_text="Predicción (datos insuficientes)", height=400)
         return fig
-    fig.add_trace(go.Scatter(
-        x=list(pred_df["fecha"]) + list(pred_df["fecha"][::-1]),
-        y=list(pred_df["upper"]) + list(pred_df["lower"][::-1]),
-        fill="toself",
-        fillcolor="rgba(37,99,235,0.10)",
-        line=dict(color="rgba(0,0,0,0)"),
-        name="Intervalo de confianza",
-        hoverinfo="skip",
-    ))
-    fig.add_trace(go.Scatter(
+    # Barras de proyección con intervalo de confianza
+    fig.add_trace(go.Bar(
         x=pred_df["fecha"], y=pred_df["prediccion"],
-        mode="lines", name="Proyección (30 días)",
-        line=dict(color=COLORS["warning"], width=2.5, dash="dash"),
-        hovertemplate="Proyección: $%{y:,.2f}<extra></extra>",
+        name="Proyección",
+        marker_color=COLORS["warning"],
+        opacity=0.75,
+        error_y=dict(
+            type="data",
+            symmetric=False,
+            array=list(pred_df["upper"] - pred_df["prediccion"]),
+            arrayminus=list(pred_df["prediccion"] - pred_df["lower"]),
+            visible=True,
+            color=COLORS["muted"],
+        ),
+        hovertemplate="<b>Campaña %{x}</b><br>Proyección: $%{y:,.0f}<extra></extra>",
     ))
     last_hist = str(ts["fecha"].iloc[-1])
     fig.update_layout(
