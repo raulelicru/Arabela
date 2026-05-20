@@ -318,15 +318,37 @@ def render_column_mapper(df_cartera: pd.DataFrame, df_saldos: pd.DataFrame) -> d
         help="Si existe, permite calcular Total Cartera y Total Cobrado.",
     )
 
+    st.divider()
+
+    # ── Fechas en Cartera (para análisis temporal real) ───────────────
+    st.markdown("##### 📅 Fechas en Cartera *(opcional — activan análisis temporal)*")
+    col_f1, col_f2 = st.columns(2)
+    with col_f1:
+        c_fecha_inicio = st.selectbox(
+            "Columna Fecha de Inicio",
+            ["(ninguna)"] + cols_c,
+            index=_best_guess(["(ninguna)"] + cols_c, ["inicio", "fecha_i", "start", "vigencia", "fecha"]),
+            key="map_c_fecha_inicio",
+        )
+    with col_f2:
+        c_fecha_fin = st.selectbox(
+            "Columna Fecha Final",
+            ["(ninguna)"] + cols_c,
+            index=_best_guess(["(ninguna)"] + cols_c, ["fin", "final", "venc", "end", "termino"]),
+            key="map_c_fecha_fin",
+        )
+
     st.markdown("")
     if st.button("✅ Confirmar y procesar", type="primary", use_container_width=True):
         return {
-            "c_dama":  c_dama,
-            "c_anio":  c_anio,
-            "c_monto": None if c_monto == "(ninguna)" else c_monto,
-            "s_dama":  s_dama,
-            "s_anio":  s_anio,
-            "s_saldo": s_saldo,
+            "c_dama":         c_dama,
+            "c_anio":         c_anio,
+            "c_monto":        None if c_monto == "(ninguna)" else c_monto,
+            "s_dama":         s_dama,
+            "s_anio":         s_anio,
+            "s_saldo":        s_saldo,
+            "c_fecha_inicio": None if c_fecha_inicio == "(ninguna)" else c_fecha_inicio,
+            "c_fecha_fin":    None if c_fecha_fin    == "(ninguna)" else c_fecha_fin,
         }
     return None
 
@@ -391,10 +413,34 @@ def load_and_clean_data(df_cartera: pd.DataFrame, df_saldos: pd.DataFrame,
     pagado_mask = df_merged[saldo_col] == 0 if saldo_col else pd.Series([False] * len(df_merged))
     df_merged["Estado_Pago"] = np.where(pagado_mask, "Pagado", "Pendiente")
 
+    # ── Fechas opcionales de Cartera ─────────────────────────────────
+    fecha_inicio_col = None
+    fecha_fin_col    = None
+    for key, suffix in [("c_fecha_inicio", "_cartera"), ("c_fecha_inicio", "")]:
+        raw = mapping.get("c_fecha_inicio")
+        if not raw:
+            break
+        candidate = raw if raw in df_merged.columns else raw + suffix
+        if candidate in df_merged.columns:
+            df_merged[candidate] = pd.to_datetime(df_merged[candidate], errors="coerce")
+            fecha_inicio_col = candidate
+            break
+    for key, suffix in [("c_fecha_fin", "_cartera"), ("c_fecha_fin", "")]:
+        raw = mapping.get("c_fecha_fin")
+        if not raw:
+            break
+        candidate = raw if raw in df_merged.columns else raw + suffix
+        if candidate in df_merged.columns:
+            df_merged[candidate] = pd.to_datetime(df_merged[candidate], errors="coerce")
+            fecha_fin_col = candidate
+            break
+
     return {
-        "merged":    df_merged,
-        "saldo_col": saldo_col,
-        "valor_col": valor_col,
+        "merged":           df_merged,
+        "saldo_col":        saldo_col,
+        "valor_col":        valor_col,
+        "fecha_inicio_col": fecha_inicio_col,
+        "fecha_fin_col":    fecha_fin_col,
     }
 
 
@@ -467,6 +513,8 @@ def calculate_metrics(data: dict) -> dict:
         "df":               df,
         "saldo_col":        saldo_col,
         "valor_col":        valor_col,
+        "fecha_inicio_col": data.get("fecha_inicio_col"),
+        "fecha_fin_col":    data.get("fecha_fin_col"),
     }
 
 
@@ -675,150 +723,192 @@ def plot_funnel(df: pd.DataFrame, saldo_col: str) -> go.Figure:
     return fig
 
 
-def plot_linea_tendencia(df: pd.DataFrame, valor_col: str) -> go.Figure:
-    """Gráfico de líneas: tendencia de cobro por campaña."""
-    camp_col = _find_col(df, ["aniocampaña", "aniocampana", "anio", "año", "campaña"])
-    if not camp_col or not valor_col or camp_col not in df.columns:
-        return _base_fig()
+def _get_time_axis(df: pd.DataFrame, valor_col: str, fecha_col: str | None):
+    """
+    Devuelve (x_labels, cob_vals, pen_vals, x_title).
+    Si hay fecha_col real, agrupa por mes. Si no, usa campaña.
+    """
     df = df.copy()
     df[valor_col] = pd.to_numeric(df[valor_col], errors="coerce").fillna(0)
-    cobrado   = df[df["Estado_Pago"] == "Pagado"].groupby(camp_col)[valor_col].sum()
-    pendiente = df[df["Estado_Pago"] == "Pendiente"].groupby(camp_col)[valor_col].sum()
-    camps = sorted(set(cobrado.index) | set(pendiente.index), key=str)
-    cob_vals = cobrado.reindex(camps, fill_value=0).values
-    pen_vals = pendiente.reindex(camps, fill_value=0).values
-    camps_str = [str(c) for c in camps]
+
+    if fecha_col and fecha_col in df.columns:
+        df["_period"] = df[fecha_col].dt.to_period("M").astype(str)
+        grp_col = "_period"
+        x_title = "Mes"
+    else:
+        camp_col = _find_col(df, ["aniocampaña", "aniocampana", "anio", "año", "campaña"])
+        if not camp_col:
+            return [], [], [], "Campaña"
+        df["_period"] = df[camp_col].astype(str)
+        grp_col = "_period"
+        x_title = "Campaña"
+
+    cobrado   = df[df["Estado_Pago"] == "Pagado"].groupby(grp_col)[valor_col].sum()
+    pendiente = df[df["Estado_Pago"] == "Pendiente"].groupby(grp_col)[valor_col].sum()
+    periods   = sorted(set(cobrado.index) | set(pendiente.index))
+    cob_vals  = cobrado.reindex(periods, fill_value=0).values
+    pen_vals  = pendiente.reindex(periods, fill_value=0).values
+    return periods, cob_vals, pen_vals, x_title
+
+
+def plot_linea_tendencia(df: pd.DataFrame, valor_col: str, fecha_col: str | None = None) -> go.Figure:
+    """Gráfico de líneas: tendencia de cobro — usa fecha real si disponible."""
+    if not valor_col:
+        return _base_fig()
+    periods, cob_vals, pen_vals, x_title = _get_time_axis(df, valor_col, fecha_col)
+    if not len(periods):
+        return _base_fig()
+    x = [str(p) for p in periods]
     fig = go.Figure()
     fig.add_trace(go.Scatter(
-        x=camps_str, y=cob_vals, name="✅ Cobrado",
+        x=x, y=cob_vals, name="✅ Cobrado",
         mode="lines+markers",
         line=dict(color=COLORS["success"], width=3),
         marker=dict(size=7, color=COLORS["success"], line=dict(width=2, color="white")),
         fill="tozeroy", fillcolor="rgba(22,163,74,0.08)",
-        hovertemplate="<b>Campaña %{x}</b><br>Cobrado: $%{y:,.0f}<extra></extra>",
+        hovertemplate=f"<b>%{{x}}</b><br>Cobrado: $%{{y:,.0f}}<extra></extra>",
     ))
     fig.add_trace(go.Scatter(
-        x=camps_str, y=pen_vals, name="🔴 Pendiente",
+        x=x, y=pen_vals, name="🔴 Pendiente",
         mode="lines+markers",
         line=dict(color=COLORS["danger"], width=3),
         marker=dict(size=7, color=COLORS["danger"], line=dict(width=2, color="white")),
         fill="tozeroy", fillcolor="rgba(220,38,38,0.06)",
-        hovertemplate="<b>Campaña %{x}</b><br>Pendiente: $%{y:,.0f}<extra></extra>",
+        hovertemplate=f"<b>%{{x}}</b><br>Pendiente: $%{{y:,.0f}}<extra></extra>",
     ))
     if len(cob_vals) >= 3:
         rolling = pd.Series(cob_vals).rolling(3, min_periods=1).mean().values
         fig.add_trace(go.Scatter(
-            x=camps_str, y=rolling, name="Tendencia (prom. móvil)",
+            x=x, y=rolling, name="Tendencia (prom. móvil 3)",
             mode="lines", line=dict(color=COLORS["warning"], width=2, dash="dot"),
             hovertemplate="Tendencia: $%{y:,.0f}<extra></extra>",
         ))
     fig.update_layout(
         **PLOTLY_LAYOUT,
-        title_text="Tendencia de Recuperación por Campaña",
+        title_text="Tendencia de Recuperación" + (" por Mes" if fecha_col else " por Campaña"),
         title_font=dict(size=14, color=COLORS["primary"]),
-        xaxis_title="Campaña", yaxis_title="Monto ($)",
+        xaxis_title=x_title, yaxis_title="Monto ($)",
         height=380,
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
     )
     return fig
 
 
-def plot_area_apilada(df: pd.DataFrame, valor_col: str) -> go.Figure:
-    """Área apilada: evolución del monto cobrado + pendiente por campaña."""
-    camp_col = _find_col(df, ["aniocampaña", "aniocampana", "anio", "año", "campaña"])
-    if not camp_col or not valor_col or camp_col not in df.columns:
+def plot_area_apilada(df: pd.DataFrame, valor_col: str, fecha_col: str | None = None) -> go.Figure:
+    """Área apilada: evolución cobrado + pendiente — usa fecha real si disponible."""
+    if not valor_col:
         return _base_fig()
-    df = df.copy()
-    df[valor_col] = pd.to_numeric(df[valor_col], errors="coerce").fillna(0)
-    cobrado   = df[df["Estado_Pago"] == "Pagado"].groupby(camp_col)[valor_col].sum()
-    pendiente = df[df["Estado_Pago"] == "Pendiente"].groupby(camp_col)[valor_col].sum()
-    camps     = sorted(set(cobrado.index) | set(pendiente.index), key=str)
-    camps_str = [str(c) for c in camps]
-    cob_vals  = cobrado.reindex(camps, fill_value=0).values
-    pen_vals  = pendiente.reindex(camps, fill_value=0).values
+    periods, cob_vals, pen_vals, x_title = _get_time_axis(df, valor_col, fecha_col)
+    if not len(periods):
+        return _base_fig()
+    x = [str(p) for p in periods]
     fig = go.Figure()
     fig.add_trace(go.Scatter(
-        x=camps_str, y=pen_vals, name="🔴 Pendiente",
+        x=x, y=pen_vals, name="🔴 Pendiente",
         stackgroup="one", mode="lines",
         line=dict(color=COLORS["danger"], width=1),
         fillcolor="rgba(220,38,38,0.45)",
-        hovertemplate="<b>Campaña %{x}</b><br>Pendiente: $%{y:,.0f}<extra></extra>",
+        hovertemplate=f"<b>%{{x}}</b><br>Pendiente: $%{{y:,.0f}}<extra></extra>",
     ))
     fig.add_trace(go.Scatter(
-        x=camps_str, y=cob_vals, name="✅ Cobrado",
+        x=x, y=cob_vals, name="✅ Cobrado",
         stackgroup="one", mode="lines",
         line=dict(color=COLORS["success"], width=1),
         fillcolor="rgba(22,163,74,0.55)",
-        hovertemplate="<b>Campaña %{x}</b><br>Cobrado: $%{y:,.0f}<extra></extra>",
+        hovertemplate=f"<b>%{{x}}</b><br>Cobrado: $%{{y:,.0f}}<extra></extra>",
     ))
     fig.update_layout(
         **PLOTLY_LAYOUT,
-        title_text="Evolución de Montos: Cobrado y Pendiente por Campaña",
+        title_text="Evolución de Montos: Cobrado y Pendiente" + (" por Mes" if fecha_col else " por Campaña"),
         title_font=dict(size=14, color=COLORS["primary"]),
-        xaxis_title="Campaña", yaxis_title="Monto Total ($)",
+        xaxis_title=x_title, yaxis_title="Monto Total ($)",
         height=380,
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
     )
     return fig
 
 
-def plot_heatmap(df: pd.DataFrame, valor_col: str) -> go.Figure:
+def plot_heatmap(df: pd.DataFrame, valor_col: str, fecha_col: str | None = None) -> go.Figure:
     """
-    Mapa de calor: Año (filas) × Período (columnas).
-    Si el código de campaña tiene 6 dígitos YYYYPP, lo descompone.
+    Mapa de calor con fechas reales: Año (filas) × Mes (columnas) → % cobrado.
+    Sin fechas: usa Año × Período extraídos del código de campaña (YYYYPP).
     """
-    camp_col = _find_col(df, ["aniocampaña", "aniocampana", "anio", "año", "campaña"])
-    if not camp_col or not valor_col or camp_col not in df.columns:
-        return _base_fig()
     df = df.copy()
+    if not valor_col:
+        return _base_fig()
     df[valor_col] = pd.to_numeric(df[valor_col], errors="coerce").fillna(0)
-    df["_camp_str"] = df[camp_col].astype(str).str.strip()
-    mask_6 = df["_camp_str"].str.match(r"^\d{6}$")
-    if mask_6.sum() < 2:
-        # Fallback: heatmap de % cobrado por campaña vs Estado (2 columnas)
-        grp = df.groupby(camp_col)
-        pct = (grp.apply(lambda x: (x["Estado_Pago"] == "Pagado").sum() / len(x) * 100)
-               .reset_index(name="pct"))
-        pct[camp_col] = pct[camp_col].astype(str)
-        pct = pct.sort_values(camp_col)
-        fig = go.Figure(go.Bar(
-            x=pct[camp_col], y=pct["pct"],
-            marker=dict(color=pct["pct"],
-                        colorscale=[[0, COLORS["danger"]], [0.5, COLORS["warning"]], [1, COLORS["success"]]],
-                        showscale=True, colorbar=dict(title="% Cobrado")),
-            text=[f"{v:.1f}%" for v in pct["pct"]], textposition="outside",
-            hovertemplate="<b>Campaña %{x}</b><br>% Cobrado: %{y:.1f}%<extra></extra>",
-        ))
-        fig.update_layout(**PLOTLY_LAYOUT, height=340,
-                          title_text="% Cobrado por Campaña",
-                          title_font=dict(size=14, color=COLORS["primary"]))
-        return fig
-    df["_anio"] = df["_camp_str"].str[:4]
-    df["_per"]  = df["_camp_str"].str[4:]
-    cobrado_grp = (df[df["Estado_Pago"] == "Pagado"]
-                   .groupby(["_anio", "_per"])[valor_col].sum())
-    total_grp   = df.groupby(["_anio", "_per"])[valor_col].sum()
-    pct_grp     = (cobrado_grp / total_grp.replace(0, np.nan) * 100).fillna(0)
-    pivot = pct_grp.unstack(fill_value=0)
-    anios = sorted(pivot.index.tolist())
-    periodos = sorted(pivot.columns.tolist())
-    z = [[pivot.loc[a, p] if p in pivot.columns else 0 for p in periodos] for a in anios]
+
+    MESES = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"]
+
+    if fecha_col and fecha_col in df.columns and df[fecha_col].notna().sum() > 1:
+        df["_anio"] = df[fecha_col].dt.year.astype(str)
+        df["_mes"]  = df[fecha_col].dt.month
+        cobrado_grp = (df[df["Estado_Pago"] == "Pagado"]
+                       .groupby(["_anio", "_mes"])[valor_col].sum())
+        total_grp   = df.groupby(["_anio", "_mes"])[valor_col].sum()
+        pct_grp     = (cobrado_grp / total_grp.replace(0, np.nan) * 100).fillna(0)
+        pivot       = pct_grp.unstack(fill_value=0)
+        anios    = sorted(pivot.index.tolist())
+        mes_nums = sorted(pivot.columns.tolist())
+        x_labels = [MESES[m - 1] for m in mes_nums]
+        z        = [[pivot.loc[a, m] if m in pivot.columns else 0 for m in mes_nums] for a in anios]
+        hover    = "Año: %{y} · Mes: %{x}<br>% Cobrado: %{z:.1f}%<extra></extra>"
+        title    = "Mapa de Calor · % Cobrado por Año y Mes (Fecha de Inicio)"
+        ylab, xlab = "Año", "Mes"
+    else:
+        camp_col = _find_col(df, ["aniocampaña", "aniocampana", "anio", "año", "campaña"])
+        if not camp_col:
+            return _base_fig()
+        df["_camp_str"] = df[camp_col].astype(str).str.strip()
+        mask_6 = df["_camp_str"].str.match(r"^\d{6}$")
+        if mask_6.sum() < 2:
+            grp = df.groupby(camp_col)
+            pct = (grp.apply(lambda x: (x["Estado_Pago"] == "Pagado").sum() / len(x) * 100)
+                   .reset_index(name="pct"))
+            pct[camp_col] = pct[camp_col].astype(str)
+            pct = pct.sort_values(camp_col)
+            fig = go.Figure(go.Bar(
+                x=pct[camp_col], y=pct["pct"],
+                marker=dict(color=pct["pct"],
+                            colorscale=[[0, COLORS["danger"]], [0.5, COLORS["warning"]], [1, COLORS["success"]]],
+                            showscale=True, colorbar=dict(title="% Cobrado")),
+                text=[f"{v:.1f}%" for v in pct["pct"]], textposition="outside",
+                hovertemplate="<b>Campaña %{x}</b><br>% Cobrado: %{y:.1f}%<extra></extra>",
+            ))
+            fig.update_layout(**PLOTLY_LAYOUT, height=340,
+                              title_text="% Cobrado por Campaña",
+                              title_font=dict(size=14, color=COLORS["primary"]))
+            return fig
+        df["_anio"] = df["_camp_str"].str[:4]
+        df["_per"]  = df["_camp_str"].str[4:]
+        cobrado_grp = (df[df["Estado_Pago"] == "Pagado"]
+                       .groupby(["_anio", "_per"])[valor_col].sum())
+        total_grp   = df.groupby(["_anio", "_per"])[valor_col].sum()
+        pct_grp     = (cobrado_grp / total_grp.replace(0, np.nan) * 100).fillna(0)
+        pivot    = pct_grp.unstack(fill_value=0)
+        anios    = sorted(pivot.index.tolist())
+        x_labels = sorted(pivot.columns.tolist())
+        z        = [[pivot.loc[a, p] if p in pivot.columns else 0 for p in x_labels] for a in anios]
+        hover    = "Año: %{y} · Período: %{x}<br>% Cobrado: %{z:.1f}%<extra></extra>"
+        title    = "Mapa de Calor · % Cobrado por Año y Período de Campaña"
+        ylab, xlab = "Año", "Período"
+
     text_z = [[f"{v:.1f}%" for v in row] for row in z]
     fig = go.Figure(go.Heatmap(
-        z=z, x=periodos, y=anios,
+        z=z, x=x_labels, y=anios,
         text=text_z, texttemplate="%{text}",
         textfont=dict(size=12, color="white"),
         colorscale=[[0, COLORS["danger"]], [0.5, COLORS["warning"]], [1, COLORS["success"]]],
         zmin=0, zmax=100,
         colorbar=dict(title="% Cobrado", ticksuffix="%"),
-        hovertemplate="Año: %{y} · Período: %{x}<br>% Cobrado: %{z:.1f}%<extra></extra>",
+        hovertemplate=hover,
     ))
     fig.update_layout(
         **PLOTLY_LAYOUT,
-        title_text="Mapa de Calor · % Cobrado por Año y Período de Campaña",
+        title_text=title,
         title_font=dict(size=14, color=COLORS["primary"]),
-        xaxis_title="Período", yaxis_title="Año",
-        height=max(280, len(anios) * 60 + 100),
+        xaxis_title=xlab, yaxis_title=ylab,
+        height=max(280, len(anios) * 60 + 120),
     )
     return fig
 
@@ -1268,22 +1358,33 @@ def tab_resumen(metrics: dict):
 
 
 def tab_temporalidad(metrics: dict):
+    fi = metrics.get("fecha_inicio_col")
+    usando_fechas = bool(fi)
     st.markdown(
         "<div class='kpi-banner'><h1>📅 Temporalidad de Cobro</h1>"
-        "<p>Analiza cuándo y cómo evoluciona la recuperación campaña a campaña</p></div>",
+        + (f"<p>Usando <b>Fecha de Inicio</b> real del archivo Cartera — análisis mes a mes</p>"
+           if usando_fechas else
+           "<p>Usando <b>Año Campaña Saldo</b> como eje temporal · Carga fechas en el mapper para análisis mensual</p>")
+        + "</div>",
         unsafe_allow_html=True,
     )
-    chart_card("Tendencia de Cobro por Campaña",
-               plot_linea_tendencia(metrics["df"], metrics["valor_col"]),
-               key="linea", height_normal=380, height_expanded=560)
+    chart_card(
+        "Tendencia de Cobro" + (" por Mes" if usando_fechas else " por Campaña"),
+        plot_linea_tendencia(metrics["df"], metrics["valor_col"], fi),
+        key="linea", height_normal=380, height_expanded=560,
+    )
     st.markdown("<br>", unsafe_allow_html=True)
-    chart_card("Evolución del Monto Cobrado y Pendiente (Área Apilada)",
-               plot_area_apilada(metrics["df"], metrics["valor_col"]),
-               key="area", height_normal=380, height_expanded=560)
+    chart_card(
+        "Evolución Cobrado y Pendiente — Área Apilada" + (" por Mes" if usando_fechas else ""),
+        plot_area_apilada(metrics["df"], metrics["valor_col"], fi),
+        key="area", height_normal=380, height_expanded=560,
+    )
     st.markdown("<br>", unsafe_allow_html=True)
-    chart_card("Mapa de Calor · % Cobrado por Año y Período",
-               plot_heatmap(metrics["df"], metrics["valor_col"]),
-               key="heatmap", height_normal=340, height_expanded=500)
+    chart_card(
+        "Mapa de Calor · % Cobrado por " + ("Año y Mes" if usando_fechas else "Año y Período"),
+        plot_heatmap(metrics["df"], metrics["valor_col"], fi),
+        key="heatmap", height_normal=340, height_expanded=500,
+    )
 
 
 def tab_flujo(metrics: dict):
