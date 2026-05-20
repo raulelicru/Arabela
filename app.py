@@ -670,8 +670,8 @@ def plot_funnel(df: pd.DataFrame, saldo_col: str) -> go.Figure:
         title_text="Embudo de Cobranza · ¿Dónde está la cartera?",
         title_font=dict(size=14, color=COLORS["primary"]),
         height=380,
-        hovermode="y",
     )
+    fig.update_layout(hovermode="y")
     return fig
 
 
