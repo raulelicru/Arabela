@@ -1129,7 +1129,7 @@ def plot_damas_por_temporalidad(df: pd.DataFrame) -> go.Figure:
 
 
 def plot_delta_campanas(df: pd.DataFrame) -> go.Figure:
-    """Delta de % cobrado entre campañas consecutivas — mayor y menor incremento."""
+    """% cobrado por campaña con flecha vs campaña anterior — muy fácil de leer."""
     camp_col = _find_col(df, ["aniocampaña", "aniocampana", "anio", "año", "campaña"])
     if not camp_col or camp_col not in df.columns:
         return _base_fig()
@@ -1143,36 +1143,56 @@ def plot_delta_campanas(df: pd.DataFrame) -> go.Figure:
     if len(pct) < 2:
         return _base_fig()
 
-    delta = pct.diff().dropna()
-    camps = delta.index.tolist()
-    vals  = delta.values
-    colors = [COLORS["success"] if v >= 0 else COLORS["danger"] for v in vals]
-    labels = [f"+{v:.1f}%" if v >= 0 else f"{v:.1f}%" for v in vals]
+    camps  = pct.index.tolist()
+    vals   = pct.values
+    delta  = pct.diff()
 
-    max_idx = delta.idxmax()
-    min_idx = delta.idxmin()
+    # Color de cada barra según si mejoró o empeoró vs la anterior
+    colors = []
+    for i, c in enumerate(camps):
+        if i == 0:
+            colors.append(COLORS["accent"])
+        elif delta[c] > 0:
+            colors.append(COLORS["success"])
+        elif delta[c] < 0:
+            colors.append(COLORS["danger"])
+        else:
+            colors.append(COLORS["accent"])
+
+    # Etiqueta: % + flecha comparación vs anterior
+    labels = []
+    for i, c in enumerate(camps):
+        if i == 0:
+            labels.append(f"{vals[i]:.1f}%")
+        else:
+            d = delta[c]
+            arrow = "▲" if d > 0 else "▼"
+            labels.append(f"{vals[i]:.1f}%\n{arrow} {abs(d):.1f}% vs anterior")
 
     fig = go.Figure(go.Bar(
         x=camps, y=vals,
         marker_color=colors,
-        text=labels, textposition="outside", textfont=dict(size=11),
-        hovertemplate="<b>Campaña %{x}</b><br>Cambio vs anterior: %{y:.1f}%<extra></extra>",
+        text=labels,
+        textposition="outside",
+        textfont=dict(size=10, color=COLORS["text"]),
+        hovertemplate="<b>Campaña %{x}</b><br>Cobrado: %{y:.1f}%<extra></extra>",
     ))
-    fig.add_hline(y=0, line_color=COLORS["muted"], line_width=1.2)
-    fig.add_annotation(x=max_idx, y=delta[max_idx],
-                       text="📈 Mayor incremento", showarrow=True, arrowhead=2,
-                       font=dict(size=10, color=COLORS["success"]),
-                       arrowcolor=COLORS["success"], ay=-35, ax=0)
-    fig.add_annotation(x=min_idx, y=delta[min_idx],
-                       text="📉 Mayor caída", showarrow=True, arrowhead=2,
-                       font=dict(size=10, color=COLORS["danger"]),
-                       arrowcolor=COLORS["danger"], ay=35, ax=0)
+
+    # Línea de promedio general
+    promedio = float(pct.mean())
+    fig.add_hline(y=promedio, line_dash="dot", line_color=COLORS["warning"], line_width=2,
+                  annotation_text=f"  Promedio: {promedio:.1f}%",
+                  annotation_font_color=COLORS["warning"], annotation_font_size=11)
+
     fig.update_layout(
         **PLOTLY_LAYOUT,
-        title_text="Cambio en % de Cobro entre campañas consecutivas",
+        title_text="¿Cuánto cobramos en cada campaña? (comparación vs campaña anterior)",
         title_font=dict(size=14, color=COLORS["primary"]),
-        xaxis_title="Campaña", yaxis_title="Δ % Cobrado vs campaña anterior",
-        height=360,
+        xaxis=dict(type="category", tickangle=-30),
+        xaxis_title="Campaña",
+        yaxis_title="% de damas que pagaron",
+        yaxis_range=[0, max(vals) * 1.35],
+        height=420,
     )
     return fig
 
