@@ -218,7 +218,6 @@ PLOTLY_LAYOUT = dict(
     font=dict(color=COLORS["text"], family="Inter, sans-serif", size=12),
     xaxis=dict(gridcolor=COLORS["grid"], zeroline=False, showline=False),
     yaxis=dict(gridcolor=COLORS["grid"], zeroline=False, showline=False),
-    legend=dict(bgcolor="rgba(255,255,255,0.9)", bordercolor=COLORS["grid"], borderwidth=1),
     margin=dict(l=40, r=20, t=50, b=40),
     hovermode="x unified",
 )
