@@ -304,7 +304,7 @@ def render_column_mapper(df_cartera: pd.DataFrame, df_saldos: pd.DataFrame) -> d
         )
     with col_d:
         st.markdown("")
-        st.info("**Saldo < 51** → ✅ Pagado totalmente\n\n**Saldo ≥ 51** → 🔴 Pendiente (ese valor es la deuda)")
+        st.info("**Saldo ≥ 51** → ✅ Pagado\n\n**Saldo < 51** → 🔴 Pendiente (aún debe)")
 
     st.divider()
 
@@ -409,8 +409,8 @@ def load_and_clean_data(df_cartera: pd.DataFrame, df_saldos: pd.DataFrame,
     if saldo_col:
         df_merged[saldo_col] = pd.to_numeric(df_merged[saldo_col], errors="coerce").fillna(0)
 
-    # ── Estado de pago: saldo == 0 → Pagado, saldo > 0 → Pendiente ───
-    pagado_mask = df_merged[saldo_col] < 51 if saldo_col else pd.Series([False] * len(df_merged))
+    # ── Estado de pago: saldo >= 51 → Pagado, saldo < 51 → Pendiente ───
+    pagado_mask = df_merged[saldo_col] >= 51 if saldo_col else pd.Series([False] * len(df_merged))
     df_merged["Estado_Pago"] = np.where(pagado_mask, "Pagado", "Pendiente")
 
     # ── Fechas opcionales de Cartera ─────────────────────────────────
