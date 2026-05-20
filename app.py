@@ -157,8 +157,16 @@ h1, h2, h3, h4 { color: #1a3c6e; font-weight: 700; }
 [data-testid="stButton"] button {
     border-radius: 8px;
     font-weight: 600;
-    font-size: 0.8rem;
+    font-size: 0.82rem;
+    padding: 0.3rem 0.9rem;
+    white-space: nowrap;
     transition: all 0.2s ease;
+}
+[data-testid="stButton"] button:hover {
+    background: #1a3c6e !important;
+    color: #fff !important;
+    transform: translateY(-1px);
+    box-shadow: 0 3px 10px rgba(26,60,110,0.25);
 }
 
 /* ── Divider ── */
@@ -827,41 +835,26 @@ def section_header(title: str, subtitle: str = ""):
 
 
 def chart_card(title: str, fig: go.Figure, key: str, height_normal: int = 340, height_expanded: int = 560):
-    """
-    Muestra una gráfica dentro de una tarjeta profesional.
-    Si el usuario pulsa '⛶ Ver en grande', se expande a pantalla completa
-    con transición animada via session_state.
-    """
     expanded = st.session_state.get("chart_expanded") == key
 
     if expanded:
-        # ── Vista expandida ────────────────────────────────────────────
-        st.markdown(f"<div class='chart-card-expanded'>", unsafe_allow_html=True)
-        col_t, col_b = st.columns([6, 1])
-        with col_t:
-            st.markdown(f"<div class='chart-title'>{title}</div>", unsafe_allow_html=True)
-        with col_b:
-            if st.button("✕ Cerrar", key=f"close_{key}", use_container_width=True):
-                st.session_state["chart_expanded"] = None
-                st.rerun()
+        st.markdown(f"<div class='chart-card-expanded'><div class='chart-title'>{title}</div></div>",
+                    unsafe_allow_html=True)
+        if st.button("✕  Cerrar", key=f"close_{key}"):
+            st.session_state["chart_expanded"] = None
+            st.rerun()
         fig.update_layout(height=height_expanded)
         st.plotly_chart(fig, use_container_width=True, key=f"plot_{key}_exp",
                         config={"displayModeBar": True, "scrollZoom": True})
-        st.markdown("</div>", unsafe_allow_html=True)
     else:
-        # ── Vista normal ───────────────────────────────────────────────
-        st.markdown(f"<div class='chart-card'>", unsafe_allow_html=True)
-        col_t, col_b = st.columns([6, 1])
-        with col_t:
-            st.markdown(f"<div class='chart-title'>{title}</div>", unsafe_allow_html=True)
-        with col_b:
-            if st.button("⛶ Ampliar", key=f"expand_{key}", use_container_width=True):
-                st.session_state["chart_expanded"] = key
-                st.rerun()
+        st.markdown(f"<div class='chart-card'><div class='chart-title'>{title}</div></div>",
+                    unsafe_allow_html=True)
+        if st.button("⛶  Ampliar", key=f"expand_{key}"):
+            st.session_state["chart_expanded"] = key
+            st.rerun()
         fig.update_layout(height=height_normal)
         st.plotly_chart(fig, use_container_width=True, key=f"plot_{key}",
                         config={"displayModeBar": False, "scrollZoom": True})
-        st.markdown("</div>", unsafe_allow_html=True)
 
 
 # ─────────────────────────────────────────────
