@@ -216,11 +216,11 @@ PLOTLY_LAYOUT = dict(
     paper_bgcolor=COLORS["bg"],
     plot_bgcolor="#f9fafb",
     font=dict(color=COLORS["text"], family="Inter, sans-serif", size=12),
-    xaxis=dict(gridcolor=COLORS["grid"], zeroline=False, showline=False),
-    yaxis=dict(gridcolor=COLORS["grid"], zeroline=False, showline=False),
     margin=dict(l=40, r=20, t=50, b=40),
     hovermode="x unified",
 )
+# Defaults de ejes — aplicar por separado cuando no se sobreescriben
+_AXIS_DEFAULTS = dict(gridcolor=COLORS["grid"], zeroline=False, showline=False)
 
 # ─────────────────────────────────────────────
 #  HELPERS BÁSICOS
