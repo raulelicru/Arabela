@@ -690,8 +690,8 @@ def plot_100pct_apilado(df: pd.DataFrame) -> go.Figure:
         textfont=dict(color=COLORS["text"], size=11),
         hovertemplate="<b>Campaña %{x}</b><br>Pendiente: %{y:.1f}%<extra></extra>",
     ))
-    fig.add_hline(y=80, line_dash="dot", line_color=COLORS["warning"], line_width=1.5,
-                  annotation_text="  Meta 80%", annotation_font_color=COLORS["warning"])
+    fig.add_hline(y=80, line_dash="dot", line_color="#000000", line_width=1.5,
+                  annotation_text="  Meta 80%", annotation_font_color="#000000")
     fig.update_layout(
         **PLOTLY_LAYOUT,
         title_text="¿Qué % de la cartera se recuperó por campaña?",
@@ -812,7 +812,7 @@ def plot_linea_tendencia(df: pd.DataFrame, valor_col: str, fecha_col: str | None
         rolling = pd.Series(cob_vals).rolling(3, min_periods=1).mean().values
         fig.add_trace(go.Scatter(
             x=x, y=rolling, name="Tendencia (prom. móvil 3)",
-            mode="lines", line=dict(color=COLORS["warning"], width=2, dash="dot"),
+            mode="lines", line=dict(color="#000000", width=2, dash="dot"),
             hovertemplate="Tendencia: $%{y:,.0f}<extra></extra>",
         ))
     fig.update_layout(
@@ -1022,7 +1022,7 @@ def plot_bullet(metrics: dict) -> go.Figure:
     ))
     for meta in metas:
         fig.add_shape(type="line", x0=meta, x1=meta, y0=-0.5, y1=0.5,
-                      line=dict(color=COLORS["muted"], width=2, dash="dash"),
+                      line=dict(color="#000000", width=2, dash="dash"),
                       row=1, col=1)
         fig.add_annotation(x=meta, y=0.55, text=f"Meta {meta}%",
                            showarrow=False, font=dict(size=10, color=COLORS["muted"]),
@@ -1103,7 +1103,7 @@ def plot_prediction(ts: pd.DataFrame, pred_df: pd.DataFrame) -> go.Figure:
             last_x = str(ts["fecha"].iloc[-1])
             fig.add_shape(type="line", xref="x", yref="paper",
                           x0=last_x, x1=last_x, y0=0, y1=1,
-                          line=dict(dash="dash", color=COLORS["muted"], width=1.5))
+                          line=dict(dash="dash", color="#000000", width=1.5))
             fig.add_annotation(x=last_x, yref="paper", y=1.05,
                                 text="Inicio proyección", showarrow=False,
                                 font=dict(size=10, color=COLORS["muted"]), xanchor="left")
@@ -1212,7 +1212,7 @@ def plot_delta_campanas(df: pd.DataFrame) -> go.Figure:
 
     # Línea de promedio general
     promedio = float(pct.mean())
-    fig.add_hline(y=promedio, line_dash="dot", line_color=COLORS["warning"], line_width=2,
+    fig.add_hline(y=promedio, line_dash="dot", line_color="#000000", line_width=2,
                   annotation_text=f"  Promedio: {promedio:.1f}%",
                   annotation_font_color=COLORS["warning"], annotation_font_size=11)
 
