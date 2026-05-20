@@ -995,6 +995,113 @@ def plot_prediction(ts: pd.DataFrame, pred_df: pd.DataFrame) -> go.Figure:
     return fig
 
 
+def _find_num_col(df: pd.DataFrame) -> str | None:
+    return next((c for c in ["Número de Dama_cartera", "Número de Dama",
+                              "NumDama_cartera", "NumDama"] if c in df.columns), None)
+
+
+def plot_cambio_temporalidad(df: pd.DataFrame) -> go.Figure:
+    """Damas que tienen campañas pagadas Y pendientes — cambio de temporalidad."""
+    num_col  = _find_num_col(df)
+    if not num_col:
+        return _base_fig()
+
+    status_sets  = df.groupby(num_col)["Estado_Pago"].apply(set)
+    mixed_mask   = status_sets.apply(lambda s: "Pagado" in s and "Pendiente" in s)
+    mixed_idx    = status_sets[mixed_mask].index
+
+    if len(mixed_idx) == 0:
+        fig = _base_fig()
+        fig.add_annotation(text="No hay damas con cambios de temporalidad detectados",
+                           x=0.5, y=0.5, showarrow=False,
+                           font=dict(size=13, color=COLORS["muted"]), xref="paper", yref="paper")
+        return fig
+
+    mixed_df = df[df[num_col].isin(mixed_idx)]
+    pag = mixed_df[mixed_df["Estado_Pago"] == "Pagado"].groupby(num_col).size().rename("pagadas")
+    pen = mixed_df[mixed_df["Estado_Pago"] == "Pendiente"].groupby(num_col).size().rename("pendientes")
+    summary = pd.concat([pag, pen], axis=1).fillna(0).astype(int)
+    summary["total"] = summary["pagadas"] + summary["pendientes"]
+    summary = summary.sort_values("total", ascending=False).head(20).sort_values("pagadas")
+
+    fig = go.Figure()
+    fig.add_trace(go.Bar(
+        x=summary["pagadas"], y=summary.index.astype(str),
+        orientation="h", name="✅ Campañas Pagadas",
+        marker_color=COLORS["success"],
+        text=summary["pagadas"].astype(str), textposition="inside",
+        textfont=dict(color="white", size=10),
+        hovertemplate="<b>Dama %{y}</b><br>Campañas pagadas: %{x}<extra></extra>",
+    ))
+    fig.add_trace(go.Bar(
+        x=summary["pendientes"], y=summary.index.astype(str),
+        orientation="h", name="🔴 Campañas Pendientes",
+        marker_color=COLORS["danger"],
+        text=summary["pendientes"].astype(str), textposition="inside",
+        textfont=dict(color="white", size=10),
+        hovertemplate="<b>Dama %{y}</b><br>Campañas pendientes: %{x}<extra></extra>",
+    ))
+    fig.update_layout(
+        **PLOTLY_LAYOUT,
+        title_text=f"Top 20 damas con campañas pagadas Y pendientes (de {len(mixed_idx):,} en total)",
+        title_font=dict(size=14, color=COLORS["primary"]),
+        barmode="stack",
+        xaxis_title="Número de Campañas", yaxis_title="",
+        height=max(340, len(summary) * 26),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+    )
+    return fig
+
+
+def plot_delta_campanas(df: pd.DataFrame) -> go.Figure:
+    """Delta de % cobrado entre campañas consecutivas — mayor y menor incremento."""
+    camp_col = _find_col(df, ["aniocampaña", "aniocampana", "anio", "año", "campaña"])
+    if not camp_col or camp_col not in df.columns:
+        return _base_fig()
+
+    total  = df.groupby(camp_col).size()
+    pagado = df[df["Estado_Pago"] == "Pagado"].groupby(camp_col).size()
+    pct    = (pagado / total * 100).fillna(0)
+    pct.index = pct.index.astype(str)
+    pct    = pct.sort_index()
+
+    if len(pct) < 2:
+        return _base_fig()
+
+    delta = pct.diff().dropna()
+    camps = delta.index.tolist()
+    vals  = delta.values
+    colors = [COLORS["success"] if v >= 0 else COLORS["danger"] for v in vals]
+    labels = [f"+{v:.1f}%" if v >= 0 else f"{v:.1f}%" for v in vals]
+
+    max_idx = delta.idxmax()
+    min_idx = delta.idxmin()
+
+    fig = go.Figure(go.Bar(
+        x=camps, y=vals,
+        marker_color=colors,
+        text=labels, textposition="outside", textfont=dict(size=11),
+        hovertemplate="<b>Campaña %{x}</b><br>Cambio vs anterior: %{y:.1f}%<extra></extra>",
+    ))
+    fig.add_hline(y=0, line_color=COLORS["muted"], line_width=1.2)
+    fig.add_annotation(x=max_idx, y=delta[max_idx],
+                       text="📈 Mayor incremento", showarrow=True, arrowhead=2,
+                       font=dict(size=10, color=COLORS["success"]),
+                       arrowcolor=COLORS["success"], ay=-35, ax=0)
+    fig.add_annotation(x=min_idx, y=delta[min_idx],
+                       text="📉 Mayor caída", showarrow=True, arrowhead=2,
+                       font=dict(size=10, color=COLORS["danger"]),
+                       arrowcolor=COLORS["danger"], ay=35, ax=0)
+    fig.update_layout(
+        **PLOTLY_LAYOUT,
+        title_text="Cambio en % de Cobro entre campañas consecutivas",
+        title_font=dict(size=14, color=COLORS["primary"]),
+        xaxis_title="Campaña", yaxis_title="Δ % Cobrado vs campaña anterior",
+        height=360,
+    )
+    return fig
+
+
 # ─────────────────────────────────────────────
 #  HELPERS UI
 # ─────────────────────────────────────────────
@@ -1207,17 +1314,28 @@ def tab_flujo(metrics: dict):
                plot_prediction(metrics["ts"], pred_df if not pred_df.empty else pd.DataFrame()),
                key="prediccion", height_normal=440, height_expanded=600)
     st.divider()
-    col_l, col_r = st.columns([3, 1])
-    with col_r:
-        top_n = st.slider("Damas a mostrar", 5, 30, 15)
-        if metrics["valor_col"] and metrics["valor_col"] in metrics["df"].columns:
-            s = metrics["df"][metrics["valor_col"]]
-            st.metric("Promedio por Dama", fmt_currency(s.mean()))
-            st.metric("Deuda Máxima",      fmt_currency(s.max()))
-    with col_l:
-        chart_card(f"Top {top_n} Damas con Mayor Saldo Pendiente",
-                   plot_top_damas(metrics["df"], metrics["valor_col"], top_n),
-                   key="topdamas", height_normal=420, height_expanded=650)
+
+    # ── KPIs: cambio de temporalidad ─────────────────────────────────
+    num_col = _find_num_col(metrics["df"])
+    if num_col:
+        status_sets  = metrics["df"].groupby(num_col)["Estado_Pago"].apply(set)
+        mixed_count  = int(status_sets.apply(lambda s: "Pagado" in s and "Pendiente" in s).sum())
+        total_pend   = int((metrics["df"]["Estado_Pago"] == "Pendiente").sum())
+        pct_mixed    = mixed_count / total_pend * 100 if total_pend else 0
+        c1, c2, c3  = st.columns(3)
+        with c1: st.metric("🔄 Damas con cambio de temporalidad", f"{mixed_count:,}")
+        with c2: st.metric("📊 % de los no pagados",              f"{pct_mixed:.1f}%")
+        with c3: st.metric("🔴 Total Pendientes",                 f"{total_pend:,}")
+        st.markdown("<br>", unsafe_allow_html=True)
+
+    chart_card("Damas con campañas pagadas Y pendientes (cambio de temporalidad)",
+               plot_cambio_temporalidad(metrics["df"]),
+               key="cambio_temp", height_normal=460, height_expanded=660)
+    st.markdown("<br>", unsafe_allow_html=True)
+    chart_card("¿Qué campaña tuvo el mayor y menor incremento de cobro?",
+               plot_delta_campanas(metrics["df"]),
+               key="delta_camps", height_normal=360, height_expanded=520)
+
     col_d, _ = st.columns([1, 2])
     with col_d:
         buf = io.BytesIO()
