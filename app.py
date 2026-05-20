@@ -1193,7 +1193,7 @@ def main():
         "📈 Proyección de Recuperación",
     ])
     with tab1:
-        tab_resumen(metrics, filters)
+        tab_resumen(metrics)
     with tab2:
         tab_pagos(metrics)
     with tab3:
