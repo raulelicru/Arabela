@@ -532,19 +532,31 @@ def _base_fig(**kwargs) -> go.Figure:
 
 
 def plot_kpi_donut(pagados: int, pendientes: int) -> go.Figure:
+    total = pagados + pendientes
+    pct   = pagados / total * 100 if total else 0
     fig = _base_fig()
     fig.add_trace(go.Pie(
-        labels=["Pagado", "Pendiente"],
+        labels=["✅ Pagado", "🔴 Pendiente"],
         values=[pagados, pendientes],
-        hole=0.62,
+        hole=0.68,
         marker_colors=[COLORS["success"], COLORS["danger"]],
-        textinfo="percent",
-        hovertemplate="%{label}: %{value} registros (%{percent})<extra></extra>",
+        textinfo="percent+label",
+        textfont=dict(size=13),
+        hovertemplate="<b>%{label}</b><br>%{value:,} damas (%{percent})<extra></extra>",
+        pull=[0.03, 0],
     ))
+    fig.add_annotation(
+        text=f"<b>{pct:.1f}%</b><br><span style='font-size:11px'>Cobrado</span>",
+        x=0.5, y=0.5, showarrow=False,
+        font=dict(size=18, color=COLORS["primary"]),
+        xref="paper", yref="paper",
+    )
     fig.update_layout(
-        title_text="Distribución Estado de Pago",
+        title_text="¿Cuántas damas ya pagaron?",
         title_font=dict(size=14, color=COLORS["primary"]),
         height=320,
+        showlegend=True,
+        legend=dict(orientation="h", yanchor="bottom", y=-0.15, xanchor="center", x=0.5),
     )
     return fig
 
@@ -553,48 +565,50 @@ def plot_saldo_por_estado(df: pd.DataFrame, saldo_col: str) -> go.Figure:
     if not saldo_col:
         return _base_fig()
     grp = df.groupby("Estado_Pago")[saldo_col].sum().reset_index()
-    fig = px.bar(
-        grp, x="Estado_Pago", y=saldo_col,
-        color="Estado_Pago",
-        color_discrete_map={"Pagado": COLORS["success"], "Pendiente": COLORS["danger"]},
-        title="Saldo Total por Estado de Pago",
-        labels={saldo_col: "Monto ($)", "Estado_Pago": ""},
-    )
+    grp["label"] = grp[saldo_col].apply(lambda v: f"${v/1e6:.2f}M" if v >= 1e6 else f"${v/1e3:.1f}K")
+    colors = grp["Estado_Pago"].map({"Pagado": COLORS["success"], "Pendiente": COLORS["danger"]})
+    fig = go.Figure(go.Bar(
+        x=grp["Estado_Pago"], y=grp[saldo_col],
+        marker_color=colors,
+        text=grp["label"], textposition="outside", textfont=dict(size=13, color=COLORS["primary"]),
+        hovertemplate="<b>%{x}</b><br>Monto: $%{y:,.0f}<extra></extra>",
+    ))
     fig.update_layout(**PLOTLY_LAYOUT, height=320,
-                      title_font=dict(size=14, color=COLORS["primary"]))
-    fig.update_traces(hovertemplate="<b>%{x}</b><br>Monto: $%{y:,.2f}<extra></extra>")
+                      title_text="Monto Total Cobrado vs Pendiente",
+                      title_font=dict(size=14, color=COLORS["primary"]),
+                      xaxis_title="", yaxis_title="Monto ($)")
     return fig
 
 
 def plot_time_series(ts: pd.DataFrame) -> go.Figure:
     fig = _base_fig()
-
-    # Barras de saldo pendiente por campaña
+    labels = [f"${v/1e6:.1f}M" if v >= 1e6 else f"${v/1e3:.0f}K" for v in ts["valor"]]
     fig.add_trace(go.Bar(
-        x=ts["fecha"], y=ts["valor"],
+        x=ts["fecha"].astype(str), y=ts["valor"],
         name="Saldo Pendiente",
-        marker_color=COLORS["accent"],
-        opacity=0.85,
-        hovertemplate="<b>Campaña %{x}</b><br>Saldo: $%{y:,.0f}<extra></extra>",
+        marker=dict(
+            color=ts["valor"],
+            colorscale=[[0, COLORS["success"]], [0.5, COLORS["warning"]], [1, COLORS["danger"]]],
+            showscale=False,
+        ),
+        text=labels, textposition="outside", textfont=dict(size=11),
+        hovertemplate="<b>Campaña %{x}</b><br>Saldo pendiente: $%{y:,.0f}<extra></extra>",
     ))
-
-    # Línea de tendencia encima
     if len(ts) >= 3:
+        rolling = ts["valor"].rolling(3, min_periods=1).mean()
         fig.add_trace(go.Scatter(
-            x=ts["fecha"], y=ts["valor"].rolling(3, min_periods=1).mean(),
-            mode="lines", name="Tendencia",
-            line=dict(color=COLORS["warning"], width=2, dash="dot"),
-            hovertemplate="Tendencia: $%{y:,.0f}<extra></extra>",
+            x=ts["fecha"].astype(str), y=rolling,
+            mode="lines+markers", name="Promedio móvil",
+            line=dict(color=COLORS["primary"], width=2, dash="dot"),
+            marker=dict(size=5),
+            hovertemplate="Promedio: $%{y:,.0f}<extra></extra>",
         ))
-
     fig.update_layout(
-        title_text="Saldo Pendiente por Campaña",
+        **PLOTLY_LAYOUT,
+        title_text="¿Cuánto saldo queda pendiente por campaña?",
         title_font=dict(size=14, color=COLORS["primary"]),
-        xaxis_title="Campaña",
-        yaxis_title="Saldo ($)",
-        height=380,
-        dragmode="zoom",
-        bargap=0.2,
+        xaxis_title="Campaña", yaxis_title="Saldo ($)",
+        height=380, bargap=0.25,
     )
     return fig
 
@@ -640,110 +654,127 @@ def plot_rsi(ts: pd.DataFrame) -> go.Figure:
 
 def plot_prediction(ts: pd.DataFrame, pred_df: pd.DataFrame) -> go.Figure:
     fig = _base_fig()
+    hist_labels = [f"${v/1e6:.1f}M" if v >= 1e6 else f"${v/1e3:.0f}K" for v in ts["valor"]]
     fig.add_trace(go.Bar(
-        x=ts["fecha"], y=ts["valor"],
-        name="Histórico por Campaña",
+        x=ts["fecha"].astype(str), y=ts["valor"],
+        name="Histórico",
         marker_color=COLORS["accent"],
-        opacity=0.8,
-        hovertemplate="<b>Campaña %{x}</b><br>Saldo: $%{y:,.0f}<extra></extra>",
+        opacity=0.9,
+        text=hist_labels, textposition="outside", textfont=dict(size=10),
+        hovertemplate="<b>Campaña %{x}</b><br>Saldo real: $%{y:,.0f}<extra></extra>",
     ))
     if pred_df.empty:
-        fig.update_layout(title_text="Predicción (datos insuficientes)", height=400)
+        fig.update_layout(title_text="Proyección (datos insuficientes)", height=420)
         return fig
-    # Barras de proyección con intervalo de confianza
+    proj_labels = [f"${v/1e6:.1f}M" if v >= 1e6 else f"${v/1e3:.0f}K" for v in pred_df["prediccion"]]
     fig.add_trace(go.Bar(
-        x=pred_df["fecha"], y=pred_df["prediccion"],
-        name="Proyección",
+        x=pred_df["fecha"].astype(str), y=pred_df["prediccion"],
+        name="🔮 Proyección",
         marker_color=COLORS["warning"],
-        opacity=0.75,
+        opacity=0.8,
+        text=proj_labels, textposition="outside", textfont=dict(size=10),
         error_y=dict(
-            type="data",
-            symmetric=False,
+            type="data", symmetric=False,
             array=list(pred_df["upper"] - pred_df["prediccion"]),
             arrayminus=list(pred_df["prediccion"] - pred_df["lower"]),
-            visible=True,
-            color=COLORS["muted"],
+            visible=True, color=COLORS["muted"],
         ),
-        hovertemplate="<b>Campaña %{x}</b><br>Proyección: $%{y:,.0f}<extra></extra>",
+        hovertemplate="<b>Campaña %{x}</b><br>Estimado: $%{y:,.0f}<extra></extra>",
     ))
-    last_hist = str(ts["fecha"].iloc[-1])
+    # Separador entre histórico y proyección
+    if len(ts):
+        last_x = str(ts["fecha"].iloc[-1])
+        fig.add_vline(x=last_x, line_dash="dash", line_color=COLORS["muted"], line_width=1.5,
+                      annotation_text="  Inicio proyección", annotation_font_color=COLORS["muted"])
     fig.update_layout(
-        title_text="Proyección de Recuperación · Próximas Campañas",
+        **PLOTLY_LAYOUT,
+        title_text="Proyección de saldo pendiente para próximas campañas",
         title_font=dict(size=14, color=COLORS["primary"]),
-        xaxis_title="Campaña",
-        yaxis_title="Saldo ($)",
-        height=420, dragmode="zoom",
-        bargap=0.2,
+        xaxis_title="Campaña", yaxis_title="Saldo ($)",
+        height=440, bargap=0.2, barmode="group",
     )
     return fig
 
 
 def plot_top_damas(df: pd.DataFrame, saldo_col: str, n: int = 15) -> go.Figure:
-    if not saldo_col or "Número de Dama" not in df.columns:
+    if not saldo_col:
         return _base_fig()
-    col = "Número de Dama_cartera" if "Número de Dama_cartera" in df.columns else "Número de Dama"
+    col = next((c for c in ["Número de Dama_cartera", "Número de Dama", "NumDama_cartera", "NumDama"]
+                if c in df.columns), None)
+    if not col:
+        return _base_fig()
     top = (
         df[df["Estado_Pago"] == "Pendiente"]
-        .groupby(col)[saldo_col]
-        .sum()
-        .nlargest(n)
-        .reset_index()
-        .sort_values(saldo_col)
+        .groupby(col)[saldo_col].sum()
+        .nlargest(n).reset_index().sort_values(saldo_col)
     )
-    fig = px.bar(
-        top, x=saldo_col, y=col, orientation="h",
-        title=f"Top {n} Damas con Mayor Saldo Pendiente",
-        color=saldo_col,
-        color_continuous_scale=["#16a34a", "#d97706", "#dc2626"],
-        labels={saldo_col: "Saldo Pendiente ($)", col: "Número de Dama"},
-    )
+    top["label"] = top[saldo_col].apply(lambda v: f"${v/1e6:.2f}M" if v >= 1e6 else f"${v/1e3:.1f}K")
+    fig = go.Figure(go.Bar(
+        x=top[saldo_col], y=top[col].astype(str),
+        orientation="h",
+        marker=dict(
+            color=top[saldo_col],
+            colorscale=[[0, "#fbbf24"], [0.6, "#f97316"], [1, "#dc2626"]],
+            showscale=False,
+        ),
+        text=top["label"], textposition="outside", textfont=dict(size=11, color=COLORS["primary"]),
+        hovertemplate="<b>Dama %{y}</b><br>Saldo pendiente: $%{x:,.0f}<extra></extra>",
+    ))
     fig.update_layout(
         **PLOTLY_LAYOUT,
-        height=max(300, n * 22),
+        title_text=f"Top {n} damas con más deuda pendiente",
         title_font=dict(size=14, color=COLORS["primary"]),
-        coloraxis_showscale=False,
+        xaxis_title="Saldo Pendiente ($)", yaxis_title="",
+        height=max(320, n * 26),
+        yaxis=dict(tickfont=dict(size=10)),
     )
     return fig
 
 
 def plot_cobrado_vs_pendiente(df: pd.DataFrame, valor_col: str) -> go.Figure:
-    """Barras apiladas: cobrado vs pendiente por campaña."""
     camp_col = _find_col(df, ["aniocampaña", "aniocampana", "anio", "año", "campaña"])
     if not camp_col or not valor_col or camp_col not in df.columns:
         return _base_fig()
 
+    df = df.copy()
     df[valor_col] = pd.to_numeric(df[valor_col], errors="coerce").fillna(0)
     grp = df.groupby([camp_col, "Estado_Pago"])[valor_col].sum().reset_index()
     grp[camp_col] = grp[camp_col].astype(str)
     camps = sorted(grp[camp_col].unique())
 
-    pagado   = grp[grp["Estado_Pago"] == "Pagado"].set_index(camp_col)[valor_col].reindex(camps, fill_value=0)
+    pagado    = grp[grp["Estado_Pago"] == "Pagado"].set_index(camp_col)[valor_col].reindex(camps, fill_value=0)
     pendiente = grp[grp["Estado_Pago"] == "Pendiente"].set_index(camp_col)[valor_col].reindex(camps, fill_value=0)
+
+    def fmt(v): return f"${v/1e6:.1f}M" if v >= 1e6 else f"${v/1e3:.0f}K"
 
     fig = go.Figure()
     fig.add_trace(go.Bar(
-        x=camps, y=pagado,
-        name="Cobrado", marker_color=COLORS["success"],
+        x=camps, y=pagado.values,
+        name="✅ Cobrado", marker_color=COLORS["success"],
+        text=[fmt(v) for v in pagado.values], textposition="inside",
+        textfont=dict(color="white", size=11),
         hovertemplate="<b>Campaña %{x}</b><br>Cobrado: $%{y:,.0f}<extra></extra>",
     ))
     fig.add_trace(go.Bar(
-        x=camps, y=pendiente,
-        name="Pendiente", marker_color=COLORS["danger"],
+        x=camps, y=pendiente.values,
+        name="🔴 Pendiente", marker_color=COLORS["danger"],
+        text=[fmt(v) for v in pendiente.values], textposition="inside",
+        textfont=dict(color="white", size=11),
         hovertemplate="<b>Campaña %{x}</b><br>Pendiente: $%{y:,.0f}<extra></extra>",
     ))
     fig.update_layout(
         **PLOTLY_LAYOUT,
-        title_text="Cobrado vs Pendiente por Campaña",
+        title_text="¿Cuánto se cobró vs cuánto falta por cobrar?",
         title_font=dict(size=14, color=COLORS["primary"]),
         barmode="stack",
         xaxis_title="Campaña", yaxis_title="Monto ($)",
         height=380,
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
     )
     return fig
 
 
 def plot_pagadas_vs_pendientes_campana(df: pd.DataFrame) -> go.Figure:
-    """Cantidad de Damas pagadas vs pendientes por campaña."""
     camp_col = _find_col(df, ["aniocampaña", "aniocampana", "anio", "año", "campaña"])
     if not camp_col or camp_col not in df.columns:
         return _base_fig()
@@ -757,28 +788,32 @@ def plot_pagadas_vs_pendientes_campana(df: pd.DataFrame) -> go.Figure:
 
     fig = go.Figure()
     fig.add_trace(go.Bar(
-        x=camps, y=pagado,
-        name="Pagadas", marker_color=COLORS["success"],
-        hovertemplate="<b>Campaña %{x}</b><br>Pagadas: %{y:,}<extra></extra>",
+        x=camps, y=pagado.values,
+        name="✅ Pagadas", marker_color=COLORS["success"],
+        text=[f"{v:,}" for v in pagado.values], textposition="outside",
+        textfont=dict(size=10),
+        hovertemplate="<b>Campaña %{x}</b><br>Pagadas: %{y:,} damas<extra></extra>",
     ))
     fig.add_trace(go.Bar(
-        x=camps, y=pendiente,
-        name="Pendientes", marker_color=COLORS["danger"],
-        hovertemplate="<b>Campaña %{x}</b><br>Pendientes: %{y:,}<extra></extra>",
+        x=camps, y=pendiente.values,
+        name="🔴 Pendientes", marker_color=COLORS["danger"],
+        text=[f"{v:,}" for v in pendiente.values], textposition="outside",
+        textfont=dict(size=10),
+        hovertemplate="<b>Campaña %{x}</b><br>Pendientes: %{y:,} damas<extra></extra>",
     ))
     fig.update_layout(
         **PLOTLY_LAYOUT,
-        title_text="Damas Pagadas vs Pendientes por Campaña",
+        title_text="¿Cuántas damas pagaron vs cuántas deben por campaña?",
         title_font=dict(size=14, color=COLORS["primary"]),
         barmode="group",
         xaxis_title="Campaña", yaxis_title="Número de Damas",
         height=360,
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
     )
     return fig
 
 
 def plot_pct_cumplimiento_campana(df: pd.DataFrame) -> go.Figure:
-    """% de cumplimiento por campaña."""
     camp_col = _find_col(df, ["aniocampaña", "aniocampana", "anio", "año", "campaña"])
     if not camp_col or camp_col not in df.columns:
         return _base_fig()
@@ -798,16 +833,22 @@ def plot_pct_cumplimiento_campana(df: pd.DataFrame) -> go.Figure:
             colorscale=[[0, COLORS["danger"]], [0.5, COLORS["warning"]], [1, COLORS["success"]]],
             showscale=False,
         ),
+        text=[f"{v:.1f}%" for v in pct["pct"]], textposition="outside",
+        textfont=dict(size=11, color=COLORS["primary"]),
         hovertemplate="<b>Campaña %{x}</b><br>Cumplimiento: %{y:.1f}%<extra></extra>",
     ))
-    fig.add_hline(y=50, line_dash="dash", line_color=COLORS["muted"],
-                  annotation_text="50%", annotation_font_color=COLORS["muted"])
+    fig.add_hline(y=50, line_dash="dash", line_color=COLORS["warning"], line_width=1.5,
+                  annotation_text="  Meta mínima 50%", annotation_font_color=COLORS["warning"],
+                  annotation_font_size=11)
+    fig.add_hline(y=80, line_dash="dot", line_color=COLORS["success"], line_width=1.5,
+                  annotation_text="  Meta ideal 80%", annotation_font_color=COLORS["success"],
+                  annotation_font_size=11)
     fig.update_layout(
         **PLOTLY_LAYOUT,
-        title_text="% de Cumplimiento de Pago por Campaña",
+        title_text="¿Qué % de damas pagó en cada campaña?",
         title_font=dict(size=14, color=COLORS["primary"]),
-        xaxis_title="Campaña", yaxis_title="% Cumplimiento",
-        yaxis_range=[0, 105],
+        xaxis_title="Campaña", yaxis_title="% de damas que pagaron",
+        yaxis_range=[0, 115],
         height=340,
     )
     return fig
