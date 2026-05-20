@@ -632,17 +632,18 @@ def plot_columnas_agrupadas(df: pd.DataFrame, valor_col: str) -> go.Figure:
     grp = df.groupby([camp_col, "Estado_Pago"])[valor_col].sum().reset_index()
     grp[camp_col] = grp[camp_col].astype(str)
     camps = sorted(grp[camp_col].unique())
+    camp_labels = [_fmt_camp(c) for c in camps]
     pagado    = grp[grp["Estado_Pago"] == "Pagado"].set_index(camp_col)[valor_col].reindex(camps, fill_value=0)
     pendiente = grp[grp["Estado_Pago"] == "Pendiente"].set_index(camp_col)[valor_col].reindex(camps, fill_value=0)
     fig = go.Figure()
     fig.add_trace(go.Bar(
-        x=camps, y=pagado.values, name="✅ Cobrado",
+        x=camp_labels, y=pagado.values, name="✅ Cobrado",
         marker_color=COLORS["success"],
         text=[_fmt(v) for v in pagado.values], textposition="outside", textfont=dict(size=10),
         hovertemplate="<b>Campaña %{x}</b><br>Cobrado: $%{y:,.0f}<extra></extra>",
     ))
     fig.add_trace(go.Bar(
-        x=camps, y=pendiente.values, name="🔴 Pendiente",
+        x=camp_labels, y=pendiente.values, name="🔴 Pendiente",
         marker_color=COLORS["danger"],
         text=[_fmt(v) for v in pendiente.values], textposition="outside", textfont=dict(size=10),
         hovertemplate="<b>Campaña %{x}</b><br>Pendiente: $%{y:,.0f}<extra></extra>",
@@ -667,6 +668,7 @@ def plot_100pct_apilado(df: pd.DataFrame) -> go.Figure:
     grp = df.groupby([camp_col, "Estado_Pago"]).size().reset_index(name="n")
     grp[camp_col] = grp[camp_col].astype(str)
     camps = sorted(grp[camp_col].unique())
+    camp_labels = [_fmt_camp(c) for c in camps]
     total_by_camp = grp.groupby(camp_col)["n"].sum()
     pagado    = grp[grp["Estado_Pago"] == "Pagado"].set_index(camp_col)["n"].reindex(camps, fill_value=0)
     pendiente = grp[grp["Estado_Pago"] == "Pendiente"].set_index(camp_col)["n"].reindex(camps, fill_value=0)
@@ -675,14 +677,14 @@ def plot_100pct_apilado(df: pd.DataFrame) -> go.Figure:
     pct_pen = (pendiente / total_s * 100).values
     fig = go.Figure()
     fig.add_trace(go.Bar(
-        x=camps, y=pct_pag, name="✅ Cobrado",
+        x=camp_labels, y=pct_pag, name="✅ Cobrado",
         marker_color=COLORS["success"],
         text=[f"{v:.1f}%" for v in pct_pag], textposition="inside",
         textfont=dict(color=COLORS["text"], size=11),
         hovertemplate="<b>Campaña %{x}</b><br>Cobrado: %{y:.1f}%<extra></extra>",
     ))
     fig.add_trace(go.Bar(
-        x=camps, y=pct_pen, name="🔴 Pendiente",
+        x=camp_labels, y=pct_pen, name="🔴 Pendiente",
         marker_color=COLORS["danger"],
         text=[f"{v:.1f}%" for v in pct_pen], textposition="inside",
         textfont=dict(color=COLORS["text"], size=11),
@@ -731,15 +733,37 @@ def plot_funnel(df: pd.DataFrame, saldo_col: str) -> go.Figure:
     return fig
 
 
+def _fmt_camp(code: str) -> str:
+    """202608 → 'Camp. 08'  (solo los últimos 2 dígitos son el número de campaña)."""
+    c = str(code).strip()
+    if len(c) == 6 and c.isdigit():
+        return f"Camp. {c[4:]}"
+    return c
+
+
+def _fecha_valida(df: pd.DataFrame, fecha_col: str) -> bool:
+    """Devuelve True si la columna tiene fechas reales (año >= 2000)."""
+    if fecha_col not in df.columns:
+        return False
+    validas = df[fecha_col].dropna()
+    if len(validas) == 0:
+        return False
+    try:
+        anio_min = validas.dt.year.min()
+        return bool(anio_min >= 2000)
+    except Exception:
+        return False
+
+
 def _get_time_axis(df: pd.DataFrame, valor_col: str, fecha_col: str | None):
     """
     Devuelve (x_labels, cob_vals, pen_vals, x_title).
-    Si hay fecha_col real, agrupa por mes. Si no, usa campaña.
+    Si hay fecha_col real válida, agrupa por mes. Si no, usa campaña.
     """
     df = df.copy()
     df[valor_col] = pd.to_numeric(df[valor_col], errors="coerce").fillna(0)
 
-    if fecha_col and fecha_col in df.columns:
+    if fecha_col and _fecha_valida(df, fecha_col):
         df["_period"] = df[fecha_col].dt.to_period("M").astype(str)
         grp_col = "_period"
         x_title = "Mes"
@@ -747,7 +771,7 @@ def _get_time_axis(df: pd.DataFrame, valor_col: str, fecha_col: str | None):
         camp_col = _find_col(df, ["aniocampaña", "aniocampana", "anio", "año", "campaña"])
         if not camp_col:
             return [], [], [], "Campaña"
-        df["_period"] = df[camp_col].astype(str)
+        df["_period"] = df[camp_col].astype(str).apply(_fmt_camp)
         grp_col = "_period"
         x_title = "Campaña"
 
@@ -848,7 +872,7 @@ def plot_heatmap(df: pd.DataFrame, valor_col: str, fecha_col: str | None = None)
 
     MESES = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"]
 
-    if fecha_col and fecha_col in df.columns and df[fecha_col].notna().sum() > 1:
+    if fecha_col and _fecha_valida(df, fecha_col):
         df["_anio"] = df[fecha_col].dt.year.astype(str)
         df["_mes"]  = df[fecha_col].dt.month
         cobrado_grp = (df[df["Estado_Pago"] == "Pagado"]
@@ -1107,7 +1131,7 @@ def plot_damas_por_temporalidad(df: pd.DataFrame) -> go.Figure:
         return _base_fig()
 
     pendientes = df[df["Estado_Pago"] == "Pendiente"].copy()
-    pendientes[camp_col] = pendientes[camp_col].astype(str).str.strip()
+    pendientes[camp_col] = pendientes[camp_col].astype(str).str.strip().apply(_fmt_camp)
     dist = pendientes.groupby(camp_col).size().sort_index()
 
     fig = go.Figure(go.Bar(
@@ -1145,7 +1169,7 @@ def plot_delta_campanas(df: pd.DataFrame) -> go.Figure:
     total  = df.groupby(camp_col).size()
     pagado = df[df["Estado_Pago"] == "Pagado"].groupby(camp_col).size()
     pct    = (pagado / total * 100).fillna(0)
-    pct.index = pct.index.astype(str)
+    pct.index = pct.index.astype(str).map(_fmt_camp)
     pct    = pct.sort_index()
 
     if len(pct) < 2:
@@ -1372,7 +1396,7 @@ def tab_resumen(metrics: dict):
 
 def tab_temporalidad(metrics: dict):
     fi = metrics.get("fecha_inicio_col")
-    usando_fechas = bool(fi)
+    usando_fechas = bool(fi) and _fecha_valida(metrics["df"], fi) if fi else False
     st.markdown(
         "<div class='kpi-banner'><h1>📅 Temporalidad de Cobro</h1>"
         + (f"<p>Usando <b>Fecha de Inicio</b> real del archivo Cartera — análisis mes a mes</p>"
