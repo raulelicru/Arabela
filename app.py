@@ -979,9 +979,12 @@ def plot_prediction(ts: pd.DataFrame, pred_df: pd.DataFrame) -> go.Figure:
         ))
         if len(ts):
             last_x = str(ts["fecha"].iloc[-1])
-            fig.add_vline(x=last_x, line_dash="dash", line_color=COLORS["muted"], line_width=1.5,
-                          annotation_text="  Inicio proyección",
-                          annotation_font_color=COLORS["muted"])
+            fig.add_shape(type="line", xref="x", yref="paper",
+                          x0=last_x, x1=last_x, y0=0, y1=1,
+                          line=dict(dash="dash", color=COLORS["muted"], width=1.5))
+            fig.add_annotation(x=last_x, yref="paper", y=1.05,
+                                text="Inicio proyección", showarrow=False,
+                                font=dict(size=10, color=COLORS["muted"]), xanchor="left")
     fig.update_layout(
         **PLOTLY_LAYOUT,
         title_text="Proyección de saldo pendiente para próximas campañas",
