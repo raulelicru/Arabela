@@ -198,19 +198,27 @@ hr { border-color: #e5e9f0; }
 st.markdown(CUSTOM_CSS, unsafe_allow_html=True)
 
 # ─────────────────────────────────────────────
-#  PALETA DE COLORES (PLOTLY)
+#  PALETA DE COLORES (PLOTLY) — PASTEL
 # ─────────────────────────────────────────────
 COLORS = {
-    "primary":  "#1a3c6e",
-    "accent":   "#2563eb",
-    "success":  "#16a34a",
-    "warning":  "#d97706",
-    "danger":   "#dc2626",
-    "muted":    "#6b7280",
+    "primary":  "#1a3c6e",   # navy (títulos y UI, no gráficas)
+    "accent":   "#93c5fd",   # pastel azul
+    "success":  "#86efac",   # pastel verde
+    "warning":  "#fde68a",   # pastel amarillo
+    "danger":   "#fca5a5",   # pastel rojo/rosa
+    "purple":   "#c4b5fd",   # pastel morado
+    "teal":     "#67e8f9",   # pastel teal
+    "orange":   "#fdba74",   # pastel naranja
+    "muted":    "#9ca3af",
     "bg":       "#ffffff",
     "grid":     "#e5e7eb",
-    "text":     "#1a1a2e",
+    "text":     "#374151",
 }
+# Secuencia pastel para series múltiples
+PASTEL_SEQ = [
+    "#93c5fd", "#86efac", "#fca5a5", "#fde68a",
+    "#c4b5fd", "#67e8f9", "#fdba74", "#a5f3fc",
+]
 
 PLOTLY_LAYOUT = dict(
     paper_bgcolor=COLORS["bg"],
@@ -670,14 +678,14 @@ def plot_100pct_apilado(df: pd.DataFrame) -> go.Figure:
         x=camps, y=pct_pag, name="✅ Cobrado",
         marker_color=COLORS["success"],
         text=[f"{v:.1f}%" for v in pct_pag], textposition="inside",
-        textfont=dict(color="white", size=11),
+        textfont=dict(color=COLORS["text"], size=11),
         hovertemplate="<b>Campaña %{x}</b><br>Cobrado: %{y:.1f}%<extra></extra>",
     ))
     fig.add_trace(go.Bar(
         x=camps, y=pct_pen, name="🔴 Pendiente",
         marker_color=COLORS["danger"],
         text=[f"{v:.1f}%" for v in pct_pen], textposition="inside",
-        textfont=dict(color="white", size=11),
+        textfont=dict(color=COLORS["text"], size=11),
         hovertemplate="<b>Campaña %{x}</b><br>Pendiente: %{y:.1f}%<extra></extra>",
     ))
     fig.add_hline(y=80, line_dash="dot", line_color=COLORS["warning"], line_width=1.5,
@@ -703,12 +711,12 @@ def plot_funnel(df: pd.DataFrame, saldo_col: str) -> go.Figure:
     pagado    = int((df["Estado_Pago"] == "Pagado").sum())
     stages = ["📋 Total Cartera", "📂 Con Saldo Asignado", "🔴 Pendientes de Pago", "✅ Pagadas"]
     values = [total, con_saldo, pendiente, pagado]
-    colors = [COLORS["primary"], COLORS["accent"], COLORS["danger"], COLORS["success"]]
+    colors = [COLORS["accent"], COLORS["teal"], COLORS["danger"], COLORS["success"]]
     fig = go.Figure(go.Funnel(
         y=stages, x=values,
         textposition="inside",
         textinfo="value+percent initial",
-        textfont=dict(color="white", size=12),
+        textfont=dict(color=COLORS["text"], size=12),
         marker=dict(color=colors, line=dict(width=1, color="white")),
         connector=dict(line=dict(color=COLORS["grid"], width=2)),
         hovertemplate="<b>%{y}</b><br>%{x:,} damas<br>%{percentInitial} del total<extra></extra>",
@@ -765,7 +773,7 @@ def plot_linea_tendencia(df: pd.DataFrame, valor_col: str, fecha_col: str | None
         mode="lines+markers",
         line=dict(color=COLORS["success"], width=3),
         marker=dict(size=7, color=COLORS["success"], line=dict(width=2, color="white")),
-        fill="tozeroy", fillcolor="rgba(22,163,74,0.08)",
+        fill="tozeroy", fillcolor="rgba(134,239,172,0.25)",
         hovertemplate=f"<b>%{{x}}</b><br>Cobrado: $%{{y:,.0f}}<extra></extra>",
     ))
     fig.add_trace(go.Scatter(
@@ -773,7 +781,7 @@ def plot_linea_tendencia(df: pd.DataFrame, valor_col: str, fecha_col: str | None
         mode="lines+markers",
         line=dict(color=COLORS["danger"], width=3),
         marker=dict(size=7, color=COLORS["danger"], line=dict(width=2, color="white")),
-        fill="tozeroy", fillcolor="rgba(220,38,38,0.06)",
+        fill="tozeroy", fillcolor="rgba(252,165,165,0.20)",
         hovertemplate=f"<b>%{{x}}</b><br>Pendiente: $%{{y:,.0f}}<extra></extra>",
     ))
     if len(cob_vals) >= 3:
@@ -807,14 +815,14 @@ def plot_area_apilada(df: pd.DataFrame, valor_col: str, fecha_col: str | None = 
         x=x, y=pen_vals, name="🔴 Pendiente",
         stackgroup="one", mode="lines",
         line=dict(color=COLORS["danger"], width=1),
-        fillcolor="rgba(220,38,38,0.45)",
+        fillcolor="rgba(252,165,165,0.70)",
         hovertemplate=f"<b>%{{x}}</b><br>Pendiente: $%{{y:,.0f}}<extra></extra>",
     ))
     fig.add_trace(go.Scatter(
         x=x, y=cob_vals, name="✅ Cobrado",
         stackgroup="one", mode="lines",
         line=dict(color=COLORS["success"], width=1),
-        fillcolor="rgba(22,163,74,0.55)",
+        fillcolor="rgba(134,239,172,0.75)",
         hovertemplate=f"<b>%{{x}}</b><br>Cobrado: $%{{y:,.0f}}<extra></extra>",
     ))
     fig.update_layout(
@@ -1026,7 +1034,7 @@ def plot_top_damas(df: pd.DataFrame, saldo_col: str, n: int = 15) -> go.Figure:
         orientation="h",
         marker=dict(
             color=top[saldo_col],
-            colorscale=[[0, "#fbbf24"], [0.6, "#f97316"], [1, "#dc2626"]],
+            colorscale=[[0, COLORS["warning"]], [0.5, COLORS["orange"]], [1, COLORS["danger"]]],
             showscale=False,
         ),
         text=top["label"], textposition="outside",
