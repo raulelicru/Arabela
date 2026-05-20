@@ -1092,35 +1092,15 @@ def _find_num_col(df: pd.DataFrame) -> str | None:
 
 def plot_damas_por_temporalidad(df: pd.DataFrame) -> go.Figure:
     """
-    Damas Pendientes que aparecen en múltiples campañas (cambiaron de temporalidad).
-    Muestra cuántas damas hay en cada temporalidad destino.
+    Todas las damas Pendientes distribuidas por temporalidad (campaña destino).
     """
-    num_col  = _find_num_col(df)
     camp_col = _find_col(df, ["aniocampaña", "aniocampana", "anio", "año", "campaña"])
-    if not num_col or not camp_col:
+    if not camp_col:
         return _base_fig()
 
-    df = df.copy()
-    df[camp_col] = df[camp_col].astype(str)
-
-    # Solo damas pendientes que aparecen en más de una campaña
-    pendientes = df[df["Estado_Pago"] == "Pendiente"]
-    n_camps = pendientes.groupby(num_col)[camp_col].nunique()
-    damas_multi = n_camps[n_camps > 1].index
-
-    if len(damas_multi) == 0:
-        fig = _base_fig()
-        fig.add_annotation(
-            text="No se detectaron damas con cambio de temporalidad",
-            x=0.5, y=0.5, showarrow=False,
-            font=dict(size=13, color=COLORS["muted"]), xref="paper", yref="paper",
-        )
-        return fig
-
-    # Para cada dama, su campaña más reciente es la "temporalidad de destino"
-    multi_df = pendientes[pendientes[num_col].isin(damas_multi)]
-    destino  = multi_df.groupby(num_col)[camp_col].max()  # campaña más reciente
-    dist     = destino.value_counts().sort_index()
+    pendientes = df[df["Estado_Pago"] == "Pendiente"].copy()
+    pendientes[camp_col] = pendientes[camp_col].astype(str).str.strip()
+    dist = pendientes.groupby(camp_col).size().sort_index()
 
     fig = go.Figure(go.Bar(
         x=dist.index.tolist(),
@@ -1133,15 +1113,16 @@ def plot_damas_por_temporalidad(df: pd.DataFrame) -> go.Figure:
         text=[f"{v:,}" for v in dist.values],
         textposition="outside",
         textfont=dict(size=11, color=COLORS["primary"]),
-        hovertemplate="<b>Temporalidad %{x}</b><br>%{y:,} damas<extra></extra>",
+        hovertemplate="<b>Temporalidad %{x}</b><br>%{y:,} damas pendientes<extra></extra>",
     ))
     fig.update_layout(
         **PLOTLY_LAYOUT,
-        title_text=f"Damas que cambiaron de temporalidad → distribución por campaña destino ({len(damas_multi):,} damas)",
+        title_text=f"Damas pendientes por temporalidad — {dist.values.sum():,} damas en total",
         title_font=dict(size=14, color=COLORS["primary"]),
+        xaxis=dict(type="category", tickangle=-45),
         xaxis_title="Temporalidad (Año Campaña Saldo)",
         yaxis_title="Número de Damas",
-        height=380,
+        height=400,
     )
     return fig
 
@@ -1421,17 +1402,14 @@ def tab_flujo(metrics: dict):
     st.divider()
 
     # ── KPIs: cambio de temporalidad ─────────────────────────────────
-    num_col  = _find_num_col(metrics["df"])
     camp_col = _find_col(metrics["df"], ["aniocampaña", "aniocampana", "anio", "año", "campaña"])
-    if num_col and camp_col:
-        pend_df  = metrics["df"][metrics["df"]["Estado_Pago"] == "Pendiente"].copy()
-        pend_df[camp_col] = pend_df[camp_col].astype(str)
-        n_camps  = pend_df.groupby(num_col)[camp_col].nunique()
-        n_multi  = int((n_camps > 1).sum())
-        total_pend = int((metrics["df"]["Estado_Pago"] == "Pendiente").sum())
-        c1, c2   = st.columns(2)
-        with c1: st.metric("🔄 Damas que cambiaron de temporalidad", f"{n_multi:,}")
-        with c2: st.metric("🔴 Total Pendientes",                    f"{total_pend:,}")
+    if camp_col:
+        pend_df    = metrics["df"][metrics["df"]["Estado_Pago"] == "Pendiente"]
+        total_pend = len(pend_df)
+        n_camps    = pend_df[camp_col].astype(str).nunique()
+        c1, c2     = st.columns(2)
+        with c1: st.metric("🔄 Damas que cambiaron de temporalidad", f"{total_pend:,}")
+        with c2: st.metric("📅 Temporalidades con pendientes",       f"{n_camps}")
         st.markdown("<br>", unsafe_allow_html=True)
 
     chart_card("Damas Pendientes por temporalidad de destino",
