@@ -30,52 +30,139 @@ st.set_page_config(
 # ─────────────────────────────────────────────
 CUSTOM_CSS = """
 <style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+* { font-family: 'Inter', sans-serif; }
+
 /* ── Fondo general ── */
 [data-testid="stAppViewContainer"] {
-    background: #f4f6f9;
-    color: #1a1a2e;
+    background: #f0f2f6;
 }
 [data-testid="stSidebar"] {
-    background: #ffffff;
-    border-right: 1px solid #e0e4ea;
+    background: #1a3c6e;
+    border-right: none;
 }
-[data-testid="stSidebar"] * { color: #1a1a2e; }
+[data-testid="stSidebar"] * { color: #e8edf5 !important; }
+[data-testid="stSidebar"] h2 { color: #ffffff !important; font-size: 1.1rem; }
+[data-testid="stSidebar"] .stSelectbox label,
+[data-testid="stSidebar"] .stMultiSelect label { color: #a8bbcf !important; font-size: 0.8rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+[data-testid="stSidebar"] hr { border-color: rgba(255,255,255,0.15) !important; }
+[data-testid="stSidebar"] [data-testid="stSelectbox"] > div > div,
+[data-testid="stSidebar"] [data-testid="stMultiSelect"] > div > div {
+    background: rgba(255,255,255,0.1) !important;
+    border: 1px solid rgba(255,255,255,0.2) !important;
+    border-radius: 8px !important;
+    color: #ffffff !important;
+}
 
 /* ── Encabezados ── */
-h1 { color: #1a3c6e; }
-h2, h3, h4 { color: #1a3c6e; }
+h1, h2, h3, h4 { color: #1a3c6e; font-weight: 700; }
 
 /* ── Tabs ── */
+[data-testid="stTabs"] {
+    background: #ffffff;
+    border-radius: 12px;
+    padding: 0.3rem 0.5rem 0;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+    margin-bottom: 1.2rem;
+}
 [data-testid="stTabs"] button {
     color: #6b7280;
     font-weight: 600;
-    font-size: 0.9rem;
+    font-size: 0.88rem;
+    border-radius: 8px 8px 0 0;
+    padding: 0.6rem 1.2rem;
+    transition: all 0.2s ease;
 }
+[data-testid="stTabs"] button:hover { color: #1a3c6e; background: #f0f4ff; }
 [data-testid="stTabs"] button[aria-selected="true"] {
-    color: #1a3c6e;
-    border-bottom: 2px solid #1a3c6e;
+    color: #1a3c6e !important;
+    border-bottom: 3px solid #1a3c6e !important;
+    background: #f0f4ff;
 }
 
 /* ── Métricas ── */
 [data-testid="stMetric"] {
     background: #ffffff;
-    border: 1px solid #e0e4ea;
-    border-radius: 10px;
-    padding: 1rem 1.2rem;
-    box-shadow: 0 1px 4px rgba(0,0,0,0.06);
-}
-[data-testid="stMetricLabel"] { color: #6b7280; font-size: 0.78rem; }
-[data-testid="stMetricValue"] { color: #1a1a2e; font-size: 1.6rem; font-weight: 700; }
-
-/* ── Tarjetas ── */
-.card {
-    background: #ffffff;
-    border: 1px solid #e0e4ea;
+    border: 1px solid #e5e9f0;
     border-radius: 12px;
-    padding: 1.2rem 1.5rem;
-    margin-bottom: 1rem;
-    box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+    padding: 1.1rem 1.3rem;
+    box-shadow: 0 2px 8px rgba(26,60,110,0.07);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
+[data-testid="stMetric"]:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(26,60,110,0.12);
+}
+[data-testid="stMetricLabel"] { color: #6b7280; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+[data-testid="stMetricValue"] { color: #1a1a2e; font-size: 1.55rem; font-weight: 700; }
+
+/* ── Tarjetas de gráfica ── */
+.chart-card {
+    background: #ffffff;
+    border: 1px solid #e5e9f0;
+    border-radius: 14px;
+    padding: 1rem 1.2rem 0.5rem;
+    box-shadow: 0 2px 8px rgba(26,60,110,0.06);
+    margin-bottom: 1rem;
+    transition: box-shadow 0.25s ease;
+    animation: fadeSlideIn 0.35s ease both;
+}
+.chart-card:hover {
+    box-shadow: 0 6px 24px rgba(26,60,110,0.13);
+}
+.chart-card-expanded {
+    background: #ffffff;
+    border: 2px solid #1a3c6e;
+    border-radius: 16px;
+    padding: 1.4rem 1.6rem 0.8rem;
+    box-shadow: 0 12px 40px rgba(26,60,110,0.18);
+    margin-bottom: 1.5rem;
+    animation: fadeSlideIn 0.3s ease both;
+}
+.chart-title {
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: #6b7280;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 0.2rem;
+}
+.badge-pagado   { background:#dcfce7; color:#16a34a; padding:2px 10px; border-radius:99px; font-size:0.75rem; font-weight:600; }
+.badge-pendiente{ background:#fee2e2; color:#dc2626; padding:2px 10px; border-radius:99px; font-size:0.75rem; font-weight:600; }
+
+/* ── Animaciones ── */
+@keyframes fadeSlideIn {
+    from { opacity: 0; transform: translateY(14px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+}
+
+/* ── KPI banner ── */
+.kpi-banner {
+    background: linear-gradient(135deg, #1a3c6e 0%, #2563eb 100%);
+    border-radius: 14px;
+    padding: 1.2rem 1.8rem;
+    color: white;
+    margin-bottom: 1.2rem;
+    animation: fadeSlideIn 0.3s ease both;
+}
+.kpi-banner h1 { color: white !important; font-size: 1.4rem; margin: 0; }
+.kpi-banner p  { color: rgba(255,255,255,0.75); margin: 0.2rem 0 0; font-size: 0.85rem; }
+
+/* ── Botones expand ── */
+[data-testid="stButton"] button {
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 0.8rem;
+    transition: all 0.2s ease;
+}
+
+/* ── Divider ── */
+hr { border-color: #e5e9f0; }
 
 /* ── File uploader ── */
 [data-testid="stFileUploader"] {
@@ -85,23 +172,18 @@ h2, h3, h4 { color: #1a3c6e; }
     background: #ffffff;
 }
 
-/* ── Dataframe ── */
-[data-testid="stDataFrame"] { border-radius: 8px; }
-
-/* ── Divider ── */
-hr { border-color: #e0e4ea; }
-
 /* ── Scrollbar ── */
-::-webkit-scrollbar { width: 6px; }
-::-webkit-scrollbar-track { background: #f4f6f9; }
+::-webkit-scrollbar { width: 5px; }
+::-webkit-scrollbar-track { background: #f0f2f6; }
 ::-webkit-scrollbar-thumb { background: #c5d0de; border-radius: 4px; }
 
-/* ── Botón de descarga ── */
+/* ── Download button ── */
 [data-testid="stDownloadButton"] button {
-    background: #1a3c6e;
-    color: white;
+    background: #1a3c6e !important;
+    color: white !important;
     border-radius: 8px;
     font-weight: 600;
+    width: 100%;
 }
 </style>
 """
@@ -744,6 +826,44 @@ def section_header(title: str, subtitle: str = ""):
         )
 
 
+def chart_card(title: str, fig: go.Figure, key: str, height_normal: int = 340, height_expanded: int = 560):
+    """
+    Muestra una gráfica dentro de una tarjeta profesional.
+    Si el usuario pulsa '⛶ Ver en grande', se expande a pantalla completa
+    con transición animada via session_state.
+    """
+    expanded = st.session_state.get("chart_expanded") == key
+
+    if expanded:
+        # ── Vista expandida ────────────────────────────────────────────
+        st.markdown(f"<div class='chart-card-expanded'>", unsafe_allow_html=True)
+        col_t, col_b = st.columns([6, 1])
+        with col_t:
+            st.markdown(f"<div class='chart-title'>{title}</div>", unsafe_allow_html=True)
+        with col_b:
+            if st.button("✕ Cerrar", key=f"close_{key}", use_container_width=True):
+                st.session_state["chart_expanded"] = None
+                st.rerun()
+        fig.update_layout(height=height_expanded)
+        st.plotly_chart(fig, use_container_width=True, key=f"plot_{key}_exp",
+                        config={"displayModeBar": True, "scrollZoom": True})
+        st.markdown("</div>", unsafe_allow_html=True)
+    else:
+        # ── Vista normal ───────────────────────────────────────────────
+        st.markdown(f"<div class='chart-card'>", unsafe_allow_html=True)
+        col_t, col_b = st.columns([6, 1])
+        with col_t:
+            st.markdown(f"<div class='chart-title'>{title}</div>", unsafe_allow_html=True)
+        with col_b:
+            if st.button("⛶ Ampliar", key=f"expand_{key}", use_container_width=True):
+                st.session_state["chart_expanded"] = key
+                st.rerun()
+        fig.update_layout(height=height_normal)
+        st.plotly_chart(fig, use_container_width=True, key=f"plot_{key}",
+                        config={"displayModeBar": False, "scrollZoom": True})
+        st.markdown("</div>", unsafe_allow_html=True)
+
+
 # ─────────────────────────────────────────────
 #  SIDEBAR CON FILTROS
 # ─────────────────────────────────────────────
@@ -821,117 +941,119 @@ def apply_filters(df: pd.DataFrame, filters: dict) -> pd.DataFrame:
 #  TABS
 # ─────────────────────────────────────────────
 
-def tab_resumen(metrics: dict, filters: dict):
-    section_header("Resumen General · KPIs", "Indicadores clave de la cartera filtrada")
+def tab_resumen(metrics: dict):
+    # ── Banner superior ───────────────────────────────────────────────
+    st.markdown(
+        f"""<div class='kpi-banner'>
+        <h1>📊 Resumen General de Cartera</h1>
+        <p>Haz clic en <b>⛶ Ampliar</b> en cualquier gráfica para verla en grande con zoom y filtros</p>
+        </div>""",
+        unsafe_allow_html=True,
+    )
 
+    # ── KPIs ──────────────────────────────────────────────────────────
     c1, c2, c3, c4, c5 = st.columns(5)
-    with c1:
-        st.metric("Total Registros", f"{metrics['total_registros']:,}")
-    with c2:
-        st.metric("Total Cartera", fmt_currency(metrics["monto_total"]))
-    with c3:
-        st.metric("Total Cobrado", fmt_currency(metrics["monto_cobrado"]),
-                  delta=f"+{metrics['monto_cobrado']/metrics['monto_total']*100:.1f}%" if metrics["monto_total"] else None)
-    with c4:
-        st.metric("Saldo Pendiente", fmt_currency(metrics["monto_pendiente"]),
-                  delta=f"{metrics['pendientes']:,} damas", delta_color="inverse")
-    with c5:
-        st.metric("% Cumplimiento", f"{metrics['pct_cumplimiento']:.1f}%",
-                  delta=f"{metrics['pagados']:,} pagadas")
+    pct_cobrado = metrics["monto_cobrado"] / metrics["monto_total"] * 100 if metrics["monto_total"] else 0
+    with c1: st.metric("📋 Total Registros",  f"{metrics['total_registros']:,}")
+    with c2: st.metric("💼 Total Cartera",     fmt_currency(metrics["monto_total"]))
+    with c3: st.metric("✅ Total Cobrado",      fmt_currency(metrics["monto_cobrado"]),
+                       delta=f"+{pct_cobrado:.1f}% del total")
+    with c4: st.metric("🔴 Saldo Pendiente",   fmt_currency(metrics["monto_pendiente"]),
+                       delta=f"{metrics['pendientes']:,} damas deben", delta_color="inverse")
+    with c5: st.metric("🎯 % Cumplimiento",    f"{metrics['pct_cumplimiento']:.1f}%",
+                       delta=f"{metrics['pagados']:,} ya pagaron")
 
-    st.divider()
+    st.markdown("<br>", unsafe_allow_html=True)
 
-    # ── Fila 1: Donut + Cobrado vs Pendiente por campaña ──────────────
+    # ── Fila 1 ────────────────────────────────────────────────────────
     col_a, col_b = st.columns([1, 2])
     with col_a:
-        st.plotly_chart(plot_kpi_donut(metrics["pagados"], metrics["pendientes"]),
-                        use_container_width=True, config={"displayModeBar": False},
-                        key="chart_donut")
+        chart_card("Estado de Pago · Damas",
+                   plot_kpi_donut(metrics["pagados"], metrics["pendientes"]),
+                   key="donut", height_normal=300, height_expanded=500)
     with col_b:
-        st.plotly_chart(plot_cobrado_vs_pendiente(metrics["df"], metrics["valor_col"]),
-                        use_container_width=True, key="chart_cobrado")
+        chart_card("Cobrado vs Pendiente por Campaña",
+                   plot_cobrado_vs_pendiente(metrics["df"], metrics["valor_col"]),
+                   key="cobrado", height_normal=300, height_expanded=520)
 
-    st.divider()
-
-    # ── Fila 2: % Cumplimiento + Damas por campaña ────────────────────
+    # ── Fila 2 ────────────────────────────────────────────────────────
     col_c, col_d = st.columns(2)
     with col_c:
-        st.plotly_chart(plot_pct_cumplimiento_campana(metrics["df"]),
-                        use_container_width=True, key="chart_pct")
+        chart_card("% Cumplimiento de Pago por Campaña",
+                   plot_pct_cumplimiento_campana(metrics["df"]),
+                   key="pct", height_normal=300, height_expanded=500)
     with col_d:
-        st.plotly_chart(plot_pagadas_vs_pendientes_campana(metrics["df"]),
-                        use_container_width=True, key="chart_damas_camp")
+        chart_card("Damas Pagadas vs Pendientes por Campaña",
+                   plot_pagadas_vs_pendientes_campana(metrics["df"]),
+                   key="damas", height_normal=300, height_expanded=500)
 
-    st.divider()
-    section_header("Datos Consolidados", "Primeros 200 registros")
-    st.dataframe(metrics["df"].head(200), use_container_width=True, height=300)
+    # ── Tabla ─────────────────────────────────────────────────────────
+    with st.expander("🗂 Ver datos consolidados (primeros 200 registros)"):
+        st.dataframe(metrics["df"].head(200), use_container_width=True, height=300)
 
 
 def tab_pagos(metrics: dict):
-    section_header("Análisis de Pagos", "Detalle por Dama y campaña")
+    st.markdown(
+        f"""<div class='kpi-banner'>
+        <h1>💳 Análisis de Pagos por Dama</h1>
+        <p>Identifica las Damas con mayor saldo pendiente · Haz clic en <b>⛶ Ampliar</b> para ver en grande</p>
+        </div>""",
+        unsafe_allow_html=True,
+    )
 
-    # ── Top Damas pendientes ──────────────────────────────────────────
-    col_l, col_r = st.columns([2, 1])
-    with col_l:
-        top_n = st.slider("Número de Damas a mostrar", 5, 30, 15)
-        st.plotly_chart(plot_top_damas(metrics["df"], metrics["valor_col"], top_n),
-                        use_container_width=True, key="chart_topdamas")
+    col_l, col_r = st.columns([3, 1])
     with col_r:
-        section_header("Estadísticas")
+        top_n = st.slider("Damas a mostrar", 5, 30, 15)
+        st.markdown("<br>", unsafe_allow_html=True)
         if metrics["valor_col"] and metrics["valor_col"] in metrics["df"].columns:
             s = metrics["df"][metrics["valor_col"]]
             st.metric("Promedio por Dama", fmt_currency(s.mean()))
-            st.metric("Máximo",            fmt_currency(s.max()))
+            st.metric("Deuda Máxima",      fmt_currency(s.max()))
             st.metric("Total Damas",       f"{metrics['total_registros']:,}")
             st.metric("Ya Pagaron",        f"{metrics['pagados']:,}")
-        else:
-            st.info("Sin columna de valor detectada.")
+    with col_l:
+        chart_card(f"Top {top_n} Damas con Mayor Saldo Pendiente",
+                   plot_top_damas(metrics["df"], metrics["valor_col"], top_n),
+                   key="topdamas", height_normal=420, height_expanded=650)
 
     st.divider()
-    section_header("Exportar datos filtrados")
-    buf = io.BytesIO()
-    metrics["df"].to_excel(buf, index=False)
-    buf.seek(0)
-    st.download_button(
-        "⬇ Descargar Excel Consolidado",
-        data=buf,
-        file_name="cartera_consolidada.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    )
+    col_d, _ = st.columns([1, 2])
+    with col_d:
+        buf = io.BytesIO()
+        metrics["df"].to_excel(buf, index=False)
+        buf.seek(0)
+        st.download_button("⬇ Descargar Excel Consolidado", data=buf,
+                           file_name="cartera_consolidada.xlsx",
+                           mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                           use_container_width=True)
 
 
 def tab_proyeccion(metrics: dict):
-    section_header("Proyección de Recuperación", "Estimación de saldos por campaña · Regresión Lineal")
+    st.markdown(
+        f"""<div class='kpi-banner'>
+        <h1>📈 Proyección de Recuperación</h1>
+        <p>Estimación de saldos para las próximas campañas · Modelo de Regresión Lineal</p>
+        </div>""",
+        unsafe_allow_html=True,
+    )
 
     pred_df = predict_recovery(metrics["ts"])
-    st.plotly_chart(plot_prediction(metrics["ts"], pred_df),
-                    use_container_width=True, key="chart_prediction")
 
     if not pred_df.empty:
         col1, col2, col3 = st.columns(3)
-        with col1:
-            st.metric("Proyección próxima campaña", fmt_currency(pred_df["prediccion"].iloc[0]))
-        with col2:
-            st.metric("Límite Superior",  fmt_currency(pred_df["upper"].iloc[0]))
-        with col3:
-            st.metric("Límite Inferior",  fmt_currency(pred_df["lower"].iloc[0]))
+        with col1: st.metric("Próxima campaña (estimado)", fmt_currency(pred_df["prediccion"].iloc[0]))
+        with col2: st.metric("Límite Superior",             fmt_currency(pred_df["upper"].iloc[0]))
+        with col3: st.metric("Límite Inferior",             fmt_currency(pred_df["lower"].iloc[0]))
+        st.markdown("<br>", unsafe_allow_html=True)
 
-        tendencia = (
-            "📈 Tendencia Alcista · Los saldos van subiendo"
-            if pred_df["prediccion"].iloc[-1] > pred_df["prediccion"].iloc[0]
-            else "📉 Tendencia Bajista · Los saldos van bajando (mejora en cobro)"
-        )
-        st.markdown(
-            f"<div class='card' style='border-left:4px solid {COLORS['accent']};'>"
-            f"<b style='color:{COLORS['primary']}'>Diagnóstico</b><br>{tendencia}"
-            f"</div>",
-            unsafe_allow_html=True,
-        )
+    chart_card("Proyección de Saldo Pendiente · Próximas Campañas",
+               plot_prediction(metrics["ts"], pred_df),
+               key="prediccion", height_normal=400, height_expanded=600)
 
     st.divider()
-    section_header("Saldo Pendiente por Campaña", "Histórico real")
-    st.plotly_chart(plot_time_series(metrics["ts"]), use_container_width=True,
-                    key="chart_timeseries")
+    chart_card("Saldo Pendiente Histórico por Campaña",
+               plot_time_series(metrics["ts"]),
+               key="historico", height_normal=340, height_expanded=560)
 
 
 # ─────────────────────────────────────────────
