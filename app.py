@@ -1646,21 +1646,23 @@ def tab_moras(metrics: dict, df_moras: pd.DataFrame | None):
         dist["Damas"] = dist["Damas"].astype(int)
         dist["% del total moras"] = (dist["Damas"] / n_coincidencias * 100).round(1)
 
-        # Dona de distribución de moras por campaña
-        fig_dona_camp = go.Figure(go.Pie(
-            labels=dist["Campaña"],
-            values=dist["Damas"],
-            hole=0.55,
-            marker_colors=PASTEL_SEQ[:len(dist)],
-            textinfo="label+percent",
-            textfont=dict(size=12, color=COLORS["text"]),
-            hovertemplate="<b>%{label}</b><br>Damas en mora: %{value:,}<br>%{percent} del total<extra></extra>",
+        # Barras: % de moras por campaña
+        fig_dona_camp = go.Figure(go.Bar(
+            x=dist["Campaña"],
+            y=dist["% del total moras"],
+            marker_color=PASTEL_SEQ[:len(dist)],
+            text=dist["% del total moras"].apply(lambda v: f"{v:.1f}%"),
+            textposition="outside",
+            textfont=dict(color=COLORS["text"], size=12),
+            hovertemplate="<b>%{x}</b><br>%{y:.1f}% del total de moras<br>Damas: %{customdata:,}<extra></extra>",
+            customdata=dist["Damas"],
         ))
         fig_dona_camp.update_layout(
             **PLOTLY_LAYOUT,
             title_text=f"¿Qué campaña concentra más moras? (total: {n_coincidencias:,} damas)",
             title_font=dict(size=13, color=COLORS["primary"]),
-            legend=dict(orientation="v", yanchor="middle", y=0.5, xanchor="left", x=1.02),
+            xaxis=dict(type="category", **_AXIS_DEFAULTS),
+            yaxis=dict(title="% del total de moras", **_AXIS_DEFAULTS),
         )
         chart_card("% de moras por campaña", fig_dona_camp, key="dona_camp", height_normal=380, height_expanded=540)
 
