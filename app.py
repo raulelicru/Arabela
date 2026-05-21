@@ -1590,7 +1590,7 @@ def tab_moras(metrics: dict, df_moras: pd.DataFrame | None):
             if valor_col else pd.Series(dtype=float)
         )
         dist = pd.concat([dist_count, dist_monto], axis=1).fillna(0).sort_index().reset_index()
-        dist.columns = ["Campaña"] + [c for c in dist.columns if c != "Campaña"]
+        dist = dist.rename(columns={"_camp": "Campaña"})
 
         # Gráfica agrupada: barras de damas + línea de monto
         fig = make_subplots(specs=[[{"secondary_y": True}]])
