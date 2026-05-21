@@ -1673,6 +1673,14 @@ def tab_moras(metrics: dict, df_moras: pd.DataFrame | None):
             lambda d: _clasificar_mora(int(d)) if pd.notna(d) else "Sin clasificar"
         )
 
+        # Una dama → solo su PEOR nivel de mora (evita doble conteo)
+        mora_orden = {"Mora 3": 3, "Mora 2": 2, "Mora 1": 1, "Sin clasificar": 0}
+        moras_dedup = (
+            moras_en_pendientes.assign(_mora_rank=moras_en_pendientes["Nivel de Mora"].map(mora_orden))
+            .sort_values("_mora_rank", ascending=False)
+            .drop_duplicates(subset=nodama_merge, keep="first")
+        )
+
         dist_count = moras_en_pendientes.groupby("_camp").size().rename("Damas")
         dist_monto = (
             pd.to_numeric(moras_en_pendientes[valor_col], errors="coerce")
@@ -1692,14 +1700,15 @@ def tab_moras(metrics: dict, df_moras: pd.DataFrame | None):
 
             mora_colors = {"Mora 1": COLORS["warning"], "Mora 2": COLORS["orange"], "Mora 3": COLORS["danger"]}
 
+            total_dedup = len(moras_dedup)
             mora_dist = (
-                moras_en_pendientes.groupby("Nivel de Mora")
+                moras_dedup.groupby("Nivel de Mora")
                 .agg(Damas=("Nivel de Mora", "count"),
                      Monto=(valor_col, lambda x: pd.to_numeric(x, errors="coerce").sum()) if valor_col else ("_seq", "count"))
                 .reindex(["Mora 1", "Mora 2", "Mora 3"], fill_value=0)
                 .reset_index()
             )
-            mora_dist["% del total"] = (mora_dist["Damas"] / n_coincidencias * 100).round(1)
+            mora_dist["% del total"] = (mora_dist["Damas"] / total_dedup * 100).round(1)
 
             # KPIs por nivel — damas y monto
             st.markdown("<br>", unsafe_allow_html=True)
@@ -1712,9 +1721,9 @@ def tab_moras(metrics: dict, df_moras: pd.DataFrame | None):
 
             st.markdown("<br>", unsafe_allow_html=True)
 
-            # Barras apiladas por campaña — damas
+            # Barras apiladas por campaña — damas (dedup)
             mora_camp = (
-                moras_en_pendientes.groupby(["_camp", "Nivel de Mora"])
+                moras_dedup.groupby(["_camp", "Nivel de Mora"])
                 .size().unstack(fill_value=0)
                 .reindex(columns=["Mora 1", "Mora 2", "Mora 3"], fill_value=0)
                 .sort_index().reset_index()
@@ -1729,7 +1738,7 @@ def tab_moras(metrics: dict, df_moras: pd.DataFrame | None):
                     ))
             fig_mora_camp.update_layout(
                 **PLOTLY_LAYOUT, barmode="stack",
-                title_text="Mora 1 / 2 / 3 por campaña — Número de damas",
+                title_text="Mora 1 / 2 / 3 por campaña — Número de damas (sin doble conteo)",
                 title_font=dict(size=13, color=COLORS["primary"]),
                 xaxis=dict(type="category", **_AXIS_DEFAULTS),
                 yaxis=dict(title="Número de damas", **_AXIS_DEFAULTS),
@@ -1737,12 +1746,12 @@ def tab_moras(metrics: dict, df_moras: pd.DataFrame | None):
             )
             chart_card("Damas Mora 1/2/3 por campaña", fig_mora_camp, key="mora_niveles_camp", height_normal=420, height_expanded=600)
 
-            # Barras apiladas por campaña — monto
+            # Barras apiladas por campaña — monto (dedup)
             if valor_col:
                 st.markdown("<br>", unsafe_allow_html=True)
                 mora_camp_monto = (
-                    moras_en_pendientes.assign(
-                        _monto=pd.to_numeric(moras_en_pendientes[valor_col], errors="coerce")
+                    moras_dedup.assign(
+                        _monto=pd.to_numeric(moras_dedup[valor_col], errors="coerce")
                     ).groupby(["_camp", "Nivel de Mora"])["_monto"]
                     .sum().unstack(fill_value=0)
                     .reindex(columns=["Mora 1", "Mora 2", "Mora 3"], fill_value=0)
@@ -1809,13 +1818,13 @@ def tab_moras(metrics: dict, df_moras: pd.DataFrame | None):
             mora_nivel_colors = {"Mora 1": COLORS["warning"], "Mora 2": COLORS["orange"], "Mora 3": COLORS["danger"]}
 
             for nivel, color in mora_nivel_colors.items():
-                df_nivel = moras_en_pendientes[moras_en_pendientes["Nivel de Mora"] == nivel].copy()
+                df_nivel = moras_dedup[moras_dedup["Nivel de Mora"] == nivel].copy()
                 if df_nivel.empty:
                     continue
 
                 n_nivel  = len(df_nivel)
                 m_nivel  = pd.to_numeric(df_nivel[valor_col], errors="coerce").sum() if valor_col else 0
-                pct_nivel = n_nivel / n_coincidencias * 100
+                pct_nivel = n_nivel / total_dedup * 100
 
                 st.markdown(
                     f"<div style='background:{color}22; border-left:4px solid {color}; "
