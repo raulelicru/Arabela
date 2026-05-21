@@ -1522,8 +1522,9 @@ def tab_moras(metrics: dict, df_moras: pd.DataFrame | None):
         return
 
     # Solo pendientes
-    pendientes = metrics["df"][metrics["df"]["Estado_Pago"] == "Pendiente"].copy()
+    pendientes    = metrics["df"][metrics["df"]["Estado_Pago"] == "Pendiente"].copy()
     total_pendientes = len(pendientes)
+    valor_col     = metrics.get("valor_col")
 
     # Normalizar IDs para el cruce
     pendientes_ids = set(pendientes[nodama_merge].astype(str).str.strip())
@@ -1531,12 +1532,26 @@ def tab_moras(metrics: dict, df_moras: pd.DataFrame | None):
     total_moras    = len(df_moras)
 
     # Coincidencias: pendientes que están en moras
-    coincidencias_ids = pendientes_ids & moras_ids
-    n_coincidencias   = len(coincidencias_ids)
-    pct_pendientes    = (n_coincidencias / total_pendientes * 100) if total_pendientes > 0 else 0
-    pct_moras         = (n_coincidencias / total_moras * 100) if total_moras > 0 else 0
+    coincidencias_ids   = pendientes_ids & moras_ids
+    n_coincidencias     = len(coincidencias_ids)
+    pct_pendientes      = (n_coincidencias / total_pendientes * 100) if total_pendientes > 0 else 0
+    pct_moras           = (n_coincidencias / total_moras * 100)      if total_moras > 0 else 0
 
-    # ── KPIs ────────────────────────────────────────────────────────
+    # Monto en mora
+    moras_en_pendientes = pendientes[
+        pendientes[nodama_merge].astype(str).str.strip().isin(coincidencias_ids)
+    ].copy()
+    monto_mora = (
+        pd.to_numeric(moras_en_pendientes[valor_col], errors="coerce").sum()
+        if valor_col else 0
+    )
+    monto_total_pend = (
+        pd.to_numeric(pendientes[valor_col], errors="coerce").sum()
+        if valor_col else 0
+    )
+    pct_monto = (monto_mora / monto_total_pend * 100) if monto_total_pend > 0 else 0
+
+    # ── KPIs fila 1: conteos ────────────────────────────────────────
     st.markdown("<br>", unsafe_allow_html=True)
     c1, c2, c3, c4 = st.columns(4)
     with c1:
@@ -1548,40 +1563,81 @@ def tab_moras(metrics: dict, df_moras: pd.DataFrame | None):
     with c4:
         st.metric("% del archivo de moras coincide", f"{pct_moras:.1f}%")
 
+    # ── KPIs fila 2: dinero ─────────────────────────────────────────
+    if valor_col:
+        st.markdown("<br>", unsafe_allow_html=True)
+        d1, d2, d3 = st.columns(3)
+        with d1:
+            st.metric("💰 Monto total pendiente", fmt_currency(monto_total_pend))
+        with d2:
+            st.metric("🔴 Monto en mora", fmt_currency(monto_mora))
+        with d3:
+            st.metric("% del monto pendiente en mora", f"{pct_monto:.1f}%")
+
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # ── Distribución por campaña de las moras coincidentes ──────────
+    # ── Gráfica por campaña: damas + monto ─────────────────────────
     camp_col = _find_col(pendientes, ["aniocampaña", "aniocampana", "anio", "año", "campaña"])
     if camp_col and n_coincidencias > 0:
-        moras_en_pendientes = pendientes[
-            pendientes[nodama_merge].astype(str).str.strip().isin(coincidencias_ids)
-        ].copy()
-        moras_en_pendientes["_camp"] = moras_en_pendientes[camp_col].astype(str).str.strip().apply(_fmt_camp)
-        dist = moras_en_pendientes.groupby("_camp").size().sort_index().reset_index()
-        dist.columns = ["Campaña", "Damas en Mora"]
+        moras_en_pendientes["_camp"] = (
+            moras_en_pendientes[camp_col].astype(str).str.strip().apply(_fmt_camp)
+        )
 
-        fig = go.Figure(go.Bar(
-            x=dist["Campaña"],
-            y=dist["Damas en Mora"],
+        dist_count = moras_en_pendientes.groupby("_camp").size().rename("Damas")
+        dist_monto = (
+            pd.to_numeric(moras_en_pendientes[valor_col], errors="coerce")
+            .groupby(moras_en_pendientes["_camp"]).sum().rename("Monto")
+            if valor_col else pd.Series(dtype=float)
+        )
+        dist = pd.concat([dist_count, dist_monto], axis=1).fillna(0).sort_index().reset_index()
+        dist.columns = ["Campaña"] + [c for c in dist.columns if c != "Campaña"]
+
+        # Gráfica agrupada: barras de damas + línea de monto
+        fig = make_subplots(specs=[[{"secondary_y": True}]])
+        fig.add_trace(go.Bar(
+            x=dist["Campaña"], y=dist["Damas"],
+            name="Damas en mora",
             marker_color=COLORS["danger"],
-            text=dist["Damas en Mora"],
+            text=dist["Damas"].astype(int),
             textposition="outside",
-            textfont=dict(color=COLORS["text"], size=12),
-            hovertemplate="<b>%{x}</b><br>Damas en mora: %{y:,}<extra></extra>",
-        ))
+            textfont=dict(color=COLORS["text"], size=11),
+            hovertemplate="<b>%{x}</b><br>Damas: %{y:,}<extra></extra>",
+        ), secondary_y=False)
+
+        if valor_col:
+            fig.add_trace(go.Scatter(
+                x=dist["Campaña"], y=dist["Monto"],
+                name="Monto en mora ($)",
+                mode="lines+markers",
+                line=dict(color="#000000", width=2.5, dash="dot"),
+                marker=dict(size=8, color="#000000"),
+                hovertemplate="<b>%{x}</b><br>Monto: $%{y:,.0f}<extra></extra>",
+            ), secondary_y=True)
+
         fig.update_layout(
             **PLOTLY_LAYOUT,
-            title_text="Damas en mora por campaña",
+            title_text="Damas y monto en mora por campaña",
             title_font=dict(size=14, color=COLORS["primary"]),
             xaxis=dict(type="category", **_AXIS_DEFAULTS),
-            yaxis=dict(title="Número de damas", **_AXIS_DEFAULTS),
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
         )
-        chart_card("Distribución de moras por campaña", fig, key="moras_camp", height_normal=380, height_expanded=560)
+        fig.update_yaxes(title_text="Número de damas", secondary_y=False, **_AXIS_DEFAULTS)
+        fig.update_yaxes(title_text="Monto ($)", secondary_y=True, **_AXIS_DEFAULTS)
+        chart_card("Damas y monto en mora por campaña", fig, key="moras_camp", height_normal=420, height_expanded=600)
 
-    # ── Tabla de moras coincidentes ──────────────────────────────────
+        # ── Tabla resumen por campaña ────────────────────────────────
+        st.markdown("<br>", unsafe_allow_html=True)
+        st.markdown("**Resumen por campaña:**")
+        resumen = dist.copy()
+        resumen["Damas"] = resumen["Damas"].astype(int)
+        if "Monto" in resumen.columns:
+            resumen["Monto"] = resumen["Monto"].apply(lambda x: f"${x:,.2f}")
+        st.dataframe(resumen, use_container_width=True, hide_index=True)
+
+    # ── Tabla detalle de moras coincidentes ─────────────────────────
     if n_coincidencias > 0:
         st.markdown("<br>", unsafe_allow_html=True)
-        st.markdown(f"**{n_coincidencias:,} damas pendientes encontradas en el archivo de moras:**")
+        st.markdown(f"**Detalle: {n_coincidencias:,} damas pendientes encontradas en el archivo de moras**")
         tabla = df_moras[
             df_moras[nodama_mora].astype(str).str.strip().isin(coincidencias_ids)
         ].reset_index(drop=True)
