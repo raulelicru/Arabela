@@ -1509,9 +1509,9 @@ def _camp_to_seq(code) -> int | None:
 
 
 def _clasificar_mora(diff: int) -> str:
-    if diff <= 0:
+    if diff < 0:
         return "Sin mora"
-    elif diff == 1:
+    elif diff <= 1:   # 0 = pendiente en su propia campaña más reciente, 1 = 1 atrás
         return "Mora 1"
     elif diff == 2:
         return "Mora 2"
