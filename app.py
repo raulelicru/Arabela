@@ -1484,6 +1484,123 @@ def tab_flujo(metrics: dict):
 
 
 # ─────────────────────────────────────────────
+#  TAB MORAS
+# ─────────────────────────────────────────────
+
+def _get_nodama_col(df: pd.DataFrame) -> str | None:
+    """Encuentra la columna de número de dama en el archivo de moras."""
+    return _find_col(df, ["nodama", "no dama", "númdama", "numdama", "número de dama", "num_dama"])
+
+
+def _get_merged_nodama_col(df: pd.DataFrame) -> str | None:
+    """Encuentra la columna de número de dama en el merged."""
+    for c in ["Número de Dama_cartera", "Número de Dama", "NumDama_cartera", "NumDama"]:
+        if c in df.columns:
+            return c
+    return _find_col(df, ["nodama", "numdama", "número de dama"])
+
+
+def tab_moras(metrics: dict, df_moras: pd.DataFrame | None):
+    st.markdown(
+        "<div class='kpi-banner'><h1>🔴 Análisis de Moras</h1>"
+        "<p>Damas con deuda pendiente que aparecen en el archivo de moras</p></div>",
+        unsafe_allow_html=True,
+    )
+
+    if df_moras is None:
+        st.info("⬆️ Sube el archivo de moras en el panel de carga de archivos para ver este análisis.")
+        return
+
+    nodama_mora  = _get_nodama_col(df_moras)
+    nodama_merge = _get_merged_nodama_col(metrics["df"])
+
+    if not nodama_mora:
+        st.error("❌ No se encontró la columna NoDama en el archivo de moras. Verifica el archivo.")
+        return
+    if not nodama_merge:
+        st.error("❌ No se encontró la columna de número de dama en los datos principales.")
+        return
+
+    # Solo pendientes
+    pendientes = metrics["df"][metrics["df"]["Estado_Pago"] == "Pendiente"].copy()
+    total_pendientes = len(pendientes)
+
+    # Normalizar IDs para el cruce
+    pendientes_ids = set(pendientes[nodama_merge].astype(str).str.strip())
+    moras_ids      = set(df_moras[nodama_mora].astype(str).str.strip())
+    total_moras    = len(df_moras)
+
+    # Coincidencias: pendientes que están en moras
+    coincidencias_ids = pendientes_ids & moras_ids
+    n_coincidencias   = len(coincidencias_ids)
+    pct_pendientes    = (n_coincidencias / total_pendientes * 100) if total_pendientes > 0 else 0
+    pct_moras         = (n_coincidencias / total_moras * 100) if total_moras > 0 else 0
+
+    # ── KPIs ────────────────────────────────────────────────────────
+    st.markdown("<br>", unsafe_allow_html=True)
+    c1, c2, c3, c4 = st.columns(4)
+    with c1:
+        st.metric("📋 Total en archivo de moras", f"{total_moras:,}")
+    with c2:
+        st.metric("⚠️ Pendientes que son moras", f"{n_coincidencias:,}")
+    with c3:
+        st.metric("% de pendientes en mora", f"{pct_pendientes:.1f}%")
+    with c4:
+        st.metric("% del archivo de moras coincide", f"{pct_moras:.1f}%")
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # ── Distribución por campaña de las moras coincidentes ──────────
+    camp_col = _find_col(pendientes, ["aniocampaña", "aniocampana", "anio", "año", "campaña"])
+    if camp_col and n_coincidencias > 0:
+        moras_en_pendientes = pendientes[
+            pendientes[nodama_merge].astype(str).str.strip().isin(coincidencias_ids)
+        ].copy()
+        moras_en_pendientes["_camp"] = moras_en_pendientes[camp_col].astype(str).str.strip().apply(_fmt_camp)
+        dist = moras_en_pendientes.groupby("_camp").size().sort_index().reset_index()
+        dist.columns = ["Campaña", "Damas en Mora"]
+
+        fig = go.Figure(go.Bar(
+            x=dist["Campaña"],
+            y=dist["Damas en Mora"],
+            marker_color=COLORS["danger"],
+            text=dist["Damas en Mora"],
+            textposition="outside",
+            textfont=dict(color=COLORS["text"], size=12),
+            hovertemplate="<b>%{x}</b><br>Damas en mora: %{y:,}<extra></extra>",
+        ))
+        fig.update_layout(
+            **PLOTLY_LAYOUT,
+            title_text="Damas en mora por campaña",
+            title_font=dict(size=14, color=COLORS["primary"]),
+            xaxis=dict(type="category", **_AXIS_DEFAULTS),
+            yaxis=dict(title="Número de damas", **_AXIS_DEFAULTS),
+        )
+        chart_card("Distribución de moras por campaña", fig, key="moras_camp", height_normal=380, height_expanded=560)
+
+    # ── Tabla de moras coincidentes ──────────────────────────────────
+    if n_coincidencias > 0:
+        st.markdown("<br>", unsafe_allow_html=True)
+        st.markdown(f"**{n_coincidencias:,} damas pendientes encontradas en el archivo de moras:**")
+        tabla = df_moras[
+            df_moras[nodama_mora].astype(str).str.strip().isin(coincidencias_ids)
+        ].reset_index(drop=True)
+        st.dataframe(tabla, use_container_width=True, height=400)
+
+        buf = io.BytesIO()
+        tabla.to_excel(buf, index=False)
+        buf.seek(0)
+        st.download_button(
+            "⬇ Descargar moras coincidentes (Excel)",
+            data=buf,
+            file_name="moras_coincidentes.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+    else:
+        st.success("✅ No se encontraron coincidencias entre las damas pendientes y el archivo de moras.")
+
+
+# ─────────────────────────────────────────────
 #  PANTALLA DE BIENVENIDA
 # ─────────────────────────────────────────────
 
@@ -1525,7 +1642,7 @@ def main():
     # ── Inicializar session_state ─────────────────────────────────────
     for key, default in [
         ("data", None), ("df_cartera", None), ("df_saldos", None),
-        ("mapping", None), ("file_names", (None, None)),
+        ("mapping", None), ("file_names", (None, None)), ("df_moras", None),
     ]:
         if key not in st.session_state:
             st.session_state[key] = default
@@ -1537,7 +1654,7 @@ def main():
         "📂 Cargar archivos Excel",
         expanded=st.session_state.data is None,
     ):
-        col_up1, col_up2 = st.columns(2)
+        col_up1, col_up2, col_up3 = st.columns(3)
         with col_up1:
             st.markdown("**Archivo 1 — Cartera**")
             st.caption("Columna de Número de Dama + Año/Campaña de saldo")
@@ -1550,6 +1667,18 @@ def main():
             file_saldos = st.file_uploader(
                 "Saldos", type=["xlsx", "xls"], label_visibility="collapsed", key="up_saldos"
             )
+        with col_up3:
+            st.markdown("**Archivo 3 — Moras** *(opcional)*")
+            st.caption("Columna NoDama para cruzar con damas pendientes")
+            file_moras = st.file_uploader(
+                "Moras", type=["xlsx", "xls"], label_visibility="collapsed", key="up_moras"
+            )
+            if file_moras:
+                try:
+                    st.session_state.df_moras = read_excel_safe(file_moras)
+                    st.success(f"✅ Moras cargadas: {len(st.session_state.df_moras):,} registros")
+                except Exception as e:
+                    st.error(f"❌ Error al leer moras: {e}")
 
         if file_cartera and file_saldos:
             new_names = (file_cartera.name, file_saldos.name)
@@ -1614,10 +1743,11 @@ def main():
         st.info("🔍 Filtros activos — " + " · ".join(partes))
 
     # ── Tabs ──────────────────────────────────────────────────────────
-    tab1, tab2, tab3 = st.tabs([
+    tab1, tab2, tab3, tab4 = st.tabs([
         "📊 Resumen General",
         "📅 Temporalidad",
         "🌊 Flujo y Proyección",
+        "🔴 Moras",
     ])
     with tab1:
         tab_resumen(metrics)
@@ -1625,6 +1755,8 @@ def main():
         tab_temporalidad(metrics)
     with tab3:
         tab_flujo(metrics)
+    with tab4:
+        tab_moras(metrics, st.session_state.df_moras)
 
 
 if __name__ == "__main__":
