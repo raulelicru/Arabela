@@ -1654,15 +1654,24 @@ def tab_moras(metrics: dict, df_moras: pd.DataFrame | None):
         moras_en_pendientes["_camp"]     = moras_en_pendientes["_camp_raw"].apply(_fmt_camp)
         moras_en_pendientes["_seq"]      = moras_en_pendientes["_camp_raw"].apply(_camp_to_seq)
 
-        # Secuencia máxima = campaña más reciente del dataset completo
-        all_seqs = pendientes[camp_col].astype(str).str.strip().apply(_camp_to_seq).dropna()
-        max_seq  = int(all_seqs.max()) if len(all_seqs) > 0 else None
+        # Campaña máxima POR DAMA (usando todos los registros, no solo pendientes)
+        df_all = metrics["df"].copy()
+        df_all["_seq_all"] = df_all[camp_col].astype(str).str.strip().apply(_camp_to_seq)
+        dama_max_seq = (
+            df_all.groupby(nodama_merge)["_seq_all"].max()
+            .rename("_max_seq_dama")
+        )
+        moras_en_pendientes = moras_en_pendientes.join(
+            dama_max_seq, on=nodama_merge
+        )
+        max_seq = True  # señal para mostrar la sección
 
-        if max_seq:
-            moras_en_pendientes["_diff"]       = max_seq - moras_en_pendientes["_seq"].fillna(max_seq)
-            moras_en_pendientes["Nivel de Mora"] = moras_en_pendientes["_diff"].apply(
-                lambda d: _clasificar_mora(int(d)) if pd.notna(d) else "Sin clasificar"
-            )
+        moras_en_pendientes["_diff"] = (
+            moras_en_pendientes["_max_seq_dama"] - moras_en_pendientes["_seq"].fillna(0)
+        )
+        moras_en_pendientes["Nivel de Mora"] = moras_en_pendientes["_diff"].apply(
+            lambda d: _clasificar_mora(int(d)) if pd.notna(d) else "Sin clasificar"
+        )
 
         dist_count = moras_en_pendientes.groupby("_camp").size().rename("Damas")
         dist_monto = (
@@ -1679,7 +1688,7 @@ def tab_moras(metrics: dict, df_moras: pd.DataFrame | None):
         if max_seq:
             st.markdown("---")
             st.markdown("### 📊 Clasificación por Nivel de Mora")
-            st.caption(f"Campaña de referencia (más reciente): **{_fmt_camp(str(max_seq - (max_seq // 26) * 26).zfill(2))}** · Mora 1 = 1 campaña atrás, Mora 2 = 2 atrás, Mora 3 = 3 o más atrás")
+            st.caption("Referencia: campaña más reciente de **cada dama** · Mora 1 = 1 campaña atrás, Mora 2 = 2 atrás, Mora 3 = 3 o más atrás")
 
             mora_colors = {"Mora 1": COLORS["warning"], "Mora 2": COLORS["orange"], "Mora 3": COLORS["danger"]}
 
