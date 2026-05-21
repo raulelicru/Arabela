@@ -1576,7 +1576,59 @@ def tab_moras(metrics: dict, df_moras: pd.DataFrame | None):
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # ── Gráfica por campaña: damas + monto ─────────────────────────
+    # ── Donas: visión general ───────────────────────────────────────
+    col_d1, col_d2 = st.columns(2)
+
+    with col_d1:
+        fig_dona_damas = go.Figure(go.Pie(
+            labels=["En mora", "Sin mora"],
+            values=[n_coincidencias, total_pendientes - n_coincidencias],
+            hole=0.6,
+            marker_colors=[COLORS["danger"], COLORS["accent"]],
+            textinfo="percent",
+            textfont=dict(size=14, color=COLORS["text"]),
+            hovertemplate="<b>%{label}</b><br>Damas: %{value:,}<br>%{percent}<extra></extra>",
+        ))
+        fig_dona_damas.update_layout(
+            **PLOTLY_LAYOUT,
+            title_text="Damas pendientes en mora vs sin mora",
+            title_font=dict(size=13, color=COLORS["primary"]),
+            annotations=[dict(
+                text=f"<b>{pct_pendientes:.1f}%</b><br>en mora",
+                x=0.5, y=0.5, font_size=16, font_color=COLORS["danger"],
+                showarrow=False,
+            )],
+            legend=dict(orientation="h", yanchor="bottom", y=-0.15, xanchor="center", x=0.5),
+        )
+        chart_card("Damas en mora", fig_dona_damas, key="dona_damas", height_normal=320, height_expanded=480)
+
+    with col_d2:
+        if valor_col:
+            fig_dona_monto = go.Figure(go.Pie(
+                labels=["Monto en mora", "Sin mora"],
+                values=[monto_mora, monto_total_pend - monto_mora],
+                hole=0.6,
+                marker_colors=[COLORS["danger"], COLORS["success"]],
+                textinfo="percent",
+                textfont=dict(size=14, color=COLORS["text"]),
+                hovertemplate="<b>%{label}</b><br>$%{value:,.0f}<br>%{percent}<extra></extra>",
+            ))
+            fig_dona_monto.update_layout(
+                **PLOTLY_LAYOUT,
+                title_text="Monto pendiente en mora vs sin mora",
+                title_font=dict(size=13, color=COLORS["primary"]),
+                annotations=[dict(
+                    text=f"<b>{pct_monto:.1f}%</b><br>en mora",
+                    x=0.5, y=0.5, font_size=16, font_color=COLORS["danger"],
+                    showarrow=False,
+                )],
+                legend=dict(orientation="h", yanchor="bottom", y=-0.15, xanchor="center", x=0.5),
+            )
+            chart_card("Monto en mora", fig_dona_monto, key="dona_monto", height_normal=320, height_expanded=480)
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # ── Distribución por campaña ────────────────────────────────────
     camp_col = _find_col(pendientes, ["aniocampaña", "aniocampana", "anio", "año", "campaña"])
     if camp_col and n_coincidencias > 0:
         moras_en_pendientes["_camp"] = (
@@ -1591,21 +1643,42 @@ def tab_moras(metrics: dict, df_moras: pd.DataFrame | None):
         )
         dist = pd.concat([dist_count, dist_monto], axis=1).fillna(0).sort_index().reset_index()
         dist = dist.rename(columns={"_camp": "Campaña"})
+        dist["Damas"] = dist["Damas"].astype(int)
+        dist["% del total moras"] = (dist["Damas"] / n_coincidencias * 100).round(1)
 
-        # Gráfica agrupada: barras de damas + línea de monto
-        fig = make_subplots(specs=[[{"secondary_y": True}]])
-        fig.add_trace(go.Bar(
+        # Dona de distribución de moras por campaña
+        fig_dona_camp = go.Figure(go.Pie(
+            labels=dist["Campaña"],
+            values=dist["Damas"],
+            hole=0.55,
+            marker_colors=PASTEL_SEQ[:len(dist)],
+            textinfo="label+percent",
+            textfont=dict(size=12, color=COLORS["text"]),
+            hovertemplate="<b>%{label}</b><br>Damas en mora: %{value:,}<br>%{percent} del total<extra></extra>",
+        ))
+        fig_dona_camp.update_layout(
+            **PLOTLY_LAYOUT,
+            title_text=f"¿Qué campaña concentra más moras? (total: {n_coincidencias:,} damas)",
+            title_font=dict(size=13, color=COLORS["primary"]),
+            legend=dict(orientation="v", yanchor="middle", y=0.5, xanchor="left", x=1.02),
+        )
+        chart_card("% de moras por campaña", fig_dona_camp, key="dona_camp", height_normal=380, height_expanded=540)
+
+        st.markdown("<br>", unsafe_allow_html=True)
+
+        # Barras: damas + monto por campaña con eje doble
+        fig_bar = make_subplots(specs=[[{"secondary_y": True}]])
+        fig_bar.add_trace(go.Bar(
             x=dist["Campaña"], y=dist["Damas"],
             name="Damas en mora",
             marker_color=COLORS["danger"],
-            text=dist["Damas"].astype(int),
+            text=dist["Damas"],
             textposition="outside",
             textfont=dict(color=COLORS["text"], size=11),
             hovertemplate="<b>%{x}</b><br>Damas: %{y:,}<extra></extra>",
         ), secondary_y=False)
-
-        if valor_col:
-            fig.add_trace(go.Scatter(
+        if valor_col and "Monto" in dist.columns:
+            fig_bar.add_trace(go.Scatter(
                 x=dist["Campaña"], y=dist["Monto"],
                 name="Monto en mora ($)",
                 mode="lines+markers",
@@ -1613,23 +1686,21 @@ def tab_moras(metrics: dict, df_moras: pd.DataFrame | None):
                 marker=dict(size=8, color="#000000"),
                 hovertemplate="<b>%{x}</b><br>Monto: $%{y:,.0f}<extra></extra>",
             ), secondary_y=True)
-
-        fig.update_layout(
+        fig_bar.update_layout(
             **PLOTLY_LAYOUT,
             title_text="Damas y monto en mora por campaña",
-            title_font=dict(size=14, color=COLORS["primary"]),
+            title_font=dict(size=13, color=COLORS["primary"]),
             xaxis=dict(type="category", **_AXIS_DEFAULTS),
             legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
         )
-        fig.update_yaxes(title_text="Número de damas", secondary_y=False, **_AXIS_DEFAULTS)
-        fig.update_yaxes(title_text="Monto ($)", secondary_y=True, **_AXIS_DEFAULTS)
-        chart_card("Damas y monto en mora por campaña", fig, key="moras_camp", height_normal=420, height_expanded=600)
+        fig_bar.update_yaxes(title_text="Número de damas", secondary_y=False, **_AXIS_DEFAULTS)
+        fig_bar.update_yaxes(title_text="Monto ($)", secondary_y=True, **_AXIS_DEFAULTS)
+        chart_card("Damas y monto en mora por campaña", fig_bar, key="moras_camp", height_normal=420, height_expanded=600)
 
         # ── Tabla resumen por campaña ────────────────────────────────
         st.markdown("<br>", unsafe_allow_html=True)
         st.markdown("**Resumen por campaña:**")
-        resumen = dist.copy()
-        resumen["Damas"] = resumen["Damas"].astype(int)
+        resumen = dist[["Campaña", "Damas", "% del total moras"] + (["Monto"] if "Monto" in dist.columns else [])].copy()
         if "Monto" in resumen.columns:
             resumen["Monto"] = resumen["Monto"].apply(lambda x: f"${x:,.2f}")
         st.dataframe(resumen, use_container_width=True, hide_index=True)
@@ -1637,21 +1708,21 @@ def tab_moras(metrics: dict, df_moras: pd.DataFrame | None):
     # ── Tabla detalle de moras coincidentes ─────────────────────────
     if n_coincidencias > 0:
         st.markdown("<br>", unsafe_allow_html=True)
-        st.markdown(f"**Detalle: {n_coincidencias:,} damas pendientes encontradas en el archivo de moras**")
-        tabla = df_moras[
-            df_moras[nodama_mora].astype(str).str.strip().isin(coincidencias_ids)
-        ].reset_index(drop=True)
-        st.dataframe(tabla, use_container_width=True, height=400)
+        with st.expander(f"Ver detalle: {n_coincidencias:,} damas pendientes en mora"):
+            tabla = df_moras[
+                df_moras[nodama_mora].astype(str).str.strip().isin(coincidencias_ids)
+            ].reset_index(drop=True)
+            st.dataframe(tabla, use_container_width=True, height=400)
 
-        buf = io.BytesIO()
-        tabla.to_excel(buf, index=False)
-        buf.seek(0)
-        st.download_button(
-            "⬇ Descargar moras coincidentes (Excel)",
-            data=buf,
-            file_name="moras_coincidentes.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        )
+            buf = io.BytesIO()
+            tabla.to_excel(buf, index=False)
+            buf.seek(0)
+            st.download_button(
+                "⬇ Descargar moras coincidentes (Excel)",
+                data=buf,
+                file_name="moras_coincidentes.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
     else:
         st.success("✅ No se encontraron coincidencias entre las damas pendientes y el archivo de moras.")
 
