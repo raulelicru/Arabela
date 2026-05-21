@@ -1500,6 +1500,25 @@ def _get_merged_nodama_col(df: pd.DataFrame) -> str | None:
     return _find_col(df, ["nodama", "numdama", "número de dama"])
 
 
+def _camp_to_seq(code) -> int | None:
+    """202526 → secuencia numérica (año*26 + campaña) para calcular diferencias entre campañas."""
+    c = str(code).strip()
+    if len(c) == 6 and c.isdigit():
+        return int(c[:4]) * 26 + int(c[4:])
+    return None
+
+
+def _clasificar_mora(diff: int) -> str:
+    if diff <= 0:
+        return "Sin mora"
+    elif diff == 1:
+        return "Mora 1"
+    elif diff == 2:
+        return "Mora 2"
+    else:
+        return "Mora 3"
+
+
 def tab_moras(metrics: dict, df_moras: pd.DataFrame | None):
     st.markdown(
         "<div class='kpi-banner'><h1>🔴 Análisis de Moras</h1>"
@@ -1631,9 +1650,19 @@ def tab_moras(metrics: dict, df_moras: pd.DataFrame | None):
     # ── Distribución por campaña ────────────────────────────────────
     camp_col = _find_col(pendientes, ["aniocampaña", "aniocampana", "anio", "año", "campaña"])
     if camp_col and n_coincidencias > 0:
-        moras_en_pendientes["_camp"] = (
-            moras_en_pendientes[camp_col].astype(str).str.strip().apply(_fmt_camp)
-        )
+        moras_en_pendientes["_camp_raw"] = moras_en_pendientes[camp_col].astype(str).str.strip()
+        moras_en_pendientes["_camp"]     = moras_en_pendientes["_camp_raw"].apply(_fmt_camp)
+        moras_en_pendientes["_seq"]      = moras_en_pendientes["_camp_raw"].apply(_camp_to_seq)
+
+        # Secuencia máxima = campaña más reciente del dataset completo
+        all_seqs = pendientes[camp_col].astype(str).str.strip().apply(_camp_to_seq).dropna()
+        max_seq  = int(all_seqs.max()) if len(all_seqs) > 0 else None
+
+        if max_seq:
+            moras_en_pendientes["_diff"]       = max_seq - moras_en_pendientes["_seq"].fillna(max_seq)
+            moras_en_pendientes["Nivel de Mora"] = moras_en_pendientes["_diff"].apply(
+                lambda d: _clasificar_mora(int(d)) if pd.notna(d) else "Sin clasificar"
+            )
 
         dist_count = moras_en_pendientes.groupby("_camp").size().rename("Damas")
         dist_monto = (
@@ -1645,6 +1674,88 @@ def tab_moras(metrics: dict, df_moras: pd.DataFrame | None):
         dist = dist.rename(columns={"_camp": "Campaña"})
         dist["Damas"] = dist["Damas"].astype(int)
         dist["% del total moras"] = (dist["Damas"] / n_coincidencias * 100).round(1)
+
+        # ── Clasificación por nivel de mora ─────────────────────────
+        if max_seq:
+            st.markdown("---")
+            st.markdown("### 📊 Clasificación por Nivel de Mora")
+            st.caption(f"Campaña de referencia (más reciente): **{_fmt_camp(str(max_seq - (max_seq // 26) * 26).zfill(2))}** · Mora 1 = 1 campaña atrás, Mora 2 = 2 atrás, Mora 3 = 3 o más atrás")
+
+            mora_colors = {"Mora 1": COLORS["warning"], "Mora 2": COLORS["orange"], "Mora 3": COLORS["danger"]}
+
+            mora_dist = (
+                moras_en_pendientes.groupby("Nivel de Mora")
+                .agg(Damas=("Nivel de Mora", "count"),
+                     Monto=(valor_col, lambda x: pd.to_numeric(x, errors="coerce").sum()) if valor_col else ("_seq", "count"))
+                .reindex(["Mora 1", "Mora 2", "Mora 3"], fill_value=0)
+                .reset_index()
+            )
+            mora_dist["% del total"] = (mora_dist["Damas"] / n_coincidencias * 100).round(1)
+
+            # KPIs por nivel
+            st.markdown("<br>", unsafe_allow_html=True)
+            km1, km2, km3 = st.columns(3)
+            for col_k, row in zip([km1, km2, km3], mora_dist.itertuples()):
+                with col_k:
+                    st.metric(
+                        f"🔴 {row._1}",
+                        f"{row.Damas:,} damas",
+                        delta=f"{row._4:.1f}% del total",
+                        delta_color="off",
+                    )
+                    if valor_col:
+                        st.caption(f"Monto: {fmt_currency(row.Monto)}")
+
+            st.markdown("<br>", unsafe_allow_html=True)
+
+            # Barras apiladas: mora 1/2/3 por campaña
+            mora_camp = (
+                moras_en_pendientes.groupby(["_camp", "Nivel de Mora"])
+                .size().unstack(fill_value=0)
+                .reindex(columns=["Mora 1", "Mora 2", "Mora 3"], fill_value=0)
+                .sort_index().reset_index()
+            )
+            fig_mora_camp = go.Figure()
+            for nivel, color in mora_colors.items():
+                if nivel in mora_camp.columns:
+                    fig_mora_camp.add_trace(go.Bar(
+                        x=mora_camp["_camp"], y=mora_camp[nivel],
+                        name=nivel,
+                        marker_color=color,
+                        hovertemplate=f"<b>%{{x}}</b><br>{nivel}: %{{y:,}} damas<extra></extra>",
+                    ))
+            fig_mora_camp.update_layout(
+                **PLOTLY_LAYOUT,
+                barmode="stack",
+                title_text="Mora 1 / 2 / 3 por campaña de saldo",
+                title_font=dict(size=13, color=COLORS["primary"]),
+                xaxis=dict(type="category", **_AXIS_DEFAULTS),
+                yaxis=dict(title="Número de damas", **_AXIS_DEFAULTS),
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+            )
+            chart_card("Distribución Mora 1/2/3 por campaña", fig_mora_camp, key="mora_niveles_camp", height_normal=420, height_expanded=600)
+
+            st.markdown("<br>", unsafe_allow_html=True)
+
+            # Dona: proporción mora 1/2/3
+            fig_dona_mora = go.Figure(go.Pie(
+                labels=mora_dist["Nivel de Mora"],
+                values=mora_dist["Damas"],
+                hole=0.6,
+                marker_colors=[mora_colors.get(m, COLORS["muted"]) for m in mora_dist["Nivel de Mora"]],
+                textinfo="label+percent",
+                textfont=dict(size=13, color=COLORS["text"]),
+                hovertemplate="<b>%{label}</b><br>Damas: %{value:,}<br>%{percent}<extra></extra>",
+            ))
+            fig_dona_mora.update_layout(
+                **PLOTLY_LAYOUT,
+                title_text="Proporción Mora 1 / 2 / 3",
+                title_font=dict(size=13, color=COLORS["primary"]),
+                legend=dict(orientation="h", yanchor="bottom", y=-0.15, xanchor="center", x=0.5),
+            )
+            chart_card("Proporción de niveles de mora", fig_dona_mora, key="dona_mora_niveles", height_normal=340, height_expanded=480)
+
+            st.markdown("---")
 
         # Barras: % de moras por campaña
         fig_dona_camp = go.Figure(go.Bar(
