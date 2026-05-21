@@ -1793,6 +1793,88 @@ def tab_moras(metrics: dict, df_moras: pd.DataFrame | None):
                     )
                     chart_card("Monto por nivel de mora", fig_dona_monto_mora, key="dona_mora_monto", height_normal=340, height_expanded=480)
 
+            # ── Gráfica individual por cada nivel de mora ───────────────
+            st.markdown("<br>", unsafe_allow_html=True)
+            st.markdown("### 🔍 Detalle individual por nivel de mora")
+
+            mora_nivel_colors = {"Mora 1": COLORS["warning"], "Mora 2": COLORS["orange"], "Mora 3": COLORS["danger"]}
+
+            for nivel, color in mora_nivel_colors.items():
+                df_nivel = moras_en_pendientes[moras_en_pendientes["Nivel de Mora"] == nivel].copy()
+                if df_nivel.empty:
+                    continue
+
+                n_nivel  = len(df_nivel)
+                m_nivel  = pd.to_numeric(df_nivel[valor_col], errors="coerce").sum() if valor_col else 0
+                pct_nivel = n_nivel / n_coincidencias * 100
+
+                st.markdown(
+                    f"<div style='background:{color}22; border-left:4px solid {color}; "
+                    f"padding:0.7rem 1rem; border-radius:8px; margin-bottom:0.5rem;'>"
+                    f"<b style='color:{COLORS['primary']}'>{nivel}</b> &nbsp;·&nbsp; "
+                    f"<b>{n_nivel:,}</b> damas &nbsp;·&nbsp; "
+                    f"<b>{fmt_currency(m_nivel)}</b> &nbsp;·&nbsp; "
+                    f"<b>{pct_nivel:.1f}%</b> del total de moras"
+                    f"</div>",
+                    unsafe_allow_html=True,
+                )
+
+                camp_nivel = (
+                    df_nivel.groupby("_camp")
+                    .agg(
+                        Damas=("_camp", "count"),
+                        Monto=(valor_col, lambda x: pd.to_numeric(x, errors="coerce").sum()) if valor_col else ("_camp", "count"),
+                    )
+                    .sort_index().reset_index()
+                )
+                camp_nivel["% del nivel"] = (camp_nivel["Damas"] / n_nivel * 100).round(1)
+
+                c_graf1, c_graf2 = st.columns(2)
+
+                # Gráfica 1: barras de damas por campaña
+                with c_graf1:
+                    fig1 = go.Figure(go.Bar(
+                        x=camp_nivel["_camp"], y=camp_nivel["Damas"],
+                        marker_color=color,
+                        text=camp_nivel["Damas"],
+                        textposition="outside",
+                        textfont=dict(color=COLORS["text"], size=11),
+                        hovertemplate="<b>%{x}</b><br>Damas: %{y:,}<br>%{customdata:.1f}% del nivel<extra></extra>",
+                        customdata=camp_nivel["% del nivel"],
+                    ))
+                    fig1.update_layout(
+                        **PLOTLY_LAYOUT,
+                        title_text=f"{nivel} · Damas por campaña",
+                        title_font=dict(size=12, color=COLORS["primary"]),
+                        xaxis=dict(type="category", **_AXIS_DEFAULTS),
+                        yaxis=dict(title="Damas", **_AXIS_DEFAULTS),
+                        height=300,
+                    )
+                    st.plotly_chart(fig1, use_container_width=True, key=f"ind_{nivel.replace(' ','')}_damas")
+
+                # Gráfica 2: barras de monto por campaña
+                with c_graf2:
+                    if valor_col and "Monto" in camp_nivel.columns:
+                        fig2 = go.Figure(go.Bar(
+                            x=camp_nivel["_camp"], y=camp_nivel["Monto"],
+                            marker_color=color,
+                            text=camp_nivel["Monto"].apply(lambda v: f"${v/1e6:.2f}M" if v >= 1e6 else f"${v/1e3:.0f}K"),
+                            textposition="outside",
+                            textfont=dict(color=COLORS["text"], size=11),
+                            hovertemplate="<b>%{x}</b><br>Monto: $%{y:,.0f}<extra></extra>",
+                        ))
+                        fig2.update_layout(
+                            **PLOTLY_LAYOUT,
+                            title_text=f"{nivel} · Monto por campaña",
+                            title_font=dict(size=12, color=COLORS["primary"]),
+                            xaxis=dict(type="category", **_AXIS_DEFAULTS),
+                            yaxis=dict(title="Monto ($)", **_AXIS_DEFAULTS),
+                            height=300,
+                        )
+                        st.plotly_chart(fig2, use_container_width=True, key=f"ind_{nivel.replace(' ','')}_monto")
+
+                st.markdown("<br>", unsafe_allow_html=True)
+
             st.markdown("---")
 
         # Barras: % de moras por campaña
