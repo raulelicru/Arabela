@@ -20,7 +20,7 @@ warnings.filterwarnings("ignore")
 # ─────────────────────────────────────────────
 st.set_page_config(
     page_title="Dashboard · Gestión de Cartera",
-    page_icon="💼",
+    page_icon="",
     layout="wide",
     initial_sidebar_state="expanded",
 )
@@ -264,17 +264,17 @@ def render_column_mapper(df_cartera: pd.DataFrame, df_saldos: pd.DataFrame) -> d
 
     st.markdown(
         f"<div class='card' style='border-left:4px solid {COLORS['warning']};'>"
-        "<b>⚙️ Mapeo de columnas</b> — Selecciona las columnas de cada archivo.</div>",
+        "<b> Mapeo de columnas</b> — Selecciona las columnas de cada archivo.</div>",
         unsafe_allow_html=True,
     )
 
     # ── Llave de cruce (misma estructura en ambos archivos) ───────────
-    st.markdown("##### 🔑 Llave de cruce — *igual en ambos archivos*")
+    st.markdown("#####  Llave de cruce — *igual en ambos archivos*")
     st.caption("Se concatena **Número de Dama + Año Campaña Saldo** en los dos Excel para unirlos.")
 
     col_a, col_b = st.columns(2)
     with col_a:
-        st.markdown("**📁 Cartera**")
+        st.markdown("** Cartera**")
         c_dama = st.selectbox(
             "Número de Dama", cols_c,
             index=_best_guess(cols_c, ["dama", "num", "nro", "id"]),
@@ -287,7 +287,7 @@ def render_column_mapper(df_cartera: pd.DataFrame, df_saldos: pd.DataFrame) -> d
         )
 
     with col_b:
-        st.markdown("**📁 Saldos Actualizados**")
+        st.markdown("** Saldos Actualizados**")
         s_dama = st.selectbox(
             "Número de Dama", cols_s,
             index=_best_guess(cols_s, ["dama", "num", "nro", "id"]),
@@ -302,22 +302,22 @@ def render_column_mapper(df_cartera: pd.DataFrame, df_saldos: pd.DataFrame) -> d
     st.divider()
 
     # ── Columna de saldo (determina quién pagó y cuánto debe) ─────────
-    st.markdown("##### 💰 Columna de saldo en Saldos Actualizados")
+    st.markdown("#####  Columna de saldo en Saldos Actualizados")
     col_c, col_d = st.columns(2)
     with col_c:
         s_saldo = st.selectbox(
-            "Columna con el saldo / deuda ⭐", cols_s,
+            "Columna con el saldo / deuda ", cols_s,
             index=_best_guess(cols_s, ["saldocampaña", "saldocampana", "saldo", "deuda", "valor", "monto", "pendiente"]),
             key="map_s_saldo",
         )
     with col_d:
         st.markdown("")
-        st.info("**Saldo ≥ 51** → ✅ Pagado\n\n**Saldo < 51** → 🔴 Pendiente (aún debe)")
+        st.info("**Saldo ≥ 51** →  Pagado\n\n**Saldo < 51** →  Pendiente (aún debe)")
 
     st.divider()
 
     # ── Monto original en Cartera (opcional) ─────────────────────────
-    st.markdown("##### 📊 Monto original en Cartera *(opcional)*")
+    st.markdown("#####  Monto original en Cartera *(opcional)*")
     c_monto = st.selectbox(
         "Columna con la deuda original de Cartera",
         ["(ninguna)"] + cols_c,
@@ -329,7 +329,7 @@ def render_column_mapper(df_cartera: pd.DataFrame, df_saldos: pd.DataFrame) -> d
     st.divider()
 
     # ── Fechas en Cartera (para análisis temporal real) ───────────────
-    st.markdown("##### 📅 Fechas en Cartera *(opcional — activan análisis temporal)*")
+    st.markdown("#####  Fechas en Cartera *(opcional — activan análisis temporal)*")
     col_f1, col_f2 = st.columns(2)
     with col_f1:
         c_fecha_inicio = st.selectbox(
@@ -347,7 +347,7 @@ def render_column_mapper(df_cartera: pd.DataFrame, df_saldos: pd.DataFrame) -> d
         )
 
     st.markdown("")
-    if st.button("✅ Confirmar y procesar", type="primary", use_container_width=True):
+    if st.button(" Confirmar y procesar", type="primary", use_container_width=True):
         return {
             "c_dama":         c_dama,
             "c_anio":         c_anio,
@@ -597,7 +597,7 @@ def plot_kpi_donut(pagados: int, pendientes: int) -> go.Figure:
     pct   = pagados / total * 100 if total else 0
     fig = _base_fig()
     fig.add_trace(go.Pie(
-        labels=["✅ Pagado", "🔴 Pendiente"],
+        labels=[" Pagado", " Pendiente"],
         values=[pagados, pendientes],
         hole=0.68,
         marker_colors=[COLORS["success"], COLORS["danger"]],
@@ -637,13 +637,13 @@ def plot_columnas_agrupadas(df: pd.DataFrame, valor_col: str) -> go.Figure:
     pendiente = grp[grp["Estado_Pago"] == "Pendiente"].set_index(camp_col)[valor_col].reindex(camps, fill_value=0)
     fig = go.Figure()
     fig.add_trace(go.Bar(
-        x=camp_labels, y=pagado.values, name="✅ Cobrado",
+        x=camp_labels, y=pagado.values, name=" Cobrado",
         marker_color=COLORS["success"],
         text=[_fmt(v) for v in pagado.values], textposition="outside", textfont=dict(size=10),
         hovertemplate="<b>Campaña %{x}</b><br>Cobrado: $%{y:,.0f}<extra></extra>",
     ))
     fig.add_trace(go.Bar(
-        x=camp_labels, y=pendiente.values, name="🔴 Pendiente",
+        x=camp_labels, y=pendiente.values, name=" Pendiente",
         marker_color=COLORS["danger"],
         text=[_fmt(v) for v in pendiente.values], textposition="outside", textfont=dict(size=10),
         hovertemplate="<b>Campaña %{x}</b><br>Pendiente: $%{y:,.0f}<extra></extra>",
@@ -677,14 +677,14 @@ def plot_100pct_apilado(df: pd.DataFrame) -> go.Figure:
     pct_pen = (pendiente / total_s * 100).values
     fig = go.Figure()
     fig.add_trace(go.Bar(
-        x=camp_labels, y=pct_pag, name="✅ Cobrado",
+        x=camp_labels, y=pct_pag, name=" Cobrado",
         marker_color=COLORS["success"],
         text=[f"{v:.1f}%" for v in pct_pag], textposition="inside",
         textfont=dict(color=COLORS["text"], size=11),
         hovertemplate="<b>Campaña %{x}</b><br>Cobrado: %{y:.1f}%<extra></extra>",
     ))
     fig.add_trace(go.Bar(
-        x=camp_labels, y=pct_pen, name="🔴 Pendiente",
+        x=camp_labels, y=pct_pen, name=" Pendiente",
         marker_color=COLORS["danger"],
         text=[f"{v:.1f}%" for v in pct_pen], textposition="inside",
         textfont=dict(color=COLORS["text"], size=11),
@@ -711,7 +711,7 @@ def plot_funnel(df: pd.DataFrame, saldo_col: str) -> go.Figure:
     con_saldo = int((pd.to_numeric(df.get(saldo_col, pd.Series(dtype=float)), errors="coerce").fillna(-1) >= 0).sum()) if saldo_col and saldo_col in df.columns else total
     pendiente = int((df["Estado_Pago"] == "Pendiente").sum())
     pagado    = int((df["Estado_Pago"] == "Pagado").sum())
-    stages = ["📋 Total Cartera", "📂 Con Saldo Asignado", "🔴 Pendientes de Pago", "✅ Pagadas"]
+    stages = [" Total Cartera", " Con Saldo Asignado", " Pendientes de Pago", " Pagadas"]
     values = [total, con_saldo, pendiente, pagado]
     colors = [COLORS["accent"], COLORS["teal"], COLORS["danger"], COLORS["success"]]
     fig = go.Figure(go.Funnel(
@@ -793,7 +793,7 @@ def plot_linea_tendencia(df: pd.DataFrame, valor_col: str, fecha_col: str | None
     x = [str(p) for p in periods]
     fig = go.Figure()
     fig.add_trace(go.Scatter(
-        x=x, y=cob_vals, name="✅ Cobrado",
+        x=x, y=cob_vals, name=" Cobrado",
         mode="lines+markers",
         line=dict(color=COLORS["success"], width=3),
         marker=dict(size=7, color=COLORS["success"], line=dict(width=2, color="white")),
@@ -801,7 +801,7 @@ def plot_linea_tendencia(df: pd.DataFrame, valor_col: str, fecha_col: str | None
         hovertemplate=f"<b>%{{x}}</b><br>Cobrado: $%{{y:,.0f}}<extra></extra>",
     ))
     fig.add_trace(go.Scatter(
-        x=x, y=pen_vals, name="🔴 Pendiente",
+        x=x, y=pen_vals, name=" Pendiente",
         mode="lines+markers",
         line=dict(color=COLORS["danger"], width=3),
         marker=dict(size=7, color=COLORS["danger"], line=dict(width=2, color="white")),
@@ -836,14 +836,14 @@ def plot_area_apilada(df: pd.DataFrame, valor_col: str, fecha_col: str | None = 
     x = [str(p) for p in periods]
     fig = go.Figure()
     fig.add_trace(go.Scatter(
-        x=x, y=pen_vals, name="🔴 Pendiente",
+        x=x, y=pen_vals, name=" Pendiente",
         stackgroup="one", mode="lines",
         line=dict(color=COLORS["danger"], width=1),
         fillcolor="rgba(252,165,165,0.70)",
         hovertemplate=f"<b>%{{x}}</b><br>Pendiente: $%{{y:,.0f}}<extra></extra>",
     ))
     fig.add_trace(go.Scatter(
-        x=x, y=cob_vals, name="✅ Cobrado",
+        x=x, y=cob_vals, name=" Cobrado",
         stackgroup="one", mode="lines",
         line=dict(color=COLORS["success"], width=1),
         fillcolor="rgba(134,239,172,0.75)",
@@ -1089,7 +1089,7 @@ def plot_prediction(ts: pd.DataFrame, pred_df: pd.DataFrame) -> go.Figure:
         proj_labels = [_fmt(v) for v in pred_df["prediccion"]]
         fig.add_trace(go.Bar(
             x=pred_df["fecha"].astype(str), y=pred_df["prediccion"],
-            name="🔮 Proyección", marker_color=COLORS["warning"], opacity=0.8,
+            name=" Proyección", marker_color=COLORS["warning"], opacity=0.8,
             text=proj_labels, textposition="outside", textfont=dict(size=10),
             error_y=dict(
                 type="data", symmetric=False,
@@ -1256,7 +1256,7 @@ def chart_card(title: str, fig: go.Figure, key: str, height_normal: int = 340, h
     if expanded:
         st.markdown(f"<div class='chart-card-expanded'><div class='chart-title'>{title}</div></div>",
                     unsafe_allow_html=True)
-        if st.button("✕  Cerrar", key=f"close_{key}"):
+        if st.button("  Cerrar", key=f"close_{key}"):
             st.session_state["chart_expanded"] = None
             st.rerun()
         fig.update_layout(height=height_expanded)
@@ -1265,7 +1265,7 @@ def chart_card(title: str, fig: go.Figure, key: str, height_normal: int = 340, h
     else:
         st.markdown(f"<div class='chart-card'><div class='chart-title'>{title}</div></div>",
                     unsafe_allow_html=True)
-        if st.button("⛶  Ampliar", key=f"expand_{key}"):
+        if st.button("  Ampliar", key=f"expand_{key}"):
             st.session_state["chart_expanded"] = key
             st.rerun()
         fig.update_layout(height=height_normal)
@@ -1280,7 +1280,7 @@ def chart_card(title: str, fig: go.Figure, key: str, height_normal: int = 340, h
 def render_sidebar(data: dict | None) -> dict:
     filters = {}
     with st.sidebar:
-        st.markdown("## 💼 Cartera Dashboard")
+        st.markdown("##  Cartera Dashboard")
         st.markdown(
             f"<span style='color:{COLORS['muted']};font-size:0.8rem'>Gestión Financiera Profesional</span>",
             unsafe_allow_html=True,
@@ -1316,9 +1316,9 @@ def render_sidebar(data: dict | None) -> dict:
             pend     = total - pagados
             st.markdown(
                 f"<small style='color:{COLORS['muted']}'>"
-                f"📊 Total registros: <b>{total:,}</b><br>"
-                f"✅ Pagadas: <b>{pagados:,}</b><br>"
-                f"🔴 Pendientes: <b>{pend:,}</b>"
+                f" Total registros: <b>{total:,}</b><br>"
+                f" Pagadas: <b>{pagados:,}</b><br>"
+                f" Pendientes: <b>{pend:,}</b>"
                 f"</small>",
                 unsafe_allow_html=True,
             )
@@ -1352,19 +1352,19 @@ def apply_filters(df: pd.DataFrame, filters: dict) -> pd.DataFrame:
 
 def tab_resumen(metrics: dict):
     st.markdown(
-        "<div class='kpi-banner'><h1>📊 Resumen General de Cartera</h1>"
-        "<p>Haz clic en <b>⛶ Ampliar</b> en cualquier gráfica para verla en grande</p></div>",
+        "<div class='kpi-banner'><h1> Resumen General de Cartera</h1>"
+        "<p>Haz clic en <b> Ampliar</b> en cualquier gráfica para verla en grande</p></div>",
         unsafe_allow_html=True,
     )
     c1, c2, c3, c4, c5 = st.columns(5)
     pct_cobrado = metrics["monto_cobrado"] / metrics["monto_total"] * 100 if metrics["monto_total"] else 0
-    with c1: st.metric("📋 Total Registros",  f"{metrics['total_registros']:,}")
-    with c2: st.metric("💼 Total Cartera",     fmt_currency(metrics["monto_total"]))
-    with c3: st.metric("✅ Total Cobrado",      fmt_currency(metrics["monto_cobrado"]),
+    with c1: st.metric(" Total Registros",  f"{metrics['total_registros']:,}")
+    with c2: st.metric(" Total Cartera",     fmt_currency(metrics["monto_total"]))
+    with c3: st.metric(" Total Cobrado",      fmt_currency(metrics["monto_cobrado"]),
                        delta=f"+{pct_cobrado:.1f}% del total")
-    with c4: st.metric("🔴 Saldo Pendiente",   fmt_currency(metrics["monto_pendiente"]),
+    with c4: st.metric(" Saldo Pendiente",   fmt_currency(metrics["monto_pendiente"]),
                        delta=f"{metrics['pendientes']:,} damas deben", delta_color="inverse")
-    with c5: st.metric("🎯 % Cumplimiento",    f"{metrics['pct_cumplimiento']:.1f}%",
+    with c5: st.metric(" % Cumplimiento",    f"{metrics['pct_cumplimiento']:.1f}%",
                        delta=f"{metrics['pagados']:,} ya pagaron")
     st.markdown("<br>", unsafe_allow_html=True)
 
@@ -1390,7 +1390,7 @@ def tab_resumen(metrics: dict):
                    plot_funnel(metrics["df"], metrics["saldo_col"]),
                    key="funnel", height_normal=380)
 
-    with st.expander("🗂 Ver datos consolidados (primeros 200 registros)"):
+    with st.expander(" Ver datos consolidados (primeros 200 registros)"):
         st.dataframe(metrics["df"].head(200), use_container_width=True, height=300)
 
 
@@ -1398,7 +1398,7 @@ def tab_temporalidad(metrics: dict):
     fi = metrics.get("fecha_inicio_col")
     usando_fechas = bool(fi) and _fecha_valida(metrics["df"], fi) if fi else False
     st.markdown(
-        "<div class='kpi-banner'><h1>📅 Temporalidad de Cobro</h1>"
+        "<div class='kpi-banner'><h1> Temporalidad de Cobro</h1>"
         + (f"<p>Usando <b>Fecha de Inicio</b> real del archivo Cartera — análisis mes a mes</p>"
            if usando_fechas else
            "<p>Usando <b>Año Campaña Saldo</b> como eje temporal · Carga fechas en el mapper para análisis mensual</p>")
@@ -1426,7 +1426,7 @@ def tab_temporalidad(metrics: dict):
 
 def tab_flujo(metrics: dict):
     st.markdown(
-        "<div class='kpi-banner'><h1>🌊 Flujo y Proyección de Cartera</h1>"
+        "<div class='kpi-banner'><h1> Flujo y Proyección de Cartera</h1>"
         "<p>Gráfica de cascada, cumplimiento vs meta y proyección de próximas campañas</p></div>",
         unsafe_allow_html=True,
     )
@@ -1460,8 +1460,8 @@ def tab_flujo(metrics: dict):
         total_pend = len(pend_df)
         n_camps    = pend_df[camp_col].astype(str).nunique()
         c1, c2     = st.columns(2)
-        with c1: st.metric("🔄 Damas que cambiaron de temporalidad", f"{total_pend:,}")
-        with c2: st.metric("📅 Temporalidades con pendientes",       f"{n_camps}")
+        with c1: st.metric(" Damas que cambiaron de temporalidad", f"{total_pend:,}")
+        with c2: st.metric(" Temporalidades con pendientes",       f"{n_camps}")
         st.markdown("<br>", unsafe_allow_html=True)
 
     chart_card("Damas Pendientes por temporalidad de destino",
@@ -1477,7 +1477,7 @@ def tab_flujo(metrics: dict):
         buf = io.BytesIO()
         metrics["df"].to_excel(buf, index=False)
         buf.seek(0)
-        st.download_button("⬇ Descargar Excel Consolidado", data=buf,
+        st.download_button(" Descargar Excel Consolidado", data=buf,
                            file_name="cartera_consolidada.xlsx",
                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                            use_container_width=True)
@@ -1521,23 +1521,23 @@ def _clasificar_mora(diff: int) -> str:
 
 def tab_moras(metrics: dict, df_moras: pd.DataFrame | None):
     st.markdown(
-        "<div class='kpi-banner'><h1>🔴 Análisis de Moras</h1>"
+        "<div class='kpi-banner'><h1> Análisis de Moras</h1>"
         "<p>Damas con deuda pendiente que aparecen en el archivo de moras</p></div>",
         unsafe_allow_html=True,
     )
 
     if df_moras is None:
-        st.info("⬆️ Sube el archivo de moras en el panel de carga de archivos para ver este análisis.")
+        st.info(" Sube el archivo de moras en el panel de carga de archivos para ver este análisis.")
         return
 
     nodama_mora  = _get_nodama_col(df_moras)
     nodama_merge = _get_merged_nodama_col(metrics["df"])
 
     if not nodama_mora:
-        st.error("❌ No se encontró la columna NoDama en el archivo de moras. Verifica el archivo.")
+        st.error(" No se encontró la columna NoDama en el archivo de moras. Verifica el archivo.")
         return
     if not nodama_merge:
-        st.error("❌ No se encontró la columna de número de dama en los datos principales.")
+        st.error(" No se encontró la columna de número de dama en los datos principales.")
         return
 
     # Solo pendientes
@@ -1574,9 +1574,9 @@ def tab_moras(metrics: dict, df_moras: pd.DataFrame | None):
     st.markdown("<br>", unsafe_allow_html=True)
     c1, c2, c3, c4 = st.columns(4)
     with c1:
-        st.metric("📋 Total en archivo de moras", f"{total_moras:,}")
+        st.metric(" Total en archivo de moras", f"{total_moras:,}")
     with c2:
-        st.metric("⚠️ Pendientes que son moras", f"{n_coincidencias:,}")
+        st.metric(" Pendientes que son moras", f"{n_coincidencias:,}")
     with c3:
         st.metric("% de pendientes en mora", f"{pct_pendientes:.1f}%")
     with c4:
@@ -1587,9 +1587,9 @@ def tab_moras(metrics: dict, df_moras: pd.DataFrame | None):
         st.markdown("<br>", unsafe_allow_html=True)
         d1, d2, d3 = st.columns(3)
         with d1:
-            st.metric("💰 Monto total pendiente", fmt_currency(monto_total_pend))
+            st.metric(" Monto total pendiente", fmt_currency(monto_total_pend))
         with d2:
-            st.metric("🔴 Monto en mora", fmt_currency(monto_mora))
+            st.metric(" Monto en mora", fmt_currency(monto_mora))
         with d3:
             st.metric("% del monto pendiente en mora", f"{pct_monto:.1f}%")
 
@@ -1695,7 +1695,7 @@ def tab_moras(metrics: dict, df_moras: pd.DataFrame | None):
         # ── Clasificación por nivel de mora ─────────────────────────
         if max_seq:
             st.markdown("---")
-            st.markdown("### 📊 Clasificación por Nivel de Mora")
+            st.markdown("###  Clasificación por Nivel de Mora")
             st.caption("Referencia: campaña más reciente de **cada dama** · Mora 1 = 1 campaña atrás, Mora 2 = 2 atrás, Mora 3 = 3 o más atrás")
 
             mora_colors = {"Mora 1": COLORS["warning"], "Mora 2": COLORS["orange"], "Mora 3": COLORS["danger"]}
@@ -1715,9 +1715,9 @@ def tab_moras(metrics: dict, df_moras: pd.DataFrame | None):
             km1, km2, km3 = st.columns(3)
             for col_k, row in zip([km1, km2, km3], mora_dist.itertuples()):
                 with col_k:
-                    st.metric(f"🔴 {row._1} — Damas", f"{row.Damas:,}", delta=f"{row._4:.1f}% del total", delta_color="off")
+                    st.metric(f" {row._1} — Damas", f"{row.Damas:,}", delta=f"{row._4:.1f}% del total", delta_color="off")
                     if valor_col:
-                        st.metric(f"💰 {row._1} — Monto", fmt_currency(row.Monto))
+                        st.metric(f" {row._1} — Monto", fmt_currency(row.Monto))
 
             st.markdown("<br>", unsafe_allow_html=True)
 
@@ -1813,7 +1813,7 @@ def tab_moras(metrics: dict, df_moras: pd.DataFrame | None):
 
             # ── Gráfica individual por cada nivel de mora ───────────────
             st.markdown("<br>", unsafe_allow_html=True)
-            st.markdown("### 🔍 Detalle individual por nivel de mora")
+            st.markdown("###  Detalle individual por nivel de mora")
 
             mora_nivel_colors = {"Mora 1": COLORS["warning"], "Mora 2": COLORS["orange"], "Mora 3": COLORS["danger"]}
 
@@ -1969,13 +1969,13 @@ def tab_moras(metrics: dict, df_moras: pd.DataFrame | None):
             tabla.to_excel(buf, index=False)
             buf.seek(0)
             st.download_button(
-                "⬇ Descargar moras coincidentes (Excel)",
+                " Descargar moras coincidentes (Excel)",
                 data=buf,
                 file_name="moras_coincidentes.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             )
     else:
-        st.success("✅ No se encontraron coincidencias entre las damas pendientes y el archivo de moras.")
+        st.success(" No se encontraron coincidencias entre las damas pendientes y el archivo de moras.")
 
 
 # ─────────────────────────────────────────────
@@ -1986,7 +1986,7 @@ def render_welcome():
     st.markdown(
         f"""
         <div style='text-align:center; padding: 3rem 0 1rem;'>
-            <h1 style='font-size:2.8rem; color:{COLORS["primary"]}'>💼 Dashboard de Gestión de Cartera</h1>
+            <h1 style='font-size:2.8rem; color:{COLORS["primary"]}'> Dashboard de Gestión de Cartera</h1>
             <p style='color:{COLORS["muted"]}; font-size:1.1rem; max-width:600px; margin:0 auto 2rem;'>
                 Análisis profesional con KPIs, RSI y predicciones.
                 Carga tus dos archivos Excel para comenzar.
@@ -1997,9 +1997,9 @@ def render_welcome():
     )
     c1, c2, c3 = st.columns(3)
     for col, icon, title, desc in [
-        (c1, "📊", "KPIs en Tiempo Real",     "Total cartera, cobrado, pendiente y % de cumplimiento."),
-        (c2, "📈", "RSI y Series Temporales", "Análisis técnico RSI-14 con zonas de sobrecompra/sobreventa."),
-        (c3, "🔮", "Predicción 30 días",       "Proyección de recuperación con regresión lineal e IC."),
+        (c1, "", "KPIs en Tiempo Real",     "Total cartera, cobrado, pendiente y % de cumplimiento."),
+        (c2, "", "RSI y Series Temporales", "Análisis técnico RSI-14 con zonas de sobrecompra/sobreventa."),
+        (c3, "", "Predicción 30 días",       "Proyección de recuperación con regresión lineal e IC."),
     ]:
         with col:
             st.markdown(
@@ -2029,7 +2029,7 @@ def main():
 
     # ── Carga de los 2 archivos Excel ─────────────────────────────────
     with st.expander(
-        "📂 Cargar archivos Excel",
+        " Cargar archivos Excel",
         expanded=st.session_state.data is None,
     ):
         col_up1, col_up2, col_up3 = st.columns(3)
@@ -2054,9 +2054,9 @@ def main():
             if file_moras:
                 try:
                     st.session_state.df_moras = read_excel_safe(file_moras)
-                    st.success(f"✅ Moras cargadas: {len(st.session_state.df_moras):,} registros")
+                    st.success(f" Moras cargadas: {len(st.session_state.df_moras):,} registros")
                 except Exception as e:
-                    st.error(f"❌ Error al leer moras: {e}")
+                    st.error(f" Error al leer moras: {e}")
 
         if file_cartera and file_saldos:
             new_names = (file_cartera.name, file_saldos.name)
@@ -2069,9 +2069,9 @@ def main():
                     st.session_state.mapping     = None
                     st.session_state.file_names  = new_names
                 except Exception as e:
-                    st.error(f"❌ No se pudo leer el archivo: {e}")
+                    st.error(f" No se pudo leer el archivo: {e}")
         elif file_cartera or file_saldos:
-            st.info("⏳ Sube los **dos** archivos para continuar.")
+            st.info(" Sube los **dos** archivos para continuar.")
 
     # ── Mapeo de columnas ─────────────────────────────────────────────
     if (st.session_state.df_cartera is not None
@@ -2093,10 +2093,10 @@ def main():
                     )
                     st.session_state.mapping = mapping
                     n = len(st.session_state.data["merged"])
-                    st.success(f"✅ Cruce completado — **{n:,}** registros consolidados.")
+                    st.success(f" Cruce completado — **{n:,}** registros consolidados.")
                     st.rerun()
                 except Exception as e:
-                    st.error(f"❌ Error al cruzar datos: {e}")
+                    st.error(f" Error al cruzar datos: {e}")
         return  # esperar confirmación del mapeo antes de mostrar dashboard
 
     # ── Sin datos ─────────────────────────────────────────────────────
@@ -2118,14 +2118,14 @@ def main():
     if estado_sel != "Todos":
         partes.append(f"Estado: **{estado_sel}**")
     if partes:
-        st.info("🔍 Filtros activos — " + " · ".join(partes))
+        st.info(" Filtros activos — " + " · ".join(partes))
 
     # ── Tabs ──────────────────────────────────────────────────────────
     tab1, tab2, tab3, tab4 = st.tabs([
-        "📊 Resumen General",
-        "📅 Temporalidad",
-        "🌊 Flujo y Proyección",
-        "🔴 Moras",
+        " Resumen General",
+        " Temporalidad",
+        " Flujo y Proyección",
+        " Moras",
     ])
     with tab1:
         tab_resumen(metrics)
