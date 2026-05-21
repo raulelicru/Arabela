@@ -268,7 +268,7 @@ def render_column_mapper(df_cartera: pd.DataFrame, df_saldos: pd.DataFrame) -> d
     )
 
     # ── Llave de cruce (misma estructura en ambos archivos) ───────────
-    st.markdown("##### 🔑 Llave de cruce — *igual en ambos archivos*")
+    st.markdown("#####  Llave de cruce — *igual en ambos archivos*")
     st.caption("Se concatena **Número de Dama + Año Campaña Saldo** en los dos Excel para unirlos.")
 
     col_a, col_b = st.columns(2)
@@ -596,7 +596,7 @@ def plot_kpi_donut(pagados: int, pendientes: int) -> go.Figure:
     pct   = pagados / total * 100 if total else 0
     fig = _base_fig()
     fig.add_trace(go.Pie(
-        labels=["✅ Pagado", "🔴 Pendiente"],
+        labels=[" Pagado", " Pendiente"],
         values=[pagados, pendientes],
         hole=0.68,
         marker_colors=[COLORS["success"], COLORS["danger"]],
@@ -842,7 +842,7 @@ def plot_area_apilada(df: pd.DataFrame, valor_col: str, fecha_col: str | None = 
         hovertemplate=f"<b>%{{x}}</b><br>Pendiente: $%{{y:,.0f}}<extra></extra>",
     ))
     fig.add_trace(go.Scatter(
-        x=x, y=cob_vals, name="✅ Cobrado",
+        x=x, y=cob_vals, name="Cobrado",
         stackgroup="one", mode="lines",
         line=dict(color=COLORS["success"], width=1),
         fillcolor="rgba(134,239,172,0.75)",
