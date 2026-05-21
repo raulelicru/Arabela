@@ -1327,7 +1327,7 @@ def render_sidebar(data: dict | None) -> dict:
 
         st.divider()
         st.markdown(
-            f"<small style='color:{COLORS['muted']}'>Proyección: Regresión Lineal</small>",
+            f"<small style='color:{COLORS['muted']}'>Motor de Inteligencia de Recuperación</small>",
             unsafe_allow_html=True,
         )
     return filters
