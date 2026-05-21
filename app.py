@@ -1280,7 +1280,7 @@ def chart_card(title: str, fig: go.Figure, key: str, height_normal: int = 340, h
 def render_sidebar(data: dict | None) -> dict:
     filters = {}
     with st.sidebar:
-        st.markdown("## Arabela")
+        st.markdown("## Cartera Dashboard")
         st.markdown(
             f"<span style='color:{COLORS['muted']};font-size:0.8rem'>Centro de Comando de Cobranza</span>",
             unsafe_allow_html=True,
