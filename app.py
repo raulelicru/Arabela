@@ -1999,7 +1999,7 @@ def render_welcome():
     for col, icon, title, desc in [
         (c1, "", "KPIs en Tiempo Real",     "Total cartera, cobrado, pendiente y % de cumplimiento."),
         (c2, "", "RSI y Series Temporales", "Análisis técnico RSI-14 con zonas de sobrecompra/sobreventa."),
-        (c3, "", "Predicción 30 días",       "Proyección de recuperación con regresión lineal e IC."),
+        (c3, "", "Clasificación de Moras",  "Identifica damas en mora, nivel de riesgo y monto en riesgo por campaña."),
     ]:
         with col:
             st.markdown(
