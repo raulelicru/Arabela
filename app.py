@@ -1988,8 +1988,8 @@ def render_welcome():
         <div style='text-align:center; padding: 3rem 0 1rem;'>
             <h1 style='font-size:2.8rem; color:{COLORS["primary"]}'> Dashboard de Gestión de Cartera</h1>
             <p style='color:{COLORS["muted"]}; font-size:1.1rem; max-width:600px; margin:0 auto 2rem;'>
-                Análisis profesional con KPIs, RSI y predicciones.
-                Carga tus dos archivos Excel para comenzar.
+                Visualiza, analiza y actúa sobre tu cartera de cobranza en tiempo real.
+                Carga tus archivos Excel para comenzar.
             </p>
         </div>
         """,
