@@ -1379,16 +1379,10 @@ def tab_resumen(metrics: dict):
                    plot_100pct_apilado(metrics["df"]),
                    key="pct100", height_normal=360)
 
-    # Fila 2: Donut + Embudo
-    col_c, col_d = st.columns([1, 1])
-    with col_c:
-        chart_card("Estado de Pago · Distribución",
-                   plot_kpi_donut(metrics["pagados"], metrics["pendientes"]),
-                   key="donut", height_normal=320)
-    with col_d:
-        chart_card("Embudo de Cobranza · ¿Dónde está la cartera?",
-                   plot_funnel(metrics["df"], metrics["saldo_col"]),
-                   key="funnel", height_normal=380)
+    # Fila 2: solo Donut
+    chart_card("Estado de Pago · Distribución",
+               plot_kpi_donut(metrics["pagados"], metrics["pendientes"]),
+               key="donut", height_normal=320)
 
     with st.expander(" Ver datos consolidados (primeros 200 registros)"):
         st.dataframe(metrics["df"].head(200), use_container_width=True, height=300)
@@ -1409,12 +1403,6 @@ def tab_temporalidad(metrics: dict):
         "Tendencia de Cobro" + (" por Mes" if usando_fechas else " por Campaña"),
         plot_linea_tendencia(metrics["df"], metrics["valor_col"], fi),
         key="linea", height_normal=380, height_expanded=560,
-    )
-    st.markdown("<br>", unsafe_allow_html=True)
-    chart_card(
-        "Evolución Cobrado y Pendiente — Área Apilada" + (" por Mes" if usando_fechas else ""),
-        plot_area_apilada(metrics["df"], metrics["valor_col"], fi),
-        key="area", height_normal=380, height_expanded=560,
     )
     st.markdown("<br>", unsafe_allow_html=True)
     chart_card(
@@ -1439,18 +1427,6 @@ def tab_flujo(metrics: dict):
     chart_card("Cascada · Cómo se reduce la deuda con cada campaña",
                plot_waterfall(metrics["df"], metrics["valor_col"]),
                key="waterfall", height_normal=420, height_expanded=600)
-    st.markdown("<br>", unsafe_allow_html=True)
-    # Proyección
-    pred_df = predict_recovery(metrics["ts"])
-    if not pred_df.empty:
-        col1, col2, col3 = st.columns(3)
-        with col1: st.metric("Próxima campaña (estimado)", fmt_currency(pred_df["prediccion"].iloc[0]))
-        with col2: st.metric("Límite Superior",             fmt_currency(pred_df["upper"].iloc[0]))
-        with col3: st.metric("Límite Inferior",             fmt_currency(pred_df["lower"].iloc[0]))
-        st.markdown("<br>", unsafe_allow_html=True)
-    chart_card("Proyección · Próximas Campañas (Regresión Lineal)",
-               plot_prediction(metrics["ts"], pred_df if not pred_df.empty else pd.DataFrame()),
-               key="prediccion", height_normal=440, height_expanded=600)
     st.divider()
 
     # ── KPIs: cambio de temporalidad ─────────────────────────────────
@@ -1468,9 +1444,6 @@ def tab_flujo(metrics: dict):
                plot_damas_por_temporalidad(metrics["df"]),
                key="cambio_temp", height_normal=400, height_expanded=580)
     st.markdown("<br>", unsafe_allow_html=True)
-    chart_card("¿Qué campaña tuvo el mayor y menor incremento de cobro?",
-               plot_delta_campanas(metrics["df"]),
-               key="delta_camps", height_normal=360, height_expanded=520)
 
     col_d, _ = st.columns([1, 2])
     with col_d:
