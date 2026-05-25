@@ -1568,7 +1568,8 @@ def tab_flujo(metrics: dict):
                     z_cnt = pivot_heat.values.tolist()
                     z_pct = pivot_heat_pct.values.tolist()
 
-                    def _heat_annotations(z_grid, x_labels, y_labels, fmt_fn, threshold=0.45):
+                    def _heat_annotations(z_grid, x_labels, y_labels, fmt_fn,
+                                          threshold=0.45, dark_color="#1a3c6e"):
                         """Anotación por celda con color blanco/oscuro según intensidad."""
                         flat = [v for row in z_grid for v in row]
                         z_max = max(flat) if flat else 1
@@ -1576,7 +1577,7 @@ def tab_flujo(metrics: dict):
                         for i, y in enumerate(y_labels):
                             for j, x in enumerate(x_labels):
                                 val = z_grid[i][j]
-                                color = "white" if (val / z_max) > threshold else "#1a3c6e"
+                                color = "white" if (val / z_max) > threshold else dark_color
                                 anns.append(dict(
                                     x=x, y=y, text=fmt_fn(val),
                                     showarrow=False,
@@ -1619,7 +1620,8 @@ def tab_flujo(metrics: dict):
                         xaxis=dict(type="category", title="Campaña", side="bottom", **_AXIS_DEFAULTS),
                         yaxis=dict(title="", autorange="reversed", **_AXIS_DEFAULTS),
                         annotations=_heat_annotations(z_pct, camps_sorted, rutas_labels,
-                                                      lambda v: f"{v:.0f}%"),
+                                                      lambda v: f"{v:.0f}%",
+                                                      threshold=2.0, dark_color="#111111"),
                     )
                     chart_card("Que porcentaje de cada campaña corresponde a cada ruta",
                                fig_heat_pct, key="heat_pct", height_normal=400)
