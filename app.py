@@ -690,8 +690,8 @@ def plot_100pct_apilado(df: pd.DataFrame) -> go.Figure:
         textfont=dict(color=COLORS["text"], size=11),
         hovertemplate="<b>Campaña %{x}</b><br>Pendiente: %{y:.1f}%<extra></extra>",
     ))
-    fig.add_hline(y=80, line_dash="dot", line_color="#000000", line_width=1.5,
-                  annotation_text="  Meta 80%", annotation_font_color="#000000")
+    fig.add_hline(y=60, line_dash="dot", line_color="#000000", line_width=1.5,
+                  annotation_text="  Meta 60%", annotation_font_color="#000000")
     fig.update_layout(
         **PLOTLY_LAYOUT,
         title_text="¿Qué % de la cartera se recuperó por campaña?",
@@ -989,13 +989,13 @@ def plot_bullet(metrics: dict) -> go.Figure:
     pct   = metrics["pct_cumplimiento"]
     total = metrics["monto_total"]
     cob   = metrics["monto_cobrado"]
-    metas = [50, 80]
+    metas = [50, 60]
     fig = make_subplots(rows=1, cols=1)
     fig.add_trace(go.Bar(
         x=[pct], y=["% Damas que pagaron"],
         orientation="h",
         marker=dict(
-            color=COLORS["success"] if pct >= 80 else COLORS["warning"] if pct >= 50 else COLORS["danger"],
+            color=COLORS["success"] if pct >= 60 else COLORS["warning"] if pct >= 50 else COLORS["danger"],
         ),
         text=[f"  {pct:.1f}%"], textposition="outside",
         textfont=dict(size=14, color=COLORS["primary"]),
@@ -1431,11 +1431,7 @@ def tab_flujo(metrics: dict):
     st.markdown("<br>", unsafe_allow_html=True)
 
     # ── Análisis de Rutas ─────────────────────────────────────────────
-    ruta_col = _find_col(metrics["df"], ["ruta", "rutas", "route"])
-    st.divider()
-    st.markdown("**Columnas disponibles en los datos:**")
-    st.write([c for c in metrics["df"].columns.tolist()])
-    st.write(f"Columna Ruta detectada: `{ruta_col}`")
+    ruta_col = _find_col(metrics["df"], ["ruta", "rutas", "route", "rut"])
     if ruta_col:
         st.divider()
         nodama_col  = _get_merged_nodama_col(metrics["df"])
