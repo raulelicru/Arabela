@@ -1399,8 +1399,8 @@ def tab_temporalidad(metrics: dict):
 
 def tab_flujo(metrics: dict):
     st.markdown(
-        "<div class='kpi-banner'><h1> Flujo y Proyección de Cartera</h1>"
-        "<p>Gráfica de cascada, cumplimiento vs meta y proyección de próximas campañas</p></div>",
+        "<div class='kpi-banner'><h1>Operaciones y Territorio</h1>"
+        "<p>Cumplimiento de meta, flujo de deuda, damas pendientes por campaña y análisis de rutas</p></div>",
         unsafe_allow_html=True,
     )
     # Bullet: meta vs real
@@ -1429,6 +1429,101 @@ def tab_flujo(metrics: dict):
                plot_damas_por_temporalidad(metrics["df"]),
                key="cambio_temp", height_normal=400, height_expanded=580)
     st.markdown("<br>", unsafe_allow_html=True)
+
+    # ── Análisis de Rutas con Moras ──────────────────────────────────
+    ruta_col = _find_col(metrics["df"], ["ruta", "rutas", "route"])
+    nodama_col = _get_merged_nodama_col(metrics["df"])
+    df_moras_ss = st.session_state.get("df_moras")
+
+    if ruta_col and nodama_col and df_moras_ss is not None:
+        st.divider()
+        st.markdown("### Que ruta tiene mas moras")
+        st.caption("Rutas del archivo Cartera cruzadas con las damas en mora")
+
+        nodama_mora = _get_nodama_col(df_moras_ss)
+        if nodama_mora:
+            moras_ids = set(df_moras_ss[nodama_mora].astype(str).str.strip())
+            pendientes = metrics["df"][metrics["df"]["Estado_Pago"] == "Pendiente"].copy()
+            moras_pend = pendientes[
+                pendientes[nodama_col].astype(str).str.strip().isin(moras_ids)
+            ].copy()
+
+            if not moras_pend.empty:
+                ruta_dist = (
+                    moras_pend.groupby(ruta_col)
+                    .agg(
+                        Damas=(ruta_col, "count"),
+                        Monto=(metrics["valor_col"], lambda x: pd.to_numeric(x, errors="coerce").sum())
+                        if metrics.get("valor_col") else (ruta_col, "count"),
+                    )
+                    .sort_values("Damas", ascending=False)
+                    .reset_index()
+                )
+                ruta_dist["% del total"] = (ruta_dist["Damas"] / ruta_dist["Damas"].sum() * 100).round(1)
+
+                # KPIs top 3 rutas
+                top3 = ruta_dist.head(3)
+                cols_r = st.columns(len(top3))
+                for i, (col_r, row) in enumerate(zip(cols_r, top3.itertuples())):
+                    with col_r:
+                        label = "Ruta con mas moras" if i == 0 else f"#{i+1} con mas moras"
+                        st.metric(label, f"Ruta {row._1}", delta=f"{row.Damas:,} damas · {row._4:.1f}%", delta_color="off")
+                        if metrics.get("valor_col"):
+                            st.caption(f"Monto: {fmt_currency(row.Monto)}")
+
+                st.markdown("<br>", unsafe_allow_html=True)
+
+                # Barras por ruta
+                fig_ruta = go.Figure(go.Bar(
+                    x=ruta_dist[ruta_col].astype(str),
+                    y=ruta_dist["Damas"],
+                    marker_color=PASTEL_SEQ[:len(ruta_dist)] if len(ruta_dist) <= len(PASTEL_SEQ)
+                                 else [PASTEL_SEQ[i % len(PASTEL_SEQ)] for i in range(len(ruta_dist))],
+                    text=ruta_dist["Damas"],
+                    textposition="outside",
+                    textfont=dict(color=COLORS["text"], size=11),
+                    hovertemplate="<b>Ruta %{x}</b><br>Damas en mora: %{y:,}<br>%{customdata:.1f}% del total<extra></extra>",
+                    customdata=ruta_dist["% del total"],
+                ))
+                fig_ruta.update_layout(
+                    **PLOTLY_LAYOUT,
+                    title_text="Damas en mora por ruta",
+                    title_font=dict(size=13, color=COLORS["primary"]),
+                    xaxis=dict(type="category", **_AXIS_DEFAULTS),
+                    yaxis=dict(title="Numero de damas", **_AXIS_DEFAULTS),
+                )
+                chart_card("Cuantas damas en mora tiene cada ruta", fig_ruta, key="ruta_moras", height_normal=400)
+
+                if metrics.get("valor_col"):
+                    st.markdown("<br>", unsafe_allow_html=True)
+                    fig_ruta_m = go.Figure(go.Bar(
+                        x=ruta_dist[ruta_col].astype(str),
+                        y=ruta_dist["Monto"],
+                        marker_color=COLORS["danger"],
+                        text=ruta_dist["Monto"].apply(lambda v: f"${v/1e6:.2f}M" if v >= 1e6 else f"${v/1e3:.0f}K"),
+                        textposition="outside",
+                        textfont=dict(color=COLORS["text"], size=11),
+                        hovertemplate="<b>Ruta %{x}</b><br>Monto en mora: $%{y:,.0f}<extra></extra>",
+                    ))
+                    fig_ruta_m.update_layout(
+                        **PLOTLY_LAYOUT,
+                        title_text="Dinero en mora por ruta",
+                        title_font=dict(size=13, color=COLORS["primary"]),
+                        xaxis=dict(type="category", **_AXIS_DEFAULTS),
+                        yaxis=dict(title="Monto ($)", **_AXIS_DEFAULTS),
+                    )
+                    chart_card("Cuanto dinero en mora tiene cada ruta", fig_ruta_m, key="ruta_moras_monto", height_normal=400)
+
+                # Tabla resumen
+                st.markdown("<br>", unsafe_allow_html=True)
+                tabla_ruta = ruta_dist.copy()
+                tabla_ruta.columns = ["Ruta", "Damas en Mora", "Monto en Mora", "% del Total"] if metrics.get("valor_col") else ["Ruta", "Damas en Mora", "% del Total"]
+                if "Monto en Mora" in tabla_ruta.columns:
+                    tabla_ruta["Monto en Mora"] = tabla_ruta["Monto en Mora"].apply(lambda x: f"${x:,.2f}")
+                st.dataframe(tabla_ruta, use_container_width=True, hide_index=True)
+
+    elif ruta_col and df_moras_ss is None:
+        st.info("Sube el archivo de moras para ver el analisis por ruta.")
 
     col_d, _ = st.columns([1, 2])
     with col_d:
@@ -2082,7 +2177,7 @@ def main():
     tab1, tab2, tab3, tab4 = st.tabs([
         " Resumen General",
         " Temporalidad",
-        " Flujo y Proyección",
+        "Operaciones y Territorio",
         " Moras",
     ])
     with tab1:
