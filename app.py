@@ -1251,26 +1251,11 @@ def section_header(title: str, subtitle: str = ""):
 
 
 def chart_card(title: str, fig: go.Figure, key: str, height_normal: int = 340, height_expanded: int = 560):
-    expanded = st.session_state.get("chart_expanded") == key
-
-    if expanded:
-        st.markdown(f"<div class='chart-card-expanded'><div class='chart-title'>{title}</div></div>",
-                    unsafe_allow_html=True)
-        if st.button("  Cerrar", key=f"close_{key}"):
-            st.session_state["chart_expanded"] = None
-            st.rerun()
-        fig.update_layout(height=height_expanded)
-        st.plotly_chart(fig, use_container_width=True, key=f"plot_{key}_exp",
-                        config={"displayModeBar": True, "scrollZoom": True})
-    else:
-        st.markdown(f"<div class='chart-card'><div class='chart-title'>{title}</div></div>",
-                    unsafe_allow_html=True)
-        if st.button("  Ampliar", key=f"expand_{key}"):
-            st.session_state["chart_expanded"] = key
-            st.rerun()
-        fig.update_layout(height=height_normal)
-        st.plotly_chart(fig, use_container_width=True, key=f"plot_{key}",
-                        config={"displayModeBar": False, "scrollZoom": True})
+    st.markdown(f"<div class='chart-card'><div class='chart-title'>{title}</div></div>",
+                unsafe_allow_html=True)
+    fig.update_layout(height=height_normal)
+    st.plotly_chart(fig, use_container_width=True, key=f"plot_{key}",
+                    config={"displayModeBar": False, "scrollZoom": True})
 
 
 # ─────────────────────────────────────────────
@@ -1371,16 +1356,16 @@ def tab_resumen(metrics: dict):
     # Fila 1: Columnas agrupadas + 100% apilado
     col_a, col_b = st.columns(2)
     with col_a:
-        chart_card("Cobrado vs Pendiente por Campaña",
+        chart_card("Cuanto cobramos y cuanto falta por campaña",
                    plot_columnas_agrupadas(metrics["df"], metrics["valor_col"]),
                    key="col_agrupadas", height_normal=380)
     with col_b:
-        chart_card("¿Qué % se recuperó por campaña?",
+        chart_card("Porcentaje cobrado por campaña",
                    plot_100pct_apilado(metrics["df"]),
                    key="pct100", height_normal=360)
 
     # Fila 2: solo Donut
-    chart_card("Estado de Pago · Distribución",
+    chart_card("De cada 10 damas, cuantas pagaron",
                plot_kpi_donut(metrics["pagados"], metrics["pendientes"]),
                key="donut", height_normal=320)
 
@@ -1400,13 +1385,13 @@ def tab_temporalidad(metrics: dict):
         unsafe_allow_html=True,
     )
     chart_card(
-        "Tendencia de Cobro" + (" por Mes" if usando_fechas else " por Campaña"),
+        "Como ha evolucionado el cobro" + (" mes a mes" if usando_fechas else " por campaña"),
         plot_linea_tendencia(metrics["df"], metrics["valor_col"], fi),
         key="linea", height_normal=380, height_expanded=560,
     )
     st.markdown("<br>", unsafe_allow_html=True)
     chart_card(
-        "Mapa de Calor · % Cobrado por " + ("Año y Mes" if usando_fechas else "Año y Período"),
+        "En que meses se cobra mejor (mapa de calor)" + (" por mes" if usando_fechas else ""),
         plot_heatmap(metrics["df"], metrics["valor_col"], fi),
         key="heatmap", height_normal=340, height_expanded=500,
     )
@@ -1419,12 +1404,12 @@ def tab_flujo(metrics: dict):
         unsafe_allow_html=True,
     )
     # Bullet: meta vs real
-    chart_card("Cumplimiento Actual vs Meta de Cobranza",
+    chart_card("Vamos a tiempo con la meta de cobranza",
                plot_bullet(metrics),
                key="bullet", height_normal=280, height_expanded=400)
     st.markdown("<br>", unsafe_allow_html=True)
     # Waterfall
-    chart_card("Cascada · Cómo se reduce la deuda con cada campaña",
+    chart_card("Como va bajando la deuda campaña a campaña",
                plot_waterfall(metrics["df"], metrics["valor_col"]),
                key="waterfall", height_normal=420, height_expanded=600)
     st.divider()
@@ -1440,7 +1425,7 @@ def tab_flujo(metrics: dict):
         with c2: st.metric(" Temporalidades con pendientes",       f"{n_camps}")
         st.markdown("<br>", unsafe_allow_html=True)
 
-    chart_card("Damas Pendientes por temporalidad de destino",
+    chart_card("Cuantas damas deben en cada campaña",
                plot_damas_por_temporalidad(metrics["df"]),
                key="cambio_temp", height_normal=400, height_expanded=580)
     st.markdown("<br>", unsafe_allow_html=True)
@@ -1592,7 +1577,7 @@ def tab_moras(metrics: dict, df_moras: pd.DataFrame | None):
             )],
             legend=dict(orientation="h", yanchor="bottom", y=-0.15, xanchor="center", x=0.5),
         )
-        chart_card("Damas en mora", fig_dona_damas, key="dona_damas", height_normal=320, height_expanded=480)
+        chart_card("Cuantas damas están en mora", fig_dona_damas, key="dona_damas", height_normal=320, height_expanded=480)
 
     with col_d2:
         if valor_col:
@@ -1616,7 +1601,7 @@ def tab_moras(metrics: dict, df_moras: pd.DataFrame | None):
                 )],
                 legend=dict(orientation="h", yanchor="bottom", y=-0.15, xanchor="center", x=0.5),
             )
-            chart_card("Monto en mora", fig_dona_monto, key="dona_monto", height_normal=320, height_expanded=480)
+            chart_card("Cuanto dinero está en mora", fig_dona_monto, key="dona_monto", height_normal=320, height_expanded=480)
 
     st.markdown("<br>", unsafe_allow_html=True)
 
@@ -1717,7 +1702,7 @@ def tab_moras(metrics: dict, df_moras: pd.DataFrame | None):
                 yaxis=dict(title="Número de damas", **_AXIS_DEFAULTS),
                 legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
             )
-            chart_card("Damas Mora 1/2/3 por campaña", fig_mora_camp, key="mora_niveles_camp", height_normal=420, height_expanded=600)
+            chart_card("Tipo de mora por campaña (numero de damas)", fig_mora_camp, key="mora_niveles_camp", height_normal=420, height_expanded=600)
 
             # Barras apiladas por campaña — monto (dedup)
             if valor_col:
@@ -1746,7 +1731,7 @@ def tab_moras(metrics: dict, df_moras: pd.DataFrame | None):
                     yaxis=dict(title="Monto ($)", **_AXIS_DEFAULTS),
                     legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
                 )
-                chart_card("Monto Mora 1/2/3 por campaña", fig_mora_monto, key="mora_monto_camp", height_normal=420, height_expanded=600)
+                chart_card("Tipo de mora por campaña (dinero)", fig_mora_monto, key="mora_monto_camp", height_normal=420, height_expanded=600)
 
             st.markdown("<br>", unsafe_allow_html=True)
 
@@ -1766,7 +1751,7 @@ def tab_moras(metrics: dict, df_moras: pd.DataFrame | None):
                     title_font=dict(size=13, color=COLORS["primary"]),
                     legend=dict(orientation="h", yanchor="bottom", y=-0.15, xanchor="center", x=0.5),
                 )
-                chart_card("Damas por nivel de mora", fig_dona_mora, key="dona_mora_damas", height_normal=340, height_expanded=480)
+                chart_card("Como se reparte la mora entre los 3 niveles", fig_dona_mora, key="dona_mora_damas", height_normal=340, height_expanded=480)
             with dcol2:
                 if valor_col:
                     fig_dona_monto_mora = go.Figure(go.Pie(
@@ -1782,7 +1767,7 @@ def tab_moras(metrics: dict, df_moras: pd.DataFrame | None):
                         title_font=dict(size=13, color=COLORS["primary"]),
                         legend=dict(orientation="h", yanchor="bottom", y=-0.15, xanchor="center", x=0.5),
                     )
-                    chart_card("Monto por nivel de mora", fig_dona_monto_mora, key="dona_mora_monto", height_normal=340, height_expanded=480)
+                    chart_card("Cuanto dinero hay en cada nivel de mora", fig_dona_monto_mora, key="dona_mora_monto", height_normal=340, height_expanded=480)
 
             # ── Gráfica individual por cada nivel de mora ───────────────
             st.markdown("<br>", unsafe_allow_html=True)
@@ -1835,7 +1820,7 @@ def tab_moras(metrics: dict, df_moras: pd.DataFrame | None):
                     ))
                     fig1.update_layout(
                         **PLOTLY_LAYOUT,
-                        title_text=f"{nivel} · Damas por campaña",
+                        title_text=f"Cuantas damas de {nivel} hay en cada campaña",
                         title_font=dict(size=12, color=COLORS["primary"]),
                         xaxis=dict(type="category", **_AXIS_DEFAULTS),
                         yaxis=dict(title="Damas", **_AXIS_DEFAULTS),
@@ -1856,7 +1841,7 @@ def tab_moras(metrics: dict, df_moras: pd.DataFrame | None):
                         ))
                         fig2.update_layout(
                             **PLOTLY_LAYOUT,
-                            title_text=f"{nivel} · Monto por campaña",
+                            title_text=f"Cuanto dinero de {nivel} hay en cada campaña",
                             title_font=dict(size=12, color=COLORS["primary"]),
                             xaxis=dict(type="category", **_AXIS_DEFAULTS),
                             yaxis=dict(title="Monto ($)", **_AXIS_DEFAULTS),
@@ -1886,7 +1871,7 @@ def tab_moras(metrics: dict, df_moras: pd.DataFrame | None):
             xaxis=dict(type="category", **_AXIS_DEFAULTS),
             yaxis=dict(title="% del total de moras", **_AXIS_DEFAULTS),
         )
-        chart_card("% de moras por campaña", fig_dona_camp, key="dona_camp", height_normal=380, height_expanded=540)
+        chart_card("En que campaña hay mas moras", fig_dona_camp, key="dona_camp", height_normal=380, height_expanded=540)
 
         st.markdown("<br>", unsafe_allow_html=True)
 
@@ -1919,7 +1904,7 @@ def tab_moras(metrics: dict, df_moras: pd.DataFrame | None):
         )
         fig_bar.update_yaxes(title_text="Número de damas", secondary_y=False, **_AXIS_DEFAULTS)
         fig_bar.update_yaxes(title_text="Monto ($)", secondary_y=True, **_AXIS_DEFAULTS)
-        chart_card("Damas y monto en mora por campaña", fig_bar, key="moras_camp", height_normal=420, height_expanded=600)
+        chart_card("Damas y dinero en mora por campaña", fig_bar, key="moras_camp", height_normal=420, height_expanded=600)
 
         # ── Tabla resumen por campaña ────────────────────────────────
         st.markdown("<br>", unsafe_allow_html=True)
