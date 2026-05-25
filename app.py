@@ -1565,36 +1565,40 @@ def tab_flujo(metrics: dict):
                     ).round(1)
 
                     rutas_labels = [f"Ruta {r}" for r in pivot_heat.index]
+                    z_cnt = pivot_heat.values.tolist()
+                    z_pct = pivot_heat_pct.values.tolist()
+
+                    def _heat_annotations(z_grid, x_labels, y_labels, fmt_fn, threshold=0.45):
+                        """Anotación por celda con color blanco/oscuro según intensidad."""
+                        flat = [v for row in z_grid for v in row]
+                        z_max = max(flat) if flat else 1
+                        anns = []
+                        for i, y in enumerate(y_labels):
+                            for j, x in enumerate(x_labels):
+                                val = z_grid[i][j]
+                                color = "white" if (val / z_max) > threshold else "#1a3c6e"
+                                anns.append(dict(
+                                    x=x, y=y, text=fmt_fn(val),
+                                    showarrow=False,
+                                    font=dict(size=11, color=color),
+                                    xref="x", yref="y",
+                                ))
+                        return anns
 
                     # — Heatmap 1: número de damas —
-                    z_cnt  = pivot_heat.values.tolist()
-                    z_pct  = pivot_heat_pct.values.tolist()
-                    text_cnt = [
-                        [f"{v:,}" for v in row] for row in z_cnt
-                    ]
                     fig_heat_cnt = go.Figure(go.Heatmap(
-                        z=z_cnt,
-                        x=camps_sorted,
-                        y=rutas_labels,
-                        text=text_cnt,
-                        texttemplate="%{text}",
-                        textfont=dict(size=11, color="#1a3c6e"),
-                        colorscale=[
-                            [0.0, "#f0f9ff"],
-                            [0.5, "#7dd3fc"],
-                            [1.0, "#1a3c6e"],
-                        ],
+                        z=z_cnt, x=camps_sorted, y=rutas_labels,
+                        colorscale=[[0.0, "#f0f9ff"], [0.5, "#7dd3fc"], [1.0, "#1a3c6e"]],
                         showscale=True,
                         colorbar=dict(title="Damas", thickness=14, len=0.8),
-                        hovertemplate=(
-                            "<b>%{y} · %{x}</b><br>"
-                            "Damas en mora: %{z:,}<extra></extra>"
-                        ),
+                        hovertemplate="<b>%{y} · %{x}</b><br>Damas en mora: %{z:,}<extra></extra>",
                     ))
                     fig_heat_cnt.update_layout(
                         **PLOTLY_LAYOUT,
                         xaxis=dict(type="category", title="Campaña", side="bottom", **_AXIS_DEFAULTS),
                         yaxis=dict(title="", autorange="reversed", **_AXIS_DEFAULTS),
+                        annotations=_heat_annotations(z_cnt, camps_sorted, rutas_labels,
+                                                      lambda v: f"{int(v):,}"),
                     )
                     chart_card("Cuantas damas en mora tiene cada ruta por campaña",
                                fig_heat_cnt, key="heat_cnt", height_normal=400)
@@ -1602,33 +1606,20 @@ def tab_flujo(metrics: dict):
                     st.markdown("<br>", unsafe_allow_html=True)
 
                     # — Heatmap 2: % de cada ruta dentro de la campaña —
-                    text_pct = [
-                        [f"{v:.0f}%" for v in row] for row in z_pct
-                    ]
                     fig_heat_pct = go.Figure(go.Heatmap(
-                        z=z_pct,
-                        x=camps_sorted,
-                        y=rutas_labels,
-                        text=text_pct,
-                        texttemplate="%{text}",
-                        textfont=dict(size=11, color="#1a3c6e"),
-                        colorscale=[
-                            [0.0, "#f0fdf4"],
-                            [0.5, "#6ee7b7"],
-                            [1.0, "#065f46"],
-                        ],
+                        z=z_pct, x=camps_sorted, y=rutas_labels,
+                        colorscale=[[0.0, "#f0fdf4"], [0.5, "#6ee7b7"], [1.0, "#065f46"]],
                         showscale=True,
                         colorbar=dict(title="%", thickness=14, len=0.8),
-                        hovertemplate=(
-                            "<b>%{y} · %{x}</b><br>"
-                            "%{z:.1f}% de la campaña<extra></extra>"
-                        ),
+                        hovertemplate="<b>%{y} · %{x}</b><br>%{z:.1f}% de la campaña<extra></extra>",
                         zmin=0, zmax=30,
                     ))
                     fig_heat_pct.update_layout(
                         **PLOTLY_LAYOUT,
                         xaxis=dict(type="category", title="Campaña", side="bottom", **_AXIS_DEFAULTS),
                         yaxis=dict(title="", autorange="reversed", **_AXIS_DEFAULTS),
+                        annotations=_heat_annotations(z_pct, camps_sorted, rutas_labels,
+                                                      lambda v: f"{v:.0f}%"),
                     )
                     chart_card("Que porcentaje de cada campaña corresponde a cada ruta",
                                fig_heat_pct, key="heat_pct", height_normal=400)
