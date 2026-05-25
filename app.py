@@ -1825,16 +1825,20 @@ def tab_moras(metrics: dict, df_moras: pd.DataFrame | None):
         moras_en_pendientes["_camp"]     = moras_en_pendientes["_camp_raw"].apply(_fmt_camp)
         moras_en_pendientes["_seq"]      = moras_en_pendientes["_camp_raw"].apply(_camp_to_seq)
 
-        # Campaña actual GLOBAL = la campaña más reciente del dataset (donde está la empresa hoy)
+        # Campaña actual POR DAMA = su campaña más reciente en todo el dataset
         df_all = metrics["df"].copy()
         df_all["_seq_all"] = df_all[camp_col].astype(str).str.strip().apply(_camp_to_seq)
-        global_max_seq = df_all["_seq_all"].max()
-        max_seq = pd.notna(global_max_seq)
+        dama_max_seq = (
+            df_all.groupby(nodama_merge)["_seq_all"].max()
+            .rename("_max_seq_dama")
+        )
+        moras_en_pendientes = moras_en_pendientes.join(dama_max_seq, on=nodama_merge)
+        max_seq = moras_en_pendientes["_max_seq_dama"].notna().any()
 
         if max_seq:
-            # diff = campaña actual global − campaña de la deuda
+            # diff = campaña actual de la dama − campaña de la deuda
             moras_en_pendientes["_diff"] = (
-                global_max_seq - moras_en_pendientes["_seq"].fillna(global_max_seq)
+                moras_en_pendientes["_max_seq_dama"] - moras_en_pendientes["_seq"].fillna(0)
             )
             moras_en_pendientes["Nivel de Mora"] = moras_en_pendientes["_diff"].apply(
                 lambda d: _clasificar_mora(int(d)) if pd.notna(d) else "Sin clasificar"
