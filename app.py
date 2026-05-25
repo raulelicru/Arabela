@@ -1432,6 +1432,10 @@ def tab_flujo(metrics: dict):
 
     # ── Análisis de Rutas ─────────────────────────────────────────────
     ruta_col = _find_col(metrics["df"], ["ruta", "rutas", "route"])
+    st.divider()
+    st.markdown("**Columnas disponibles en los datos:**")
+    st.write([c for c in metrics["df"].columns.tolist()])
+    st.write(f"Columna Ruta detectada: `{ruta_col}`")
     if ruta_col:
         st.divider()
         nodama_col  = _get_merged_nodama_col(metrics["df"])
