@@ -1468,12 +1468,12 @@ def tab_flujo(metrics: dict):
                 # KPIs top 3
                 top3 = ruta_dist.head(3)
                 cols_r = st.columns(min(len(top3), 3))
-                for i, (col_r, row) in enumerate(zip(cols_r, top3.itertuples())):
+                for i, (col_r, (_, row_s)) in enumerate(zip(cols_r, top3.iterrows())):
                     with col_r:
                         label = "Ruta con mas moras" if i == 0 else f"#{i+1} con mas moras"
-                        st.metric(label, f"Ruta {row._1}", delta=f"{row.Damas:,} damas · {row._4:.1f}%", delta_color="off")
+                        st.metric(label, f"Ruta {row_s[ruta_col]}", delta=f"{row_s['Damas']:,} damas · {row_s['% del total']:.1f}%", delta_color="off")
                         if valor_col and "Monto" in ruta_dist.columns:
-                            st.caption(f"Monto: {fmt_currency(getattr(row, 'Monto', 0))}")
+                            st.caption(f"Monto: {fmt_currency(row_s['Monto'])}")
 
                 st.markdown("<br>", unsafe_allow_html=True)
 
