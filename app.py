@@ -1744,7 +1744,7 @@ def tab_moras(metrics: dict, df_moras: pd.DataFrame | None):
         dist = pd.concat([dist_count, dist_monto], axis=1).fillna(0).sort_index().reset_index()
         dist = dist.rename(columns={"_camp": "Campaña"})
         dist["Damas"] = dist["Damas"].astype(int)
-        dist["% del total moras"] = (dist["Damas"] / n_coincidencias * 100).round(1)
+        dist["% del total moras"] = (dist["Damas"] / dist["Damas"].sum() * 100).round(1)
 
         # ── Clasificación por nivel de mora ─────────────────────────
         if max_seq:
