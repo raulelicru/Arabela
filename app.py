@@ -1825,32 +1825,19 @@ def tab_moras(metrics: dict, df_moras: pd.DataFrame | None):
         moras_en_pendientes["_camp"]     = moras_en_pendientes["_camp_raw"].apply(_fmt_camp)
         moras_en_pendientes["_seq"]      = moras_en_pendientes["_camp_raw"].apply(_camp_to_seq)
 
-        # Campaña máxima POR DAMA (usando todos los registros, no solo pendientes)
+        # Campaña máxima GLOBAL (todos los registros del dataset, pagados + pendientes)
         df_all = metrics["df"].copy()
         df_all["_seq_all"] = df_all[camp_col].astype(str).str.strip().apply(_camp_to_seq)
-        dama_max_seq = (
-            df_all.groupby(nodama_merge)["_seq_all"].max()
-            .rename("_max_seq_dama")
-        )
-        moras_en_pendientes = moras_en_pendientes.join(
-            dama_max_seq, on=nodama_merge
-        )
-        max_seq = True  # señal para mostrar la sección
+        global_max_seq = df_all["_seq_all"].max()
+        max_seq = pd.notna(global_max_seq)
 
-        moras_en_pendientes["_diff"] = (
-            moras_en_pendientes["_max_seq_dama"] - moras_en_pendientes["_seq"].fillna(0)
-        )
-        moras_en_pendientes["Nivel de Mora"] = moras_en_pendientes["_diff"].apply(
-            lambda d: _clasificar_mora(int(d)) if pd.notna(d) else "Sin clasificar"
-        )
-
-        # Una dama → solo su PEOR nivel de mora (evita doble conteo)
-        mora_orden = {"Mora 3": 3, "Mora 2": 2, "Mora 1": 1, "Sin clasificar": 0}
-        moras_dedup = (
-            moras_en_pendientes.assign(_mora_rank=moras_en_pendientes["Nivel de Mora"].map(mora_orden))
-            .sort_values("_mora_rank", ascending=False)
-            .drop_duplicates(subset=nodama_merge, keep="first")
-        )
+        if max_seq:
+            moras_en_pendientes["_diff"] = (
+                global_max_seq - moras_en_pendientes["_seq"].fillna(global_max_seq)
+            )
+            moras_en_pendientes["Nivel de Mora"] = moras_en_pendientes["_diff"].apply(
+                lambda d: _clasificar_mora(int(d)) if pd.notna(d) else "Sin clasificar"
+            )
 
         dist_count = moras_en_pendientes.groupby("_camp").size().rename("Damas")
         dist_monto = (
@@ -1867,12 +1854,12 @@ def tab_moras(metrics: dict, df_moras: pd.DataFrame | None):
         if max_seq:
             st.markdown("---")
             st.markdown("###  Clasificación por Nivel de Mora")
-            st.caption("Referencia: campaña más reciente de **cada dama** · Mora 1 = 1 campaña atrás, Mora 2 = 2 atrás, Mora 3 = 3 o más atrás")
+            st.caption("Referencia: campaña más reciente del dataset · cada registro se clasifica por su propia campaña · Mora 1 = 0-1 campañas atrás, Mora 2 = 2 atrás, Mora 3 = 3 o más atrás")
 
             mora_colors = {"Mora 1": COLORS["warning"], "Mora 2": COLORS["orange"], "Mora 3": COLORS["danger"]}
 
             mora_dist = (
-                moras_dedup.groupby("Nivel de Mora")
+                moras_en_pendientes.groupby("Nivel de Mora")
                 .agg(Damas=("Nivel de Mora", "count"),
                      Monto=(valor_col, lambda x: pd.to_numeric(x, errors="coerce").sum()) if valor_col else ("_seq", "count"))
                 .reindex(["Mora 1", "Mora 2", "Mora 3"], fill_value=0)
@@ -1898,7 +1885,7 @@ def tab_moras(metrics: dict, df_moras: pd.DataFrame | None):
 
             # Barras apiladas por campaña — damas (dedup)
             mora_camp = (
-                moras_dedup.groupby(["_camp", "Nivel de Mora"])
+                moras_en_pendientes.groupby(["_camp", "Nivel de Mora"])
                 .size().unstack(fill_value=0)
                 .reindex(columns=["Mora 1", "Mora 2", "Mora 3"], fill_value=0)
                 .sort_index().reset_index()
@@ -1913,7 +1900,7 @@ def tab_moras(metrics: dict, df_moras: pd.DataFrame | None):
                     ))
             fig_mora_camp.update_layout(
                 **PLOTLY_LAYOUT, barmode="stack",
-                title_text="Mora 1 / 2 / 3 por campaña — Número de damas (sin doble conteo)",
+                title_text="Mora 1 / 2 / 3 por campaña — Número de registros",
                 title_font=dict(size=13, color=COLORS["primary"]),
                 xaxis=dict(type="category", **_AXIS_DEFAULTS),
                 yaxis=dict(title="Número de damas", **_AXIS_DEFAULTS),
@@ -1925,8 +1912,8 @@ def tab_moras(metrics: dict, df_moras: pd.DataFrame | None):
             if valor_col:
                 st.markdown("<br>", unsafe_allow_html=True)
                 mora_camp_monto = (
-                    moras_dedup.assign(
-                        _monto=pd.to_numeric(moras_dedup[valor_col], errors="coerce")
+                    moras_en_pendientes.assign(
+                        _monto=pd.to_numeric(moras_en_pendientes[valor_col], errors="coerce")
                     ).groupby(["_camp", "Nivel de Mora"])["_monto"]
                     .sum().unstack(fill_value=0)
                     .reindex(columns=["Mora 1", "Mora 2", "Mora 3"], fill_value=0)
@@ -1993,7 +1980,7 @@ def tab_moras(metrics: dict, df_moras: pd.DataFrame | None):
             mora_nivel_colors = {"Mora 1": COLORS["warning"], "Mora 2": COLORS["orange"], "Mora 3": COLORS["danger"]}
 
             for nivel, color in mora_nivel_colors.items():
-                df_nivel = moras_dedup[moras_dedup["Nivel de Mora"] == nivel].copy()
+                df_nivel = moras_en_pendientes[moras_en_pendientes["Nivel de Mora"] == nivel].copy()
                 if df_nivel.empty:
                     continue
 
