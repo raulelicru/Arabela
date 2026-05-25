@@ -1523,6 +1523,84 @@ def tab_flujo(metrics: dict):
                 if "Monto en Mora" in tabla_ruta.columns:
                     tabla_ruta["Monto en Mora"] = tabla_ruta["Monto en Mora"].apply(lambda x: f"${x:,.2f}")
                 st.dataframe(tabla_ruta, use_container_width=True, hide_index=True)
+
+                # ── Desglose de campañas por ruta ──────────────────────
+                camp_col_ruta = _find_col(df_cruce, ["aniocampaña", "aniocampana", "anio", "año", "campaña"])
+                if camp_col_ruta:
+                    st.markdown("<br>", unsafe_allow_html=True)
+                    st.markdown("#### Composicion de campañas dentro de cada ruta")
+
+                    ruta_camp = (
+                        df_cruce.groupby([ruta_col, camp_col_ruta])
+                        .size()
+                        .reset_index(name="Damas")
+                    )
+                    ruta_camp["Campaña"] = ruta_camp[camp_col_ruta].astype(str).str.strip().apply(_fmt_camp)
+                    total_por_ruta = ruta_camp.groupby(ruta_col)["Damas"].transform("sum")
+                    ruta_camp["% en ruta"] = (ruta_camp["Damas"] / total_por_ruta * 100).round(1)
+
+                    # Orden de rutas: mayor número de moras primero
+                    orden_rutas = ruta_dist[ruta_col].tolist()
+                    camps_sorted = sorted(ruta_camp["Campaña"].unique())
+                    pivot_pct = (
+                        ruta_camp.pivot_table(index=ruta_col, columns="Campaña",
+                                              values="% en ruta", aggfunc="sum", fill_value=0)
+                        .reindex(orden_rutas, fill_value=0)
+                    )
+                    pivot_cnt = (
+                        ruta_camp.pivot_table(index=ruta_col, columns="Campaña",
+                                              values="Damas", aggfunc="sum", fill_value=0)
+                        .reindex(orden_rutas, fill_value=0)
+                    )
+
+                    fig_comp = go.Figure()
+                    for i, camp in enumerate(camps_sorted):
+                        pct_vals = pivot_pct[camp].values if camp in pivot_pct.columns else [0] * len(pivot_pct)
+                        cnt_vals = pivot_cnt[camp].values if camp in pivot_cnt.columns else [0] * len(pivot_cnt)
+                        fig_comp.add_trace(go.Bar(
+                            name=camp,
+                            x=[str(r) for r in orden_rutas],
+                            y=pct_vals,
+                            marker_color=PASTEL_SEQ[i % len(PASTEL_SEQ)],
+                            text=[f"{v:.0f}%" if v >= 5 else "" for v in pct_vals],
+                            textposition="inside",
+                            insidetextanchor="middle",
+                            hovertemplate=(
+                                f"<b>Ruta %{{x}} — {camp}</b><br>"
+                                "%{y:.1f}% de la ruta<br>"
+                                "%{customdata:,} damas<extra></extra>"
+                            ),
+                            customdata=cnt_vals,
+                        ))
+
+                    fig_comp.update_layout(
+                        **PLOTLY_LAYOUT,
+                        barmode="stack",
+                        xaxis=dict(type="category", title="Ruta", **_AXIS_DEFAULTS),
+                        yaxis=dict(title="% de damas de la ruta", ticksuffix="%", range=[0, 102], **_AXIS_DEFAULTS),
+                        legend=dict(
+                            orientation="h", yanchor="bottom", y=1.02,
+                            xanchor="right", x=1, title_text="Campaña",
+                        ),
+                    )
+                    chart_card("Que campaña aporta mas moras a cada ruta", fig_comp,
+                               key="ruta_camp_comp", height_normal=440)
+
+                    # Selector: detalle de una ruta específica
+                    st.markdown("<br>", unsafe_allow_html=True)
+                    rutas_disponibles = [str(r) for r in orden_rutas]
+                    ruta_sel = st.selectbox("Ver detalle de campaña para una ruta:",
+                                            rutas_disponibles, key="sel_ruta_camp")
+                    detalle = (
+                        ruta_camp[ruta_camp[ruta_col].astype(str) == ruta_sel]
+                        [["Campaña", "Damas", "% en ruta"]]
+                        .sort_values("Damas", ascending=False)
+                        .rename(columns={"% en ruta": "% de la ruta"})
+                    )
+                    total_ruta_sel = detalle["Damas"].sum()
+                    st.caption(f"Ruta {ruta_sel} — {total_ruta_sel:,} damas en mora en total")
+                    st.dataframe(detalle, use_container_width=True, hide_index=True)
+
     else:
         st.info("Sube el archivo de moras para ver el analisis por ruta.")
 
