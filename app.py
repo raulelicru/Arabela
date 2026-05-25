@@ -1554,93 +1554,105 @@ def tab_flujo(metrics: dict):
                         .reindex(orden_rutas, fill_value=0)
                     )
 
-                    rutas_x = [str(r) for r in orden_rutas]
+                    # Un color fijo por ruta (máx 12 rutas, sin repetición)
+                    rutas_ordenadas = orden_rutas  # de mayor a menor moras
+                    ruta_color = {
+                        str(r): PASTEL_SEQ[i % len(PASTEL_SEQ)]
+                        for i, r in enumerate(rutas_ordenadas)
+                    }
                     legend_cfg = dict(
                         orientation="h", yanchor="top", y=-0.18,
                         xanchor="center", x=0.5,
-                        font=dict(size=11), title_text="",
-                        itemwidth=60,
+                        font=dict(size=11), title_text="Ruta",
+                        itemwidth=70,
                     )
 
-                    # — Gráfica 1: % (composición relativa dentro de cada ruta) —
-                    fig_pct = go.Figure()
-                    for i, camp in enumerate(camps_sorted):
-                        pct_vals = pivot_pct[camp].values if camp in pivot_pct.columns else [0] * len(pivot_pct)
-                        cnt_vals = pivot_cnt[camp].values if camp in pivot_cnt.columns else [0] * len(pivot_cnt)
-                        fig_pct.add_trace(go.Bar(
-                            name=camp,
-                            x=rutas_x, y=pct_vals,
-                            marker_color=PASTEL_SEQ[i % len(PASTEL_SEQ)],
-                            marker_line_width=0,
-                            text=[f"{v:.0f}%" if v >= 7 else "" for v in pct_vals],
-                            textposition="inside", insidetextanchor="middle",
-                            textfont=dict(size=10, color="#374151"),
-                            hovertemplate=(
-                                f"<b>Ruta %{{x}} · {camp}</b><br>"
-                                "Participacion: %{y:.1f}%<br>"
-                                "Damas: %{customdata:,}<extra></extra>"
-                            ),
-                            customdata=cnt_vals,
-                        ))
-                    fig_pct.update_layout(
-                        **{**PLOTLY_LAYOUT, "margin": dict(l=40, r=20, t=40, b=100)},
-                        barmode="stack",
-                        bargap=0.25,
-                        xaxis=dict(type="category", title="Ruta", **_AXIS_DEFAULTS),
-                        yaxis=dict(title="% de la ruta", ticksuffix="%",
-                                   range=[0, 103], **_AXIS_DEFAULTS),
-                        legend=legend_cfg,
+                    # Pivot inverso: filas = campaña, columnas = ruta
+                    pivot_camp_cnt = (
+                        ruta_camp.pivot_table(index="Campaña", columns=ruta_col,
+                                              values="Damas", aggfunc="sum", fill_value=0)
+                        .reindex(camps_sorted, fill_value=0)
                     )
-                    chart_card("Como se distribuyen las campanas dentro de cada ruta (%)",
-                               fig_pct, key="ruta_camp_pct", height_normal=480)
+                    # % de cada ruta dentro de la campaña
+                    total_por_camp = pivot_camp_cnt.sum(axis=1)
+                    pivot_camp_pct = pivot_camp_cnt.div(total_por_camp, axis=0).mul(100).round(1)
 
-                    st.markdown("<br>", unsafe_allow_html=True)
-
-                    # — Gráfica 2: número absoluto de damas por campaña y ruta —
+                    # — Gráfica 1: número de damas por campaña, apilado por ruta —
                     fig_cnt = go.Figure()
-                    for i, camp in enumerate(camps_sorted):
-                        cnt_vals = pivot_cnt[camp].values if camp in pivot_cnt.columns else [0] * len(pivot_cnt)
-                        pct_vals = pivot_pct[camp].values if camp in pivot_pct.columns else [0] * len(pivot_pct)
+                    for ruta in rutas_ordenadas:
+                        cnt_vals = pivot_camp_cnt[ruta].values if ruta in pivot_camp_cnt.columns else [0] * len(camps_sorted)
+                        pct_vals = pivot_camp_pct[ruta].values if ruta in pivot_camp_pct.columns else [0] * len(camps_sorted)
                         fig_cnt.add_trace(go.Bar(
-                            name=camp,
-                            x=rutas_x, y=cnt_vals,
-                            marker_color=PASTEL_SEQ[i % len(PASTEL_SEQ)],
+                            name=f"Ruta {ruta}",
+                            x=camps_sorted, y=cnt_vals,
+                            marker_color=ruta_color[str(ruta)],
                             marker_line_width=0,
                             text=[f"{v:,}" if v >= 80 else "" for v in cnt_vals],
                             textposition="inside", insidetextanchor="middle",
                             textfont=dict(size=10, color="#374151"),
                             hovertemplate=(
-                                f"<b>Ruta %{{x}} · {camp}</b><br>"
+                                f"<b>%{{x}} · Ruta {ruta}</b><br>"
                                 "Damas en mora: %{y:,}<br>"
-                                "Participacion: %{customdata:.1f}%<extra></extra>"
+                                "%{customdata:.1f}% de la campaña<extra></extra>"
                             ),
                             customdata=pct_vals,
                         ))
                     fig_cnt.update_layout(
-                        **{**PLOTLY_LAYOUT, "margin": dict(l=40, r=20, t=40, b=100)},
-                        barmode="stack",
-                        bargap=0.25,
-                        xaxis=dict(type="category", title="Ruta", **_AXIS_DEFAULTS),
-                        yaxis=dict(title="Numero de damas", **_AXIS_DEFAULTS),
+                        **{**PLOTLY_LAYOUT, "margin": dict(l=40, r=20, t=40, b=110)},
+                        barmode="stack", bargap=0.2,
+                        xaxis=dict(type="category", title="Campaña", **_AXIS_DEFAULTS),
+                        yaxis=dict(title="Numero de damas en mora", **_AXIS_DEFAULTS),
                         legend=legend_cfg,
                     )
-                    chart_card("Cuantas damas en mora tiene cada ruta por campaña (numero)",
+                    chart_card("Damas en mora por campaña — desglosado por ruta",
                                fig_cnt, key="ruta_camp_cnt", height_normal=480)
 
-                    # Selector: detalle de una ruta específica
                     st.markdown("<br>", unsafe_allow_html=True)
-                    rutas_disponibles = [str(r) for r in orden_rutas]
-                    ruta_sel = st.selectbox("Ver detalle de campaña para una ruta:",
-                                            rutas_disponibles, key="sel_ruta_camp")
-                    detalle = (
-                        ruta_camp[ruta_camp[ruta_col].astype(str) == ruta_sel]
-                        [["Campaña", "Damas", "% en ruta"]]
-                        .sort_values("Damas", ascending=False)
-                        .rename(columns={"% en ruta": "% de la ruta"})
+
+                    # — Gráfica 2: % dentro de cada campaña, apilado por ruta (siempre 100%) —
+                    fig_pct = go.Figure()
+                    for ruta in rutas_ordenadas:
+                        cnt_vals = pivot_camp_cnt[ruta].values if ruta in pivot_camp_cnt.columns else [0] * len(camps_sorted)
+                        pct_vals = pivot_camp_pct[ruta].values if ruta in pivot_camp_pct.columns else [0] * len(camps_sorted)
+                        fig_pct.add_trace(go.Bar(
+                            name=f"Ruta {ruta}",
+                            x=camps_sorted, y=pct_vals,
+                            marker_color=ruta_color[str(ruta)],
+                            marker_line_width=0,
+                            text=[f"{v:.0f}%" if v >= 7 else "" for v in pct_vals],
+                            textposition="inside", insidetextanchor="middle",
+                            textfont=dict(size=10, color="#374151"),
+                            hovertemplate=(
+                                f"<b>%{{x}} · Ruta {ruta}</b><br>"
+                                "%{y:.1f}% de la campaña<br>"
+                                "%{customdata:,} damas<extra></extra>"
+                            ),
+                            customdata=cnt_vals,
+                        ))
+                    fig_pct.update_layout(
+                        **{**PLOTLY_LAYOUT, "margin": dict(l=40, r=20, t=40, b=110)},
+                        barmode="stack", bargap=0.2,
+                        xaxis=dict(type="category", title="Campaña", **_AXIS_DEFAULTS),
+                        yaxis=dict(title="% de damas de la campaña", ticksuffix="%",
+                                   range=[0, 103], **_AXIS_DEFAULTS),
+                        legend=legend_cfg,
                     )
-                    total_ruta_sel = detalle["Damas"].sum()
-                    st.caption(f"Ruta {ruta_sel} — {total_ruta_sel:,} damas en mora en total")
-                    st.dataframe(detalle, use_container_width=True, hide_index=True)
+                    chart_card("Participacion de cada ruta dentro de la campaña (%)",
+                               fig_pct, key="ruta_camp_pct", height_normal=480)
+
+                    # Selector: detalle de una campaña específica
+                    st.markdown("<br>", unsafe_allow_html=True)
+                    camp_sel = st.selectbox("Ver detalle de una campaña:",
+                                            camps_sorted, key="sel_camp_ruta")
+                    detalle_camp = (
+                        ruta_camp[ruta_camp["Campaña"] == camp_sel]
+                        [[ruta_col, "Damas", "% en ruta"]]
+                        .sort_values("Damas", ascending=False)
+                        .rename(columns={ruta_col: "Ruta", "% en ruta": "% dentro de la campaña"})
+                    )
+                    total_camp_sel = detalle_camp["Damas"].sum()
+                    st.caption(f"{camp_sel} — {total_camp_sel:,} damas en mora en total")
+                    st.dataframe(detalle_camp, use_container_width=True, hide_index=True)
 
     else:
         st.info("Sube el archivo de moras para ver el analisis por ruta.")
