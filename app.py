@@ -1882,7 +1882,7 @@ def tab_moras(metrics: dict, df_moras: pd.DataFrame | None):
 
                 n_nivel  = len(df_nivel)
                 m_nivel  = pd.to_numeric(df_nivel[valor_col], errors="coerce").sum() if valor_col else 0
-                pct_nivel = n_nivel / total_dedup * 100
+                pct_nivel = n_nivel / total_mora_shown * 100 if total_mora_shown > 0 else 0
 
                 st.markdown(
                     f"<div style='background:{color}22; border-left:4px solid {color}; "
