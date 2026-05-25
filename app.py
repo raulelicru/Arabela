@@ -1583,14 +1583,13 @@ def tab_flujo(metrics: dict):
                             customdata=cnt_vals,
                         ))
                     fig_pct.update_layout(
-                        **PLOTLY_LAYOUT,
+                        **{**PLOTLY_LAYOUT, "margin": dict(l=40, r=20, t=40, b=100)},
                         barmode="stack",
                         bargap=0.25,
                         xaxis=dict(type="category", title="Ruta", **_AXIS_DEFAULTS),
                         yaxis=dict(title="% de la ruta", ticksuffix="%",
                                    range=[0, 103], **_AXIS_DEFAULTS),
                         legend=legend_cfg,
-                        margin=dict(l=40, r=20, t=40, b=100),
                     )
                     chart_card("Como se distribuyen las campanas dentro de cada ruta (%)",
                                fig_pct, key="ruta_camp_pct", height_normal=480)
@@ -1618,13 +1617,12 @@ def tab_flujo(metrics: dict):
                             customdata=pct_vals,
                         ))
                     fig_cnt.update_layout(
-                        **PLOTLY_LAYOUT,
+                        **{**PLOTLY_LAYOUT, "margin": dict(l=40, r=20, t=40, b=100)},
                         barmode="stack",
                         bargap=0.25,
                         xaxis=dict(type="category", title="Ruta", **_AXIS_DEFAULTS),
                         yaxis=dict(title="Numero de damas", **_AXIS_DEFAULTS),
                         legend=legend_cfg,
-                        margin=dict(l=40, r=20, t=40, b=100),
                     )
                     chart_card("Cuantas damas en mora tiene cada ruta por campaña (numero)",
                                fig_cnt, key="ruta_camp_cnt", height_normal=480)
