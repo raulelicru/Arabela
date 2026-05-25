@@ -1754,7 +1754,6 @@ def tab_moras(metrics: dict, df_moras: pd.DataFrame | None):
 
             mora_colors = {"Mora 1": COLORS["warning"], "Mora 2": COLORS["orange"], "Mora 3": COLORS["danger"]}
 
-            total_dedup = len(moras_dedup)
             mora_dist = (
                 moras_dedup.groupby("Nivel de Mora")
                 .agg(Damas=("Nivel de Mora", "count"),
@@ -1762,16 +1761,21 @@ def tab_moras(metrics: dict, df_moras: pd.DataFrame | None):
                 .reindex(["Mora 1", "Mora 2", "Mora 3"], fill_value=0)
                 .reset_index()
             )
-            mora_dist["% del total"] = (mora_dist["Damas"] / total_dedup * 100).round(1)
+            # Denominador = suma real de las 3 categorías mostradas → siempre suma 100%
+            total_mora_shown = mora_dist["Damas"].sum()
+            mora_dist["% del total"] = (
+                (mora_dist["Damas"] / total_mora_shown * 100).round(1)
+                if total_mora_shown > 0 else 0.0
+            )
 
             # KPIs por nivel — damas y monto
             st.markdown("<br>", unsafe_allow_html=True)
             km1, km2, km3 = st.columns(3)
-            for col_k, row in zip([km1, km2, km3], mora_dist.itertuples()):
+            for col_k, (_, row_m) in zip([km1, km2, km3], mora_dist.iterrows()):
                 with col_k:
-                    st.metric(f" {row._1} — Damas", f"{row.Damas:,}", delta=f"{row._4:.1f}% del total", delta_color="off")
+                    st.metric(f"{row_m['Nivel de Mora']} — Damas", f"{row_m['Damas']:,}", delta=f"{row_m['% del total']:.1f}% del total", delta_color="off")
                     if valor_col:
-                        st.metric(f" {row._1} — Monto", fmt_currency(row.Monto))
+                        st.metric(f"{row_m['Nivel de Mora']} — Monto", fmt_currency(row_m["Monto"]))
 
             st.markdown("<br>", unsafe_allow_html=True)
 
