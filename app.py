@@ -249,8 +249,22 @@ def _find_col(df: pd.DataFrame, candidates: list) -> str | None:
 
 
 def read_excel_safe(file) -> pd.DataFrame:
-    """Lee el Excel y normaliza nombres de columnas."""
-    df = pd.read_excel(file)
+    """Lee el Excel y normaliza nombres de columnas. Si hay varias hojas, elige la más grande."""
+    xl = pd.ExcelFile(file)
+    if len(xl.sheet_names) == 1:
+        df = xl.parse(xl.sheet_names[0])
+    else:
+        # Tomar la hoja con más filas (ignorar hojas de resumen/pivot)
+        best, best_rows = xl.sheet_names[0], 0
+        for sheet in xl.sheet_names:
+            try:
+                n = xl.parse(sheet, nrows=0).shape[0]  # solo cabecera
+                tmp = xl.parse(sheet)
+                if len(tmp) > best_rows:
+                    best, best_rows = sheet, len(tmp)
+            except Exception:
+                pass
+        df = xl.parse(best)
     df.columns = [str(c).strip() for c in df.columns]
     return df
 
