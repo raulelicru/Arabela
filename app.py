@@ -1850,6 +1850,10 @@ def tab_moras(metrics: dict, df_moras: pd.DataFrame | None):
         df_m["_nivel"] = df_m[mora_col_moras].astype(str).str.strip().str.lower().map(mora_map)
         df_m = df_m.dropna(subset=["_nivel"])
 
+        # Filtrar solo damas que NO pagaron (coinciden con pendientes de la cartera)
+        if nodama_mora_key and coincidencias_ids:
+            df_m = df_m[df_m[nodama_mora_key].astype(str).str.strip().isin(coincidencias_ids)]
+
         mora_colors = {"Mora 1": COLORS["warning"], "Mora 2": COLORS["orange"], "Mora 3": COLORS["danger"]}
 
         # ── KPIs por nivel ────────────────────────────────────────────
