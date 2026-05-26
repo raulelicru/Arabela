@@ -1850,6 +1850,19 @@ def tab_moras(metrics: dict, df_moras: pd.DataFrame | None):
         if nodama_mora_key and coincidencias_ids:
             df_m = df_m[df_m[nodama_mora_key].astype(str).str.strip().isin(coincidencias_ids)]
 
+        # Deduplicar: una fila por dama usando la campaña más reciente
+        if nodama_mora_key and camp_col_moras:
+            def _camp_n(v):
+                try:
+                    return int(str(v).strip().upper().replace("C", ""))
+                except Exception:
+                    return 0
+            df_m["_camp_n"] = df_m[camp_col_moras].apply(_camp_n)
+            df_m = (
+                df_m.sort_values("_camp_n", ascending=False)
+                .drop_duplicates(subset=[nodama_mora_key], keep="first")
+            )
+
         mora_colors = {"Mora 1": COLORS["warning"], "Mora 2": COLORS["orange"], "Mora 3": COLORS["danger"]}
 
         # ── KPIs por nivel ────────────────────────────────────────────
