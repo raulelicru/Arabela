@@ -1846,37 +1846,47 @@ def tab_moras(metrics: dict, df_moras: pd.DataFrame | None):
 
         # Campaña actual POR DAMA = su campaña más reciente en todo el dataset
         df_all = metrics["df"].copy()
-        df_all["_seq_all"] = df_all[camp_col].astype(str).str.strip().apply(_camp_to_seq)
-        dama_max_seq = (
-            df_all.groupby(nodama_merge)["_seq_all"].max()
-            .rename("_max_seq_dama")
+        df_all["_seq_all"]  = df_all[camp_col].astype(str).str.strip().apply(_camp_to_seq)
+        df_all["_camp_code"] = df_all[camp_col].astype(str).str.strip()
+
+        # Guardamos tanto el seq como el código de campaña del máximo
+        dama_max = (
+            df_all.sort_values("_seq_all")
+            .groupby(nodama_merge)
+            .last()[["_seq_all", "_camp_code"]]
+            .rename(columns={"_seq_all": "_max_seq_dama", "_camp_code": "_max_camp_dama"})
         )
-        moras_en_pendientes = moras_en_pendientes.join(dama_max_seq, on=nodama_merge)
+        moras_en_pendientes = moras_en_pendientes.join(dama_max, on=nodama_merge)
         max_seq = moras_en_pendientes["_max_seq_dama"].notna().any()
 
         if max_seq:
             moras_en_pendientes["_diff"] = (
                 moras_en_pendientes["_max_seq_dama"] - moras_en_pendientes["_seq"].fillna(0)
             )
-            # Usar tabla Excel si está cargada, si no usar fórmula
+
             df_tabla_mora = st.session_state.get("df_tabla_mora")
             if df_tabla_mora is not None:
                 mora_lookup = _build_mora_lookup(df_tabla_mora)
-                # camp_actual_num = último 2 dígitos de la campaña max de la dama
+
+                # Número de campaña actual de la dama (1-26) extraído del código 6 dígitos
+                def _camp_num(code):
+                    c = str(code).strip()
+                    return int(c[4:]) if len(c) == 6 and c.isdigit() else None
+
                 moras_en_pendientes["_camp_actual_num"] = (
-                    moras_en_pendientes["_max_seq_dama"]
-                    .apply(lambda s: int(s) % 26 if pd.notna(s) else None)
+                    moras_en_pendientes["_max_camp_dama"].apply(_camp_num)
                 )
                 moras_en_pendientes["_camp_deuda_num"] = (
-                    moras_en_pendientes["_camp_raw"]
-                    .apply(lambda c: int(c[4:]) if len(str(c)) == 6 else None)
+                    moras_en_pendientes["_camp_raw"].apply(_camp_num)
                 )
+
                 def _lookup_mora(row):
                     try:
                         key = (int(row["_camp_actual_num"]), int(row["_camp_deuda_num"]))
                         return mora_lookup.get(key, "Mora 3")
                     except Exception:
                         return "Sin clasificar"
+
                 moras_en_pendientes["Nivel de Mora"] = moras_en_pendientes.apply(_lookup_mora, axis=1)
                 st.caption("Clasificacion usando tabla Excel cargada")
             else:
