@@ -1701,9 +1701,9 @@ def _build_mora_lookup(df_tabla: pd.DataFrame) -> dict:
 def _clasificar_mora(diff: int) -> str:
     if diff < 0:
         return "Sin mora"
-    elif diff <= 2:   # campaña actual (0), 1 atrás, 2 atrás → Mora 1
+    elif diff <= 1:   # misma campaña o 1 atrás → Mora 1
         return "Mora 1"
-    elif diff == 3:
+    elif diff == 2:
         return "Mora 2"
     else:
         return "Mora 3"
@@ -1844,51 +1844,52 @@ def tab_moras(metrics: dict, df_moras: pd.DataFrame | None):
         moras_en_pendientes["_camp"]     = moras_en_pendientes["_camp_raw"].apply(_fmt_camp)
         moras_en_pendientes["_seq"]      = moras_en_pendientes["_camp_raw"].apply(_camp_to_seq)
 
-        # Campaña actual PER-DAMA = la más reciente de cada dama en el dataset completo
-        df_all = metrics["df"].copy()
-        df_all["_seq_all"]   = df_all[camp_col].astype(str).str.strip().apply(_camp_to_seq)
-        df_all["_camp_code"] = df_all[camp_col].astype(str).str.strip()
+        max_seq = True
 
-        def _camp_num(code):
-            c = str(code).strip()
-            return int(c[4:]) if len(c) == 6 and c.isdigit() else None
+        # ── Opción 1: el archivo de moras ya trae columna "Moras" pre-clasificada ──
+        mora_col_moras = _find_col(df_moras, ["moras", "mora", "nivel de mora", "nivel_mora", "niveldemora"])
+        nodama_mora_key = _get_nodama_col(df_moras)
 
-        # Para cada dama, encontrar su campaña máxima (código y número)
-        dama_max = (
-            df_all.sort_values("_seq_all")
-            .groupby(nodama_merge)
-            .last()[["_seq_all", "_camp_code"]]
-            .rename(columns={"_seq_all": "_max_seq_dama", "_camp_code": "_max_camp_dama"})
-        )
-        moras_en_pendientes = moras_en_pendientes.join(
-            dama_max, on=nodama_merge
-        )
+        if mora_col_moras and nodama_mora_key:
+            # Buscar columna de campaña en df_moras para hacer join exacto
+            camp_col_moras = _find_col(df_moras, ["aniocampaniasaldo", "aniocampañasaldo", "campaniasaldo", "campañasaldo", "aniocampana", "campaña"])
 
-        moras_en_pendientes["_camp_deuda_num"]  = moras_en_pendientes["_camp_raw"].apply(_camp_num)
-        moras_en_pendientes["_camp_actual_num"] = moras_en_pendientes["_max_camp_dama"].apply(_camp_num)
+            # Normalizar mora labels
+            mora_map = {"mora 1": "Mora 1", "mora 2": "Mora 2", "mora 3": "Mora 3",
+                        "1": "Mora 1", "2": "Mora 2", "3": "Mora 3"}
+            df_moras_cls = df_moras[[nodama_mora_key, mora_col_moras]].copy()
+            df_moras_cls[mora_col_moras] = (
+                df_moras_cls[mora_col_moras].astype(str).str.strip().str.lower().map(mora_map)
+            )
+            df_moras_cls = df_moras_cls.dropna(subset=[mora_col_moras])
+            df_moras_cls[nodama_mora_key] = df_moras_cls[nodama_mora_key].astype(str).str.strip()
 
-        max_seq = True  # siempre tenemos datos por-dama
+            # Si hay varias filas por dama, tomar la peor mora (Mora 3 > 2 > 1)
+            mora_order = {"Mora 1": 1, "Mora 2": 2, "Mora 3": 3}
+            df_moras_cls["_ord"] = df_moras_cls[mora_col_moras].map(mora_order)
+            df_moras_best = (
+                df_moras_cls.sort_values("_ord", ascending=False)
+                .drop_duplicates(subset=[nodama_mora_key])
+                .set_index(nodama_mora_key)[mora_col_moras]
+                .rename("Nivel de Mora")
+            )
+            moras_en_pendientes["_nk"] = moras_en_pendientes[nodama_merge].astype(str).str.strip()
+            moras_en_pendientes["Nivel de Mora"] = moras_en_pendientes["_nk"].map(df_moras_best).fillna("Sin clasificar")
+            st.caption("Clasificación leída directamente del archivo de moras")
 
-        df_tabla_mora = st.session_state.get("df_tabla_mora")
-        if df_tabla_mora is not None:
-            mora_lookup = _build_mora_lookup(df_tabla_mora)
-            # Lookup: (campaña actual de la dama, campaña de la deuda) → nivel
-            def _lookup_mora(row):
-                actual = row["_camp_actual_num"]
-                deuda  = row["_camp_deuda_num"]
-                if pd.isna(actual) or pd.isna(deuda):
-                    return "Sin clasificar"
-                return mora_lookup.get((int(actual), int(deuda)), "Mora 3")
-            moras_en_pendientes["Nivel de Mora"] = moras_en_pendientes.apply(_lookup_mora, axis=1)
-            st.caption("Clasificación con tabla Excel — por campaña de cada dama")
         else:
-            # Fallback: clasificar por diff de secuencia per-dama
+            # ── Opción 2: calcular por diff usando campaña global máxima ──
+            df_all = metrics["df"].copy()
+            df_all["_seq_all"] = df_all[camp_col].astype(str).str.strip().apply(_camp_to_seq)
+            global_max_seq  = df_all["_seq_all"].max()
+
             moras_en_pendientes["_diff"] = (
-                moras_en_pendientes["_max_seq_dama"] - moras_en_pendientes["_seq"].fillna(moras_en_pendientes["_max_seq_dama"])
+                global_max_seq - moras_en_pendientes["_seq"].fillna(global_max_seq)
             )
             moras_en_pendientes["Nivel de Mora"] = moras_en_pendientes["_diff"].apply(
                 lambda d: _clasificar_mora(int(d)) if pd.notna(d) else "Sin clasificar"
             )
+            st.caption("Clasificación automática — diff 0-1: Mora 1 · diff 2: Mora 2 · diff 3+: Mora 3")
 
         dist_count = moras_en_pendientes.groupby("_camp").size().rename("Damas")
         dist_monto = (
@@ -1905,7 +1906,7 @@ def tab_moras(metrics: dict, df_moras: pd.DataFrame | None):
         if max_seq:
             st.markdown("---")
             st.markdown("###  Clasificación por Nivel de Mora")
-            st.caption("Referencia: campaña más reciente de cada dama · la clasificación usa la tabla Excel subida · Mora 1 = 0-2 campañas atrás, Mora 2 = 3 atrás, Mora 3 = 4 o más atrás")
+            st.caption("Mora 1 = 0-1 campañas atrás · Mora 2 = 2 campañas atrás · Mora 3 = 3 o más campañas atrás")
 
             mora_colors = {"Mora 1": COLORS["warning"], "Mora 2": COLORS["orange"], "Mora 3": COLORS["danger"]}
 
