@@ -1679,24 +1679,6 @@ def _camp_to_seq(code) -> int | None:
     return None
 
 
-def _build_mora_lookup(df_tabla: pd.DataFrame) -> dict:
-    """Construye dict {(camp_actual_num, camp_deuda_num): nivel} desde la tabla Excel."""
-    lookup = {}
-    cols = df_tabla.columns.tolist()
-    # Detectar columnas por posición o nombre
-    col_actual = next((c for c in cols if "actual" in c.lower()), cols[0])
-    col_deuda  = next((c for c in cols if "deuda"  in c.lower()), cols[1])
-    col_nivel  = next((c for c in cols if "mora"   in c.lower() or "estatus" in c.lower()), cols[2])
-    for _, row in df_tabla.iterrows():
-        actual_raw = str(row[col_actual]).strip().upper().replace("C", "")
-        deuda_raw  = str(row[col_deuda]).strip()
-        nivel      = str(row[col_nivel]).strip()
-        try:
-            lookup[(int(actual_raw), int(float(deuda_raw)))] = nivel
-        except ValueError:
-            pass
-    return lookup
-
 
 def _clasificar_mora(diff: int) -> str:
     if diff < 0:
@@ -2171,7 +2153,6 @@ def main():
     for key, default in [
         ("data", None), ("df_cartera", None), ("df_saldos", None),
         ("mapping", None), ("file_names", (None, None)), ("df_moras", None),
-        ("df_tabla_mora", None),
     ]:
         if key not in st.session_state:
             st.session_state[key] = default
@@ -2209,32 +2190,6 @@ def main():
                 except Exception as e:
                     st.error(f" Error al leer moras: {e}")
 
-        # Cuarto uploader: tabla de clasificación de moras
-        st.markdown("---")
-        col_up4, col_info = st.columns([1, 2])
-        with col_up4:
-            st.markdown("**Tabla de Clasificacion de Moras** *(opcional)*")
-            st.caption("Excel con columnas: Campaña Actual, Campaña de deuda, estatus de mora")
-            file_tabla = st.file_uploader(
-                "Tabla mora", type=["xlsx", "xls"], label_visibility="collapsed", key="up_tabla_mora"
-            )
-            if file_tabla:
-                try:
-                    # Intentar leer Hoja1, si no existe tomar la primera hoja
-                    try:
-                        df_tabla = pd.read_excel(file_tabla, sheet_name="Hoja1")
-                    except Exception:
-                        df_tabla = pd.read_excel(file_tabla, sheet_name=0)
-                    df_tabla.columns = [str(c).strip() for c in df_tabla.columns]
-                    st.session_state.df_tabla_mora = df_tabla
-                    st.success(f" Tabla de clasificacion cargada: {len(df_tabla):,} reglas")
-                except Exception as e:
-                    st.error(f" Error al leer tabla: {e}")
-        with col_info:
-            if st.session_state.df_tabla_mora is not None:
-                df_t = st.session_state.df_tabla_mora
-                st.caption(f"Columnas detectadas: {', '.join(df_t.columns.tolist())}")
-                st.dataframe(df_t.head(5), use_container_width=True, hide_index=True)
 
         if file_cartera and file_saldos:
             new_names = (file_cartera.name, file_saldos.name)
