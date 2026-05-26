@@ -1846,94 +1846,38 @@ def tab_moras(metrics: dict, df_moras: pd.DataFrame | None):
 
         max_seq = True
 
-        # ── Opción 1: el archivo de moras ya trae columna "Moras" pre-clasificada ──
-        mora_col_moras = _find_col(df_moras, ["moras", "mora", "nivel de mora", "nivel_mora", "niveldemora"])
+        # Lookup directo: NoDama del archivo de moras → nivel de mora asignado
+        mora_col_moras  = _find_col(df_moras, ["moras", "mora", "nivel de mora", "nivel_mora", "niveldemora"])
         nodama_mora_key = _get_nodama_col(df_moras)
 
-        # Columna "Campaña de trabajo" en df_moras: cada registro sabe su propia campaña actual
-        camp_trab_col = _find_col(df_moras, ["campania trabajo", "campanatrabajo", "campañatrabajo", "campania_trabajo", "campaña_trabajo", "campaniasactuales"])
-
-        def _parse_camp_trab(val, ref_year):
-            """'C1'-'C10' → secuencia. ref_year se infiere del dataset."""
-            v = str(val).strip().upper()
-            if v.startswith("C") and v[1:].isdigit():
-                return ref_year * 26 + int(v[1:])
-            return None
-
         if mora_col_moras and nodama_mora_key:
-            # ── Opción 1: el archivo ya trae "Moras" pre-clasificada ────────
             mora_map = {"mora 1": "Mora 1", "mora 2": "Mora 2", "mora 3": "Mora 3",
                         "1": "Mora 1", "2": "Mora 2", "3": "Mora 3"}
-            df_moras_cls = df_moras[[nodama_mora_key, mora_col_moras]].copy()
-            df_moras_cls[mora_col_moras] = (
-                df_moras_cls[mora_col_moras].astype(str).str.strip().str.lower().map(mora_map)
-            )
-            df_moras_cls = df_moras_cls.dropna(subset=[mora_col_moras])
-            df_moras_cls[nodama_mora_key] = df_moras_cls[nodama_mora_key].astype(str).str.strip()
-
-            # Si hay varias filas por dama, tomar la peor mora (Mora 3 > 2 > 1)
-            mora_order = {"Mora 1": 1, "Mora 2": 2, "Mora 3": 3}
-            df_moras_cls["_ord"] = df_moras_cls[mora_col_moras].map(mora_order)
-            df_moras_best = (
-                df_moras_cls.sort_values("_ord", ascending=False)
-                .drop_duplicates(subset=[nodama_mora_key])
+            lookup = (
+                df_moras[[nodama_mora_key, mora_col_moras]]
+                .copy()
+                .assign(**{
+                    nodama_mora_key: lambda d: d[nodama_mora_key].astype(str).str.strip(),
+                    mora_col_moras:  lambda d: d[mora_col_moras].astype(str).str.strip().str.lower().map(mora_map),
+                })
+                .dropna(subset=[mora_col_moras])
+                .drop_duplicates(subset=[nodama_mora_key], keep="last")
                 .set_index(nodama_mora_key)[mora_col_moras]
-                .rename("Nivel de Mora")
             )
-            moras_en_pendientes["_nk"] = moras_en_pendientes[nodama_merge].astype(str).str.strip()
-            moras_en_pendientes["Nivel de Mora"] = moras_en_pendientes["_nk"].map(df_moras_best).fillna("Sin clasificar")
-            st.caption("Clasificación leída directamente del archivo de moras")
-
-        elif camp_trab_col and nodama_mora_key:
-            # ── Opción 2: calcular diff per-registro usando "Campaña de trabajo" ──
-            # Infiere el año de referencia de los datos de deuda
-            camp_debt_col = _find_col(df_moras, ["aniocampaniasaldo", "aniocampañasaldo", "campaniasaldo"])
-            if camp_debt_col:
-                years = (
-                    df_moras[camp_debt_col].astype(str)
-                    .str.extract(r"(\d{4})", expand=False)
-                    .dropna().astype(int)
-                )
-                ref_year = int(years.max()) if len(years) > 0 else 2026
-            else:
-                ref_year = 2026
-
-            df_m = df_moras[[nodama_mora_key, camp_trab_col]].copy()
-            df_m[nodama_mora_key] = df_m[nodama_mora_key].astype(str).str.strip()
-            df_m["_ref_seq"] = df_m[camp_trab_col].apply(lambda v: _parse_camp_trab(v, ref_year))
-
-            # Para cada dama, tomar la campaña de trabajo más reciente
-            df_m_max = (
-                df_m.dropna(subset=["_ref_seq"])
-                .sort_values("_ref_seq", ascending=False)
-                .drop_duplicates(subset=[nodama_mora_key])
-                .set_index(nodama_mora_key)["_ref_seq"]
-                .rename("_ref_seq_dama")
+            moras_en_pendientes["Nivel de Mora"] = (
+                moras_en_pendientes[nodama_merge].astype(str).str.strip().map(lookup).fillna("Sin clasificar")
             )
-            moras_en_pendientes["_nk"] = moras_en_pendientes[nodama_merge].astype(str).str.strip()
-            moras_en_pendientes["_ref_seq_dama"] = moras_en_pendientes["_nk"].map(df_m_max)
-
-            moras_en_pendientes["_diff"] = (
-                moras_en_pendientes["_ref_seq_dama"] - moras_en_pendientes["_seq"]
-            ).fillna(0)
-            moras_en_pendientes["Nivel de Mora"] = moras_en_pendientes["_diff"].apply(
-                lambda d: _clasificar_mora(int(d)) if pd.notna(d) else "Sin clasificar"
-            )
-            st.caption(f"Clasificación por campaña de trabajo del archivo · diff 0-1=Mora 1 · diff 2=Mora 2 · diff 3+=Mora 3")
-
         else:
-            # ── Opción 3: fallback — diff vs campaña global máxima del dataset ──
+            # Fallback si el archivo no trae columna de mora
             df_all = metrics["df"].copy()
             df_all["_seq_all"] = df_all[camp_col].astype(str).str.strip().apply(_camp_to_seq)
             global_max_seq = df_all["_seq_all"].max()
-
             moras_en_pendientes["_diff"] = (
                 global_max_seq - moras_en_pendientes["_seq"].fillna(global_max_seq)
             )
             moras_en_pendientes["Nivel de Mora"] = moras_en_pendientes["_diff"].apply(
                 lambda d: _clasificar_mora(int(d)) if pd.notna(d) else "Sin clasificar"
             )
-            st.caption("Clasificación automática — diff 0-1: Mora 1 · diff 2: Mora 2 · diff 3+: Mora 3")
 
         dist_count = moras_en_pendientes.groupby("_camp").size().rename("Damas")
         dist_monto = (
