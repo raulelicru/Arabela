@@ -1837,104 +1837,75 @@ def tab_moras(metrics: dict, df_moras: pd.DataFrame | None):
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # ── Distribución por campaña ────────────────────────────────────
-    camp_col = _find_col(pendientes, ["aniocampaña", "aniocampana", "anio", "año", "campaña"])
-    if camp_col and n_coincidencias > 0:
-        moras_en_pendientes["_camp_raw"] = moras_en_pendientes[camp_col].astype(str).str.strip()
-        moras_en_pendientes["_camp"]     = moras_en_pendientes["_camp_raw"].apply(_fmt_camp)
-        moras_en_pendientes["_seq"]      = moras_en_pendientes["_camp_raw"].apply(_camp_to_seq)
+    # ── Sección de clasificación por nivel de mora ─────────────────────
+    mora_col_moras  = _find_col(df_moras, ["moras", "mora", "nivel de mora", "nivel_mora", "niveldemora"])
+    camp_col_moras  = _find_col(df_moras, ["campania", "campaña", "camp", "campana"])
+    saldo_col_moras = _find_col(df_moras, ["saldodama", "saldo", "importe", "monto", "importenetofactura"])
+    nodama_mora_key = _get_nodama_col(df_moras)
 
-        max_seq = True
+    if mora_col_moras:
+        mora_map = {"mora 1": "Mora 1", "mora 2": "Mora 2", "mora 3": "Mora 3",
+                    "1": "Mora 1", "2": "Mora 2", "3": "Mora 3"}
+        df_m = df_moras.copy()
+        df_m["_nivel"] = df_m[mora_col_moras].astype(str).str.strip().str.lower().map(mora_map)
+        df_m = df_m.dropna(subset=["_nivel"])
 
-        # Lookup directo: NoDama del archivo de moras → nivel de mora asignado
-        mora_col_moras  = _find_col(df_moras, ["moras", "mora", "nivel de mora", "nivel_mora", "niveldemora"])
-        nodama_mora_key = _get_nodama_col(df_moras)
+        mora_colors = {"Mora 1": COLORS["warning"], "Mora 2": COLORS["orange"], "Mora 3": COLORS["danger"]}
 
-        if mora_col_moras and nodama_mora_key:
-            mora_map = {"mora 1": "Mora 1", "mora 2": "Mora 2", "mora 3": "Mora 3",
-                        "1": "Mora 1", "2": "Mora 2", "3": "Mora 3"}
-            lookup = (
-                df_moras[[nodama_mora_key, mora_col_moras]]
-                .copy()
-                .assign(**{
-                    nodama_mora_key: lambda d: d[nodama_mora_key].astype(str).str.strip(),
-                    mora_col_moras:  lambda d: d[mora_col_moras].astype(str).str.strip().str.lower().map(mora_map),
-                })
-                .dropna(subset=[mora_col_moras])
-                .drop_duplicates(subset=[nodama_mora_key], keep="last")
-                .set_index(nodama_mora_key)[mora_col_moras]
-            )
-            moras_en_pendientes["Nivel de Mora"] = (
-                moras_en_pendientes[nodama_merge].astype(str).str.strip().map(lookup).fillna("Sin clasificar")
+        # ── KPIs por nivel ────────────────────────────────────────────
+        if saldo_col_moras:
+            df_m["_saldo"] = pd.to_numeric(df_m[saldo_col_moras], errors="coerce")
+            mora_dist = (
+                df_m.groupby("_nivel")
+                .agg(Damas=("_nivel", "count"), Monto=("_saldo", "sum"))
+                .reindex(["Mora 1", "Mora 2", "Mora 3"], fill_value=0)
+                .reset_index().rename(columns={"_nivel": "Nivel de Mora"})
             )
         else:
-            # Fallback si el archivo no trae columna de mora
-            df_all = metrics["df"].copy()
-            df_all["_seq_all"] = df_all[camp_col].astype(str).str.strip().apply(_camp_to_seq)
-            global_max_seq = df_all["_seq_all"].max()
-            moras_en_pendientes["_diff"] = (
-                global_max_seq - moras_en_pendientes["_seq"].fillna(global_max_seq)
-            )
-            moras_en_pendientes["Nivel de Mora"] = moras_en_pendientes["_diff"].apply(
-                lambda d: _clasificar_mora(int(d)) if pd.notna(d) else "Sin clasificar"
-            )
-
-        dist_count = moras_en_pendientes.groupby("_camp").size().rename("Damas")
-        dist_monto = (
-            pd.to_numeric(moras_en_pendientes[valor_col], errors="coerce")
-            .groupby(moras_en_pendientes["_camp"]).sum().rename("Monto")
-            if valor_col else pd.Series(dtype=float)
-        )
-        dist = pd.concat([dist_count, dist_monto], axis=1).fillna(0).sort_index().reset_index()
-        dist = dist.rename(columns={"_camp": "Campaña"})
-        dist["Damas"] = dist["Damas"].astype(int)
-        dist["% del total moras"] = (dist["Damas"] / dist["Damas"].sum() * 100).round(1)
-
-        # ── Clasificación por nivel de mora ─────────────────────────
-        if max_seq:
-            st.markdown("---")
-            st.markdown("###  Clasificación por Nivel de Mora")
-            st.caption("Mora 1 = 0-1 campañas atrás · Mora 2 = 2 campañas atrás · Mora 3 = 3 o más campañas atrás")
-
-            mora_colors = {"Mora 1": COLORS["warning"], "Mora 2": COLORS["orange"], "Mora 3": COLORS["danger"]}
-
             mora_dist = (
-                moras_en_pendientes.groupby("Nivel de Mora")
-                .agg(Damas=("Nivel de Mora", "count"),
-                     Monto=(valor_col, lambda x: pd.to_numeric(x, errors="coerce").sum()) if valor_col else ("_seq", "count"))
+                df_m.groupby("_nivel").size().rename("Damas")
                 .reindex(["Mora 1", "Mora 2", "Mora 3"], fill_value=0)
+                .reset_index().rename(columns={"_nivel": "Nivel de Mora"})
+            )
+            mora_dist["Monto"] = 0
+
+        total_mora_shown = mora_dist["Damas"].sum()
+        mora_dist["% del total"] = (
+            (mora_dist["Damas"] / total_mora_shown * 100).round(1) if total_mora_shown > 0 else 0.0
+        )
+
+        st.markdown("---")
+        st.markdown("###  Clasificación por Nivel de Mora")
+        st.markdown("<br>", unsafe_allow_html=True)
+        km1, km2, km3 = st.columns(3)
+        for col_k, (_, row_m) in zip([km1, km2, km3], mora_dist.iterrows()):
+            with col_k:
+                st.metric(f"{row_m['Nivel de Mora']} — Damas", f"{int(row_m['Damas']):,}",
+                          delta=f"{row_m['% del total']:.1f}% del total", delta_color="off")
+                if saldo_col_moras:
+                    st.metric(f"{row_m['Nivel de Mora']} — Monto", fmt_currency(row_m["Monto"]))
+
+        st.markdown("<br>", unsafe_allow_html=True)
+
+        # ── Barras apiladas por campaña ───────────────────────────────
+        if camp_col_moras:
+            mora_camp = (
+                df_m.groupby([camp_col_moras, "_nivel"]).size()
+                .unstack(fill_value=0)
+                .reindex(columns=["Mora 1", "Mora 2", "Mora 3"], fill_value=0)
                 .reset_index()
             )
-            # Denominador = suma real de las 3 categorías mostradas → siempre suma 100%
-            total_mora_shown = mora_dist["Damas"].sum()
-            mora_dist["% del total"] = (
-                (mora_dist["Damas"] / total_mora_shown * 100).round(1)
-                if total_mora_shown > 0 else 0.0
-            )
+            # Ordenar C1, C2, ..., C10
+            def _camp_sort_key(v):
+                v2 = str(v).strip().upper().replace("C", "")
+                return int(v2) if v2.isdigit() else 99
+            mora_camp = mora_camp.sort_values(camp_col_moras, key=lambda s: s.map(_camp_sort_key))
 
-            # KPIs por nivel — damas y monto
-            st.markdown("<br>", unsafe_allow_html=True)
-            km1, km2, km3 = st.columns(3)
-            for col_k, (_, row_m) in zip([km1, km2, km3], mora_dist.iterrows()):
-                with col_k:
-                    st.metric(f"{row_m['Nivel de Mora']} — Damas", f"{row_m['Damas']:,}", delta=f"{row_m['% del total']:.1f}% del total", delta_color="off")
-                    if valor_col:
-                        st.metric(f"{row_m['Nivel de Mora']} — Monto", fmt_currency(row_m["Monto"]))
-
-            st.markdown("<br>", unsafe_allow_html=True)
-
-            # Barras apiladas por campaña — damas (dedup)
-            mora_camp = (
-                moras_en_pendientes.groupby(["_camp", "Nivel de Mora"])
-                .size().unstack(fill_value=0)
-                .reindex(columns=["Mora 1", "Mora 2", "Mora 3"], fill_value=0)
-                .sort_index().reset_index()
-            )
             fig_mora_camp = go.Figure()
             for nivel, color in mora_colors.items():
                 if nivel in mora_camp.columns:
                     fig_mora_camp.add_trace(go.Bar(
-                        x=mora_camp["_camp"], y=mora_camp[nivel],
+                        x=mora_camp[camp_col_moras], y=mora_camp[nivel],
                         name=nivel, marker_color=color,
                         hovertemplate=f"<b>%{{x}}</b><br>{nivel}: %{{y:,}} damas<extra></extra>",
                     ))
@@ -1946,24 +1917,23 @@ def tab_moras(metrics: dict, df_moras: pd.DataFrame | None):
                 yaxis=dict(title="Número de damas", **_AXIS_DEFAULTS),
                 legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
             )
-            chart_card("Tipo de mora por campaña (numero de damas)", fig_mora_camp, key="mora_niveles_camp", height_normal=420, height_expanded=600)
+            chart_card("Tipo de mora por campaña (numero de damas)", fig_mora_camp,
+                       key="mora_niveles_camp", height_normal=420, height_expanded=600)
 
-            # Barras apiladas por campaña — monto (dedup)
-            if valor_col:
+            if saldo_col_moras:
                 st.markdown("<br>", unsafe_allow_html=True)
-                mora_camp_monto = (
-                    moras_en_pendientes.assign(
-                        _monto=pd.to_numeric(moras_en_pendientes[valor_col], errors="coerce")
-                    ).groupby(["_camp", "Nivel de Mora"])["_monto"]
-                    .sum().unstack(fill_value=0)
+                mora_camp_m = (
+                    df_m.groupby([camp_col_moras, "_nivel"])["_saldo"].sum()
+                    .unstack(fill_value=0)
                     .reindex(columns=["Mora 1", "Mora 2", "Mora 3"], fill_value=0)
-                    .sort_index().reset_index()
+                    .reset_index()
                 )
+                mora_camp_m = mora_camp_m.sort_values(camp_col_moras, key=lambda s: s.map(_camp_sort_key))
                 fig_mora_monto = go.Figure()
                 for nivel, color in mora_colors.items():
-                    if nivel in mora_camp_monto.columns:
+                    if nivel in mora_camp_m.columns:
                         fig_mora_monto.add_trace(go.Bar(
-                            x=mora_camp_monto["_camp"], y=mora_camp_monto[nivel],
+                            x=mora_camp_m[camp_col_moras], y=mora_camp_m[nivel],
                             name=nivel, marker_color=color,
                             hovertemplate=f"<b>%{{x}}</b><br>{nivel}: $%{{y:,.0f}}<extra></extra>",
                         ))
@@ -1975,57 +1945,58 @@ def tab_moras(metrics: dict, df_moras: pd.DataFrame | None):
                     yaxis=dict(title="Monto ($)", **_AXIS_DEFAULTS),
                     legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
                 )
-                chart_card("Tipo de mora por campaña (dinero)", fig_mora_monto, key="mora_monto_camp", height_normal=420, height_expanded=600)
+                chart_card("Tipo de mora por campaña (dinero)", fig_mora_monto,
+                           key="mora_monto_camp", height_normal=420, height_expanded=600)
 
-            st.markdown("<br>", unsafe_allow_html=True)
+        st.markdown("<br>", unsafe_allow_html=True)
 
-            # Donas lado a lado: proporción damas y monto
-            dcol1, dcol2 = st.columns(2)
-            with dcol1:
-                fig_dona_mora = go.Figure(go.Pie(
-                    labels=mora_dist["Nivel de Mora"], values=mora_dist["Damas"],
+        # ── Donas: proporción de damas y monto ───────────────────────
+        dcol1, dcol2 = st.columns(2)
+        with dcol1:
+            fig_dona_mora = go.Figure(go.Pie(
+                labels=mora_dist["Nivel de Mora"], values=mora_dist["Damas"],
+                hole=0.6,
+                marker_colors=[mora_colors.get(m, COLORS["muted"]) for m in mora_dist["Nivel de Mora"]],
+                textinfo="label+percent", textfont=dict(size=13, color=COLORS["text"]),
+                hovertemplate="<b>%{label}</b><br>Damas: %{value:,}<br>%{percent}<extra></extra>",
+            ))
+            fig_dona_mora.update_layout(
+                **PLOTLY_LAYOUT,
+                title_text="Proporción de damas Mora 1/2/3",
+                title_font=dict(size=13, color=COLORS["primary"]),
+                legend=dict(orientation="h", yanchor="bottom", y=-0.15, xanchor="center", x=0.5),
+            )
+            chart_card("Como se reparte la mora entre los 3 niveles", fig_dona_mora,
+                       key="dona_mora_damas", height_normal=340, height_expanded=480)
+        with dcol2:
+            if saldo_col_moras:
+                fig_dona_monto_mora = go.Figure(go.Pie(
+                    labels=mora_dist["Nivel de Mora"], values=mora_dist["Monto"],
                     hole=0.6,
                     marker_colors=[mora_colors.get(m, COLORS["muted"]) for m in mora_dist["Nivel de Mora"]],
                     textinfo="label+percent", textfont=dict(size=13, color=COLORS["text"]),
-                    hovertemplate="<b>%{label}</b><br>Damas: %{value:,}<br>%{percent}<extra></extra>",
+                    hovertemplate="<b>%{label}</b><br>$%{value:,.0f}<br>%{percent}<extra></extra>",
                 ))
-                fig_dona_mora.update_layout(
+                fig_dona_monto_mora.update_layout(
                     **PLOTLY_LAYOUT,
-                    title_text="Proporción de damas Mora 1/2/3",
+                    title_text="Proporción del monto Mora 1/2/3",
                     title_font=dict(size=13, color=COLORS["primary"]),
                     legend=dict(orientation="h", yanchor="bottom", y=-0.15, xanchor="center", x=0.5),
                 )
-                chart_card("Como se reparte la mora entre los 3 niveles", fig_dona_mora, key="dona_mora_damas", height_normal=340, height_expanded=480)
-            with dcol2:
-                if valor_col:
-                    fig_dona_monto_mora = go.Figure(go.Pie(
-                        labels=mora_dist["Nivel de Mora"], values=mora_dist["Monto"],
-                        hole=0.6,
-                        marker_colors=[mora_colors.get(m, COLORS["muted"]) for m in mora_dist["Nivel de Mora"]],
-                        textinfo="label+percent", textfont=dict(size=13, color=COLORS["text"]),
-                        hovertemplate="<b>%{label}</b><br>$%{value:,.0f}<br>%{percent}<extra></extra>",
-                    ))
-                    fig_dona_monto_mora.update_layout(
-                        **PLOTLY_LAYOUT,
-                        title_text="Proporción de monto Mora 1/2/3",
-                        title_font=dict(size=13, color=COLORS["primary"]),
-                        legend=dict(orientation="h", yanchor="bottom", y=-0.15, xanchor="center", x=0.5),
-                    )
-                    chart_card("Cuanto dinero hay en cada nivel de mora", fig_dona_monto_mora, key="dona_mora_monto", height_normal=340, height_expanded=480)
+                chart_card("Como se reparte el dinero entre los 3 niveles", fig_dona_monto_mora,
+                           key="dona_mora_monto", height_normal=340, height_expanded=480)
 
-            # ── Gráfica individual por cada nivel de mora ───────────────
+        # ── Detalle por nivel de mora ─────────────────────────────────
+        if camp_col_moras:
             st.markdown("<br>", unsafe_allow_html=True)
             st.markdown("###  Detalle individual por nivel de mora")
 
-            mora_nivel_colors = {"Mora 1": COLORS["warning"], "Mora 2": COLORS["orange"], "Mora 3": COLORS["danger"]}
-
-            for nivel, color in mora_nivel_colors.items():
-                df_nivel = moras_en_pendientes[moras_en_pendientes["Nivel de Mora"] == nivel].copy()
+            for nivel, color in mora_colors.items():
+                df_nivel = df_m[df_m["_nivel"] == nivel]
                 if df_nivel.empty:
                     continue
-
-                n_nivel  = len(df_nivel)
-                m_nivel  = pd.to_numeric(df_nivel[valor_col], errors="coerce").sum() if valor_col else 0
+                n_nivel   = len(df_nivel)
+                m_nivel   = df_nivel["_saldo"].sum() if saldo_col_moras else 0
                 pct_nivel = n_nivel / total_mora_shown * 100 if total_mora_shown > 0 else 0
 
                 st.markdown(
@@ -2034,129 +2005,102 @@ def tab_moras(metrics: dict, df_moras: pd.DataFrame | None):
                     f"<b style='color:{COLORS['primary']}'>{nivel}</b> &nbsp;·&nbsp; "
                     f"<b>{n_nivel:,}</b> damas &nbsp;·&nbsp; "
                     f"<b>{fmt_currency(m_nivel)}</b> &nbsp;·&nbsp; "
-                    f"<b>{pct_nivel:.1f}%</b> del total de moras"
-                    f"</div>",
-                    unsafe_allow_html=True,
+                    f"<b>{pct_nivel:.1f}%</b> del total"
+                    f"</div>", unsafe_allow_html=True,
                 )
 
                 camp_nivel = (
-                    df_nivel.groupby("_camp")
-                    .agg(
-                        Damas=("_camp", "count"),
-                        Monto=(valor_col, lambda x: pd.to_numeric(x, errors="coerce").sum()) if valor_col else ("_camp", "count"),
-                    )
-                    .sort_index().reset_index()
+                    df_nivel.groupby(camp_col_moras)
+                    .agg(Damas=(camp_col_moras, "count"),
+                         Monto=("_saldo", "sum") if saldo_col_moras else (camp_col_moras, "count"))
+                    .reset_index()
+                    .sort_values(camp_col_moras, key=lambda s: s.map(_camp_sort_key))
                 )
                 camp_nivel["% del nivel"] = (camp_nivel["Damas"] / n_nivel * 100).round(1)
 
                 c_graf1, c_graf2 = st.columns(2)
-
-                # Gráfica 1: barras de damas por campaña
                 with c_graf1:
                     fig1 = go.Figure(go.Bar(
-                        x=camp_nivel["_camp"], y=camp_nivel["Damas"],
-                        marker_color=color,
-                        text=camp_nivel["Damas"],
-                        textposition="outside",
+                        x=camp_nivel[camp_col_moras], y=camp_nivel["Damas"],
+                        marker_color=color, text=camp_nivel["Damas"], textposition="outside",
                         textfont=dict(color=COLORS["text"], size=11),
-                        hovertemplate="<b>%{x}</b><br>Damas: %{y:,}<br>%{customdata:.1f}% del nivel<extra></extra>",
+                        hovertemplate="<b>%{x}</b><br>Damas: %{y:,}<br>%{customdata:.1f}%<extra></extra>",
                         customdata=camp_nivel["% del nivel"],
                     ))
-                    fig1.update_layout(
-                        **PLOTLY_LAYOUT,
-                        title_text=f"Cuantas damas de {nivel} hay en cada campaña",
+                    fig1.update_layout(**PLOTLY_LAYOUT,
+                        title_text=f"Damas {nivel} por campaña",
                         title_font=dict(size=12, color=COLORS["primary"]),
                         xaxis=dict(type="category", **_AXIS_DEFAULTS),
-                        yaxis=dict(title="Damas", **_AXIS_DEFAULTS),
-                        height=300,
-                    )
+                        yaxis=dict(title="Damas", **_AXIS_DEFAULTS), height=300)
                     st.plotly_chart(fig1, use_container_width=True, key=f"ind_{nivel.replace(' ','')}_damas")
-
-                # Gráfica 2: barras de monto por campaña
                 with c_graf2:
-                    if valor_col and "Monto" in camp_nivel.columns:
+                    if saldo_col_moras:
                         fig2 = go.Figure(go.Bar(
-                            x=camp_nivel["_camp"], y=camp_nivel["Monto"],
+                            x=camp_nivel[camp_col_moras], y=camp_nivel["Monto"],
                             marker_color=color,
                             text=camp_nivel["Monto"].apply(lambda v: f"${v/1e6:.2f}M" if v >= 1e6 else f"${v/1e3:.0f}K"),
                             textposition="outside",
                             textfont=dict(color=COLORS["text"], size=11),
-                            hovertemplate="<b>%{x}</b><br>Monto: $%{y:,.0f}<extra></extra>",
+                            hovertemplate="<b>%{x}</b><br>$%{y:,.0f}<extra></extra>",
                         ))
-                        fig2.update_layout(
-                            **PLOTLY_LAYOUT,
-                            title_text=f"Cuanto dinero de {nivel} hay en cada campaña",
+                        fig2.update_layout(**PLOTLY_LAYOUT,
+                            title_text=f"Monto {nivel} por campaña",
                             title_font=dict(size=12, color=COLORS["primary"]),
                             xaxis=dict(type="category", **_AXIS_DEFAULTS),
-                            yaxis=dict(title="Monto ($)", **_AXIS_DEFAULTS),
-                            height=300,
-                        )
+                            yaxis=dict(title="Monto ($)", **_AXIS_DEFAULTS), height=300)
                         st.plotly_chart(fig2, use_container_width=True, key=f"ind_{nivel.replace(' ','')}_monto")
-
                 st.markdown("<br>", unsafe_allow_html=True)
 
-            st.markdown("---")
+        st.markdown("---")
 
-        # Barras: % de moras por campaña
-        fig_dona_camp = go.Figure(go.Bar(
-            x=dist["Campaña"],
-            y=dist["% del total moras"],
-            marker_color=PASTEL_SEQ[:len(dist)],
-            text=dist["% del total moras"].apply(lambda v: f"{v:.1f}%"),
-            textposition="outside",
-            textfont=dict(color=COLORS["text"], size=12),
-            hovertemplate="<b>%{x}</b><br>%{y:.1f}% del total de moras<br>Damas: %{customdata:,}<extra></extra>",
-            customdata=dist["Damas"],
-        ))
-        fig_dona_camp.update_layout(
-            **PLOTLY_LAYOUT,
-            title_text=f"¿Qué campaña concentra más moras? (total: {n_coincidencias:,} damas)",
-            title_font=dict(size=13, color=COLORS["primary"]),
-            xaxis=dict(type="category", **_AXIS_DEFAULTS),
-            yaxis=dict(title="% del total de moras", **_AXIS_DEFAULTS),
-        )
-        chart_card("En que campaña hay mas moras", fig_dona_camp, key="dona_camp", height_normal=380, height_expanded=540)
+        # ── Barras: damas + monto por campaña (desde df_moras) ──────────
+        if mora_col_moras and camp_col_moras:
+            st.markdown("<br>", unsafe_allow_html=True)
+            dist = (
+                df_m.groupby(camp_col_moras)
+                .agg(Damas=(camp_col_moras, "count"),
+                     Monto=("_saldo", "sum") if saldo_col_moras else (camp_col_moras, "count"))
+                .reset_index()
+                .rename(columns={camp_col_moras: "Campaña"})
+                .sort_values("Campaña", key=lambda s: s.map(_camp_sort_key))
+            )
+            dist["% del total moras"] = (dist["Damas"] / dist["Damas"].sum() * 100).round(1)
 
-        st.markdown("<br>", unsafe_allow_html=True)
+            fig_bar = make_subplots(specs=[[{"secondary_y": True}]])
+            fig_bar.add_trace(go.Bar(
+                x=dist["Campaña"], y=dist["Damas"],
+                name="Damas en mora", marker_color=COLORS["danger"],
+                text=dist["Damas"], textposition="outside",
+                textfont=dict(color=COLORS["text"], size=11),
+                hovertemplate="<b>%{x}</b><br>Damas: %{y:,}<extra></extra>",
+            ), secondary_y=False)
+            if saldo_col_moras:
+                fig_bar.add_trace(go.Scatter(
+                    x=dist["Campaña"], y=dist["Monto"],
+                    name="Monto ($)", mode="lines+markers",
+                    line=dict(color="#000000", width=2.5, dash="dot"),
+                    marker=dict(size=8, color="#000000"),
+                    hovertemplate="<b>%{x}</b><br>$%{y:,.0f}<extra></extra>",
+                ), secondary_y=True)
+            fig_bar.update_layout(
+                **PLOTLY_LAYOUT,
+                title_text="Damas y monto en mora por campaña",
+                title_font=dict(size=13, color=COLORS["primary"]),
+                xaxis=dict(type="category", **_AXIS_DEFAULTS),
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+            )
+            fig_bar.update_yaxes(title_text="Número de damas", secondary_y=False, **_AXIS_DEFAULTS)
+            fig_bar.update_yaxes(title_text="Monto ($)", secondary_y=True, **_AXIS_DEFAULTS)
+            chart_card("Damas y dinero en mora por campaña", fig_bar, key="moras_camp",
+                       height_normal=420, height_expanded=600)
 
-        # Barras: damas + monto por campaña con eje doble
-        fig_bar = make_subplots(specs=[[{"secondary_y": True}]])
-        fig_bar.add_trace(go.Bar(
-            x=dist["Campaña"], y=dist["Damas"],
-            name="Damas en mora",
-            marker_color=COLORS["danger"],
-            text=dist["Damas"],
-            textposition="outside",
-            textfont=dict(color=COLORS["text"], size=11),
-            hovertemplate="<b>%{x}</b><br>Damas: %{y:,}<extra></extra>",
-        ), secondary_y=False)
-        if valor_col and "Monto" in dist.columns:
-            fig_bar.add_trace(go.Scatter(
-                x=dist["Campaña"], y=dist["Monto"],
-                name="Monto en mora ($)",
-                mode="lines+markers",
-                line=dict(color="#000000", width=2.5, dash="dot"),
-                marker=dict(size=8, color="#000000"),
-                hovertemplate="<b>%{x}</b><br>Monto: $%{y:,.0f}<extra></extra>",
-            ), secondary_y=True)
-        fig_bar.update_layout(
-            **PLOTLY_LAYOUT,
-            title_text="Damas y monto en mora por campaña",
-            title_font=dict(size=13, color=COLORS["primary"]),
-            xaxis=dict(type="category", **_AXIS_DEFAULTS),
-            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-        )
-        fig_bar.update_yaxes(title_text="Número de damas", secondary_y=False, **_AXIS_DEFAULTS)
-        fig_bar.update_yaxes(title_text="Monto ($)", secondary_y=True, **_AXIS_DEFAULTS)
-        chart_card("Damas y dinero en mora por campaña", fig_bar, key="moras_camp", height_normal=420, height_expanded=600)
-
-        # ── Tabla resumen por campaña ────────────────────────────────
-        st.markdown("<br>", unsafe_allow_html=True)
-        st.markdown("**Resumen por campaña:**")
-        resumen = dist[["Campaña", "Damas", "% del total moras"] + (["Monto"] if "Monto" in dist.columns else [])].copy()
-        if "Monto" in resumen.columns:
-            resumen["Monto"] = resumen["Monto"].apply(lambda x: f"${x:,.2f}")
-        st.dataframe(resumen, use_container_width=True, hide_index=True)
+            st.markdown("<br>", unsafe_allow_html=True)
+            st.markdown("**Resumen por campaña:**")
+            resumen_cols = ["Campaña", "Damas", "% del total moras"] + (["Monto"] if saldo_col_moras else [])
+            resumen = dist[resumen_cols].copy()
+            if saldo_col_moras:
+                resumen["Monto"] = resumen["Monto"].apply(lambda x: f"${x:,.2f}")
+            st.dataframe(resumen, use_container_width=True, hide_index=True)
 
     # ── Tabla detalle de moras coincidentes ─────────────────────────
     if n_coincidencias > 0:
