@@ -1668,488 +1668,30 @@ def tab_flujo(metrics: dict):
                            use_container_width=True)
 
 
+
+
 # ─────────────────────────────────────────────
-#  TAB MORAS
+#  HELPERS COMPARTIDOS
 # ─────────────────────────────────────────────
 
 def _get_nodama_col(df: pd.DataFrame) -> str | None:
-    """Encuentra la columna de número de dama en el archivo de moras."""
+    """Encuentra la columna de número de dama."""
     return _find_col(df, ["nodama", "no dama", "númdama", "numdama", "número de dama", "num_dama"])
 
 
-def _get_merged_nodama_col(df: pd.DataFrame) -> str | None:
-    """Encuentra la columna de número de dama en el merged."""
-    for c in ["Número de Dama_cartera", "Número de Dama", "NumDama_cartera", "NumDama"]:
-        if c in df.columns:
-            return c
-    return _find_col(df, ["nodama", "numdama", "número de dama"])
+# ─────────────────────────────────────────────
+#  TAB TRACKING COMPLETO
+# ─────────────────────────────────────────────
 
-
-def _camp_to_seq(code) -> int | None:
-    """202526 → secuencia numérica (año*26 + campaña) para calcular diferencias entre campañas."""
-    c = str(code).strip()
-    if len(c) == 6 and c.isdigit():
-        return int(c[:4]) * 26 + int(c[4:])
-    return None
-
-
-
-def _clasificar_mora(diff: int) -> str:
-    if diff < 0:
-        return "Sin mora"
-    elif diff <= 1:   # misma campaña o 1 atrás → Mora 1
-        return "Mora 1"
-    elif diff == 2:
-        return "Mora 2"
-    else:
-        return "Mora 3"
-
-
-def tab_moras(metrics: dict, df_moras: pd.DataFrame | None):
+def tab_tracking(df_moras: pd.DataFrame | None):
     st.markdown(
-        "<div class='kpi-banner'><h1> Análisis de Moras</h1>"
-        "<p>Damas con deuda pendiente que aparecen en el archivo de moras</p></div>",
+        "<div class='kpi-banner'><h1>Tracking Completo de Cartera</h1>"
+        "<p>Seguimiento de pendientes de pago a través de las 10 campañas operativas</p></div>",
         unsafe_allow_html=True,
     )
 
     if df_moras is None:
-        st.info(" Sube el archivo de moras en el panel de carga de archivos para ver este análisis.")
-        return
-
-    nodama_mora  = _get_nodama_col(df_moras)
-    nodama_merge = _get_merged_nodama_col(metrics["df"])
-
-    if not nodama_mora:
-        st.error(" No se encontró la columna NoDama en el archivo de moras. Verifica el archivo.")
-        return
-    if not nodama_merge:
-        st.error(" No se encontró la columna de número de dama en los datos principales.")
-        return
-
-    # Solo pendientes
-    pendientes    = metrics["df"][metrics["df"]["Estado_Pago"] == "Pendiente"].copy()
-    total_pendientes = len(pendientes)
-    valor_col     = metrics.get("valor_col")
-
-    # Normalizar IDs para el cruce
-    pendientes_ids = set(pendientes[nodama_merge].astype(str).str.strip())
-    moras_ids      = set(df_moras[nodama_mora].astype(str).str.strip())
-    total_moras    = len(df_moras)
-
-    # Coincidencias: pendientes que están en moras
-    coincidencias_ids   = pendientes_ids & moras_ids
-    n_coincidencias     = len(coincidencias_ids)
-    pct_pendientes      = (n_coincidencias / total_pendientes * 100) if total_pendientes > 0 else 0
-    pct_moras           = (n_coincidencias / total_moras * 100)      if total_moras > 0 else 0
-
-    # Monto en mora
-    moras_en_pendientes = pendientes[
-        pendientes[nodama_merge].astype(str).str.strip().isin(coincidencias_ids)
-    ].copy()
-    monto_mora = (
-        pd.to_numeric(moras_en_pendientes[valor_col], errors="coerce").sum()
-        if valor_col else 0
-    )
-    monto_total_pend = (
-        pd.to_numeric(pendientes[valor_col], errors="coerce").sum()
-        if valor_col else 0
-    )
-    pct_monto = (monto_mora / monto_total_pend * 100) if monto_total_pend > 0 else 0
-
-    # ── KPIs fila 1: conteos ────────────────────────────────────────
-    st.markdown("<br>", unsafe_allow_html=True)
-    c1, c2, c3, c4 = st.columns(4)
-    with c1:
-        st.metric(" Total en archivo de moras", f"{total_moras:,}")
-    with c2:
-        st.metric(" Pendientes que son moras", f"{n_coincidencias:,}")
-    with c3:
-        st.metric("% de pendientes en mora", f"{pct_pendientes:.1f}%")
-    with c4:
-        st.metric("% del archivo de moras coincide", f"{pct_moras:.1f}%")
-
-    # ── KPIs fila 2: dinero ─────────────────────────────────────────
-    if valor_col:
-        st.markdown("<br>", unsafe_allow_html=True)
-        d1, d2, d3 = st.columns(3)
-        with d1:
-            st.metric(" Monto total pendiente", fmt_currency(monto_total_pend))
-        with d2:
-            st.metric(" Monto en mora", fmt_currency(monto_mora))
-        with d3:
-            st.metric("% del monto pendiente en mora", f"{pct_monto:.1f}%")
-
-    st.markdown("<br>", unsafe_allow_html=True)
-
-    # ── Donas: visión general ───────────────────────────────────────
-    col_d1, col_d2 = st.columns(2)
-
-    with col_d1:
-        fig_dona_damas = go.Figure(go.Pie(
-            labels=["En mora", "Sin mora"],
-            values=[n_coincidencias, total_pendientes - n_coincidencias],
-            hole=0.6,
-            marker_colors=[COLORS["danger"], COLORS["accent"]],
-            textinfo="percent",
-            textfont=dict(size=14, color=COLORS["text"]),
-            hovertemplate="<b>%{label}</b><br>Damas: %{value:,}<br>%{percent}<extra></extra>",
-        ))
-        fig_dona_damas.update_layout(
-            **PLOTLY_LAYOUT,
-            title_text="Damas pendientes en mora vs sin mora",
-            title_font=dict(size=13, color=COLORS["primary"]),
-            annotations=[dict(
-                text=f"<b>{pct_pendientes:.1f}%</b><br>en mora",
-                x=0.5, y=0.5, font_size=16, font_color=COLORS["danger"],
-                showarrow=False,
-            )],
-            legend=dict(orientation="h", yanchor="bottom", y=-0.15, xanchor="center", x=0.5),
-        )
-        chart_card("Cuantas damas están en mora", fig_dona_damas, key="dona_damas", height_normal=320, height_expanded=480)
-
-    with col_d2:
-        if valor_col:
-            fig_dona_monto = go.Figure(go.Pie(
-                labels=["Monto en mora", "Sin mora"],
-                values=[monto_mora, monto_total_pend - monto_mora],
-                hole=0.6,
-                marker_colors=[COLORS["danger"], COLORS["success"]],
-                textinfo="percent",
-                textfont=dict(size=14, color=COLORS["text"]),
-                hovertemplate="<b>%{label}</b><br>$%{value:,.0f}<br>%{percent}<extra></extra>",
-            ))
-            fig_dona_monto.update_layout(
-                **PLOTLY_LAYOUT,
-                title_text="Monto pendiente en mora vs sin mora",
-                title_font=dict(size=13, color=COLORS["primary"]),
-                annotations=[dict(
-                    text=f"<b>{pct_monto:.1f}%</b><br>en mora",
-                    x=0.5, y=0.5, font_size=16, font_color=COLORS["danger"],
-                    showarrow=False,
-                )],
-                legend=dict(orientation="h", yanchor="bottom", y=-0.15, xanchor="center", x=0.5),
-            )
-            chart_card("Cuanto dinero está en mora", fig_dona_monto, key="dona_monto", height_normal=320, height_expanded=480)
-
-    st.markdown("<br>", unsafe_allow_html=True)
-
-    # ── Sección de clasificación por nivel de mora ─────────────────────
-    mora_col_moras  = _find_col(df_moras, ["moras", "mora", "nivel de mora", "nivel_mora", "niveldemora"])
-    camp_col_moras  = _find_col(df_moras, ["campania", "campaña", "camp", "campana"])
-    saldo_col_moras = _find_col(df_moras, ["saldodama", "saldo", "importe", "monto", "importenetofactura"])
-    nodama_mora_key = _get_nodama_col(df_moras)
-
-    if mora_col_moras:
-        mora_map = {"mora 1": "Mora 1", "mora 2": "Mora 2", "mora 3": "Mora 3",
-                    "1": "Mora 1", "2": "Mora 2", "3": "Mora 3"}
-        df_m = df_moras.copy()
-        df_m["_nivel"] = df_m[mora_col_moras].astype(str).str.strip().str.lower().map(mora_map)
-        df_m = df_m.dropna(subset=["_nivel"])
-
-        # Filtrar solo damas que NO pagaron (coinciden con pendientes de la cartera)
-        if nodama_mora_key and coincidencias_ids:
-            df_m = df_m[df_m[nodama_mora_key].astype(str).str.strip().isin(coincidencias_ids)]
-
-        # Deduplicar: una fila por dama usando la campaña más reciente
-        if nodama_mora_key and camp_col_moras:
-            def _camp_n(v):
-                try:
-                    return int(str(v).strip().upper().replace("C", ""))
-                except Exception:
-                    return 0
-            df_m["_camp_n"] = df_m[camp_col_moras].apply(_camp_n)
-            df_m = (
-                df_m.sort_values("_camp_n", ascending=False)
-                .drop_duplicates(subset=[nodama_mora_key], keep="first")
-            )
-
-        mora_colors = {"Mora 1": COLORS["warning"], "Mora 2": COLORS["orange"], "Mora 3": COLORS["danger"]}
-
-        # ── KPIs por nivel ────────────────────────────────────────────
-        if saldo_col_moras:
-            df_m["_saldo"] = pd.to_numeric(df_m[saldo_col_moras], errors="coerce")
-            mora_dist = (
-                df_m.groupby("_nivel")
-                .agg(Damas=("_nivel", "count"), Monto=("_saldo", "sum"))
-                .reindex(["Mora 1", "Mora 2", "Mora 3"], fill_value=0)
-                .reset_index().rename(columns={"_nivel": "Nivel de Mora"})
-            )
-        else:
-            mora_dist = (
-                df_m.groupby("_nivel").size().rename("Damas")
-                .reindex(["Mora 1", "Mora 2", "Mora 3"], fill_value=0)
-                .reset_index().rename(columns={"_nivel": "Nivel de Mora"})
-            )
-            mora_dist["Monto"] = 0
-
-        total_mora_shown = mora_dist["Damas"].sum()
-        mora_dist["% del total"] = (
-            (mora_dist["Damas"] / total_mora_shown * 100).round(1) if total_mora_shown > 0 else 0.0
-        )
-
-        st.markdown("---")
-        st.markdown("###  Clasificación por Nivel de Mora")
-        st.markdown("<br>", unsafe_allow_html=True)
-        km1, km2, km3 = st.columns(3)
-        for col_k, (_, row_m) in zip([km1, km2, km3], mora_dist.iterrows()):
-            with col_k:
-                st.metric(f"{row_m['Nivel de Mora']} — Damas", f"{int(row_m['Damas']):,}",
-                          delta=f"{row_m['% del total']:.1f}% del total", delta_color="off")
-                if saldo_col_moras:
-                    st.metric(f"{row_m['Nivel de Mora']} — Monto", fmt_currency(row_m["Monto"]))
-
-        st.markdown("<br>", unsafe_allow_html=True)
-
-        # ── Barras apiladas por campaña ───────────────────────────────
-        if camp_col_moras:
-            mora_camp = (
-                df_m.groupby([camp_col_moras, "_nivel"]).size()
-                .unstack(fill_value=0)
-                .reindex(columns=["Mora 1", "Mora 2", "Mora 3"], fill_value=0)
-                .reset_index()
-            )
-            # Ordenar C1, C2, ..., C10
-            def _camp_sort_key(v):
-                v2 = str(v).strip().upper().replace("C", "")
-                return int(v2) if v2.isdigit() else 99
-            mora_camp = mora_camp.sort_values(camp_col_moras, key=lambda s: s.map(_camp_sort_key))
-
-            fig_mora_camp = go.Figure()
-            for nivel, color in mora_colors.items():
-                if nivel in mora_camp.columns:
-                    fig_mora_camp.add_trace(go.Bar(
-                        x=mora_camp[camp_col_moras], y=mora_camp[nivel],
-                        name=nivel, marker_color=color,
-                        hovertemplate=f"<b>%{{x}}</b><br>{nivel}: %{{y:,}} damas<extra></extra>",
-                    ))
-            fig_mora_camp.update_layout(
-                **PLOTLY_LAYOUT, barmode="stack",
-                title_text="Mora 1 / 2 / 3 por campaña — Número de registros",
-                title_font=dict(size=13, color=COLORS["primary"]),
-                xaxis=dict(type="category", **_AXIS_DEFAULTS),
-                yaxis=dict(title="Número de damas", **_AXIS_DEFAULTS),
-                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-            )
-            chart_card("Tipo de mora por campaña (numero de damas)", fig_mora_camp,
-                       key="mora_niveles_camp", height_normal=420, height_expanded=600)
-
-            if saldo_col_moras:
-                st.markdown("<br>", unsafe_allow_html=True)
-                mora_camp_m = (
-                    df_m.groupby([camp_col_moras, "_nivel"])["_saldo"].sum()
-                    .unstack(fill_value=0)
-                    .reindex(columns=["Mora 1", "Mora 2", "Mora 3"], fill_value=0)
-                    .reset_index()
-                )
-                mora_camp_m = mora_camp_m.sort_values(camp_col_moras, key=lambda s: s.map(_camp_sort_key))
-                fig_mora_monto = go.Figure()
-                for nivel, color in mora_colors.items():
-                    if nivel in mora_camp_m.columns:
-                        fig_mora_monto.add_trace(go.Bar(
-                            x=mora_camp_m[camp_col_moras], y=mora_camp_m[nivel],
-                            name=nivel, marker_color=color,
-                            hovertemplate=f"<b>%{{x}}</b><br>{nivel}: $%{{y:,.0f}}<extra></extra>",
-                        ))
-                fig_mora_monto.update_layout(
-                    **PLOTLY_LAYOUT, barmode="stack",
-                    title_text="Mora 1 / 2 / 3 por campaña — Monto en pesos",
-                    title_font=dict(size=13, color=COLORS["primary"]),
-                    xaxis=dict(type="category", **_AXIS_DEFAULTS),
-                    yaxis=dict(title="Monto ($)", **_AXIS_DEFAULTS),
-                    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-                )
-                chart_card("Tipo de mora por campaña (dinero)", fig_mora_monto,
-                           key="mora_monto_camp", height_normal=420, height_expanded=600)
-
-        st.markdown("<br>", unsafe_allow_html=True)
-
-        # ── Donas: proporción de damas y monto ───────────────────────
-        dcol1, dcol2 = st.columns(2)
-        with dcol1:
-            fig_dona_mora = go.Figure(go.Pie(
-                labels=mora_dist["Nivel de Mora"], values=mora_dist["Damas"],
-                hole=0.6,
-                marker_colors=[mora_colors.get(m, COLORS["muted"]) for m in mora_dist["Nivel de Mora"]],
-                textinfo="label+percent", textfont=dict(size=13, color=COLORS["text"]),
-                hovertemplate="<b>%{label}</b><br>Damas: %{value:,}<br>%{percent}<extra></extra>",
-            ))
-            fig_dona_mora.update_layout(
-                **PLOTLY_LAYOUT,
-                title_text="Proporción de damas Mora 1/2/3",
-                title_font=dict(size=13, color=COLORS["primary"]),
-                legend=dict(orientation="h", yanchor="bottom", y=-0.15, xanchor="center", x=0.5),
-            )
-            chart_card("Como se reparte la mora entre los 3 niveles", fig_dona_mora,
-                       key="dona_mora_damas", height_normal=340, height_expanded=480)
-        with dcol2:
-            if saldo_col_moras:
-                fig_dona_monto_mora = go.Figure(go.Pie(
-                    labels=mora_dist["Nivel de Mora"], values=mora_dist["Monto"],
-                    hole=0.6,
-                    marker_colors=[mora_colors.get(m, COLORS["muted"]) for m in mora_dist["Nivel de Mora"]],
-                    textinfo="label+percent", textfont=dict(size=13, color=COLORS["text"]),
-                    hovertemplate="<b>%{label}</b><br>$%{value:,.0f}<br>%{percent}<extra></extra>",
-                ))
-                fig_dona_monto_mora.update_layout(
-                    **PLOTLY_LAYOUT,
-                    title_text="Proporción del monto Mora 1/2/3",
-                    title_font=dict(size=13, color=COLORS["primary"]),
-                    legend=dict(orientation="h", yanchor="bottom", y=-0.15, xanchor="center", x=0.5),
-                )
-                chart_card("Como se reparte el dinero entre los 3 niveles", fig_dona_monto_mora,
-                           key="dona_mora_monto", height_normal=340, height_expanded=480)
-
-        # ── Detalle por nivel de mora ─────────────────────────────────
-        if camp_col_moras:
-            st.markdown("<br>", unsafe_allow_html=True)
-            st.markdown("###  Detalle individual por nivel de mora")
-
-            for nivel, color in mora_colors.items():
-                df_nivel = df_m[df_m["_nivel"] == nivel]
-                if df_nivel.empty:
-                    continue
-                n_nivel   = len(df_nivel)
-                m_nivel   = df_nivel["_saldo"].sum() if saldo_col_moras else 0
-                pct_nivel = n_nivel / total_mora_shown * 100 if total_mora_shown > 0 else 0
-
-                st.markdown(
-                    f"<div style='background:{color}22; border-left:4px solid {color}; "
-                    f"padding:0.7rem 1rem; border-radius:8px; margin-bottom:0.5rem;'>"
-                    f"<b style='color:{COLORS['primary']}'>{nivel}</b> &nbsp;·&nbsp; "
-                    f"<b>{n_nivel:,}</b> damas &nbsp;·&nbsp; "
-                    f"<b>{fmt_currency(m_nivel)}</b> &nbsp;·&nbsp; "
-                    f"<b>{pct_nivel:.1f}%</b> del total"
-                    f"</div>", unsafe_allow_html=True,
-                )
-
-                camp_nivel = (
-                    df_nivel.groupby(camp_col_moras)
-                    .agg(Damas=(camp_col_moras, "count"),
-                         Monto=("_saldo", "sum") if saldo_col_moras else (camp_col_moras, "count"))
-                    .reset_index()
-                    .sort_values(camp_col_moras, key=lambda s: s.map(_camp_sort_key))
-                )
-                camp_nivel["% del nivel"] = (camp_nivel["Damas"] / n_nivel * 100).round(1)
-
-                c_graf1, c_graf2 = st.columns(2)
-                with c_graf1:
-                    fig1 = go.Figure(go.Bar(
-                        x=camp_nivel[camp_col_moras], y=camp_nivel["Damas"],
-                        marker_color=color, text=camp_nivel["Damas"], textposition="outside",
-                        textfont=dict(color=COLORS["text"], size=11),
-                        hovertemplate="<b>%{x}</b><br>Damas: %{y:,}<br>%{customdata:.1f}%<extra></extra>",
-                        customdata=camp_nivel["% del nivel"],
-                    ))
-                    fig1.update_layout(**PLOTLY_LAYOUT,
-                        title_text=f"Damas {nivel} por campaña",
-                        title_font=dict(size=12, color=COLORS["primary"]),
-                        xaxis=dict(type="category", **_AXIS_DEFAULTS),
-                        yaxis=dict(title="Damas", **_AXIS_DEFAULTS), height=300)
-                    st.plotly_chart(fig1, use_container_width=True, key=f"ind_{nivel.replace(' ','')}_damas")
-                with c_graf2:
-                    if saldo_col_moras:
-                        fig2 = go.Figure(go.Bar(
-                            x=camp_nivel[camp_col_moras], y=camp_nivel["Monto"],
-                            marker_color=color,
-                            text=camp_nivel["Monto"].apply(lambda v: f"${v/1e6:.2f}M" if v >= 1e6 else f"${v/1e3:.0f}K"),
-                            textposition="outside",
-                            textfont=dict(color=COLORS["text"], size=11),
-                            hovertemplate="<b>%{x}</b><br>$%{y:,.0f}<extra></extra>",
-                        ))
-                        fig2.update_layout(**PLOTLY_LAYOUT,
-                            title_text=f"Monto {nivel} por campaña",
-                            title_font=dict(size=12, color=COLORS["primary"]),
-                            xaxis=dict(type="category", **_AXIS_DEFAULTS),
-                            yaxis=dict(title="Monto ($)", **_AXIS_DEFAULTS), height=300)
-                        st.plotly_chart(fig2, use_container_width=True, key=f"ind_{nivel.replace(' ','')}_monto")
-                st.markdown("<br>", unsafe_allow_html=True)
-
-        st.markdown("---")
-
-        # ── Barras: damas + monto por campaña (desde df_moras) ──────────
-        if mora_col_moras and camp_col_moras:
-            st.markdown("<br>", unsafe_allow_html=True)
-            dist = (
-                df_m.groupby(camp_col_moras)
-                .agg(Damas=(camp_col_moras, "count"),
-                     Monto=("_saldo", "sum") if saldo_col_moras else (camp_col_moras, "count"))
-                .reset_index()
-                .rename(columns={camp_col_moras: "Campaña"})
-                .sort_values("Campaña", key=lambda s: s.map(_camp_sort_key))
-            )
-            dist["% del total moras"] = (dist["Damas"] / dist["Damas"].sum() * 100).round(1)
-
-            fig_bar = make_subplots(specs=[[{"secondary_y": True}]])
-            fig_bar.add_trace(go.Bar(
-                x=dist["Campaña"], y=dist["Damas"],
-                name="Damas en mora", marker_color=COLORS["danger"],
-                text=dist["Damas"], textposition="outside",
-                textfont=dict(color=COLORS["text"], size=11),
-                hovertemplate="<b>%{x}</b><br>Damas: %{y:,}<extra></extra>",
-            ), secondary_y=False)
-            if saldo_col_moras:
-                fig_bar.add_trace(go.Scatter(
-                    x=dist["Campaña"], y=dist["Monto"],
-                    name="Monto ($)", mode="lines+markers",
-                    line=dict(color="#000000", width=2.5, dash="dot"),
-                    marker=dict(size=8, color="#000000"),
-                    hovertemplate="<b>%{x}</b><br>$%{y:,.0f}<extra></extra>",
-                ), secondary_y=True)
-            fig_bar.update_layout(
-                **PLOTLY_LAYOUT,
-                title_text="Damas y monto en mora por campaña",
-                title_font=dict(size=13, color=COLORS["primary"]),
-                xaxis=dict(type="category", **_AXIS_DEFAULTS),
-                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-            )
-            fig_bar.update_yaxes(title_text="Número de damas", secondary_y=False, **_AXIS_DEFAULTS)
-            fig_bar.update_yaxes(title_text="Monto ($)", secondary_y=True, **_AXIS_DEFAULTS)
-            chart_card("Damas y dinero en mora por campaña", fig_bar, key="moras_camp",
-                       height_normal=420, height_expanded=600)
-
-            st.markdown("<br>", unsafe_allow_html=True)
-            st.markdown("**Resumen por campaña:**")
-            resumen_cols = ["Campaña", "Damas", "% del total moras"] + (["Monto"] if saldo_col_moras else [])
-            resumen = dist[resumen_cols].copy()
-            if saldo_col_moras:
-                resumen["Monto"] = resumen["Monto"].apply(lambda x: f"${x:,.2f}")
-            st.dataframe(resumen, use_container_width=True, hide_index=True)
-
-    # ── Tabla detalle de moras coincidentes ─────────────────────────
-    if n_coincidencias > 0:
-        st.markdown("<br>", unsafe_allow_html=True)
-        with st.expander(f"Ver detalle: {n_coincidencias:,} damas pendientes en mora"):
-            tabla = df_moras[
-                df_moras[nodama_mora].astype(str).str.strip().isin(coincidencias_ids)
-            ].reset_index(drop=True)
-            st.dataframe(tabla, use_container_width=True, height=400)
-
-            buf = io.BytesIO()
-            tabla.to_excel(buf, index=False)
-            buf.seek(0)
-            st.download_button(
-                " Descargar moras coincidentes (Excel)",
-                data=buf,
-                file_name="moras_coincidentes.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            )
-    else:
-        st.success(" No se encontraron coincidencias entre las damas pendientes y el archivo de moras.")
-
-
-# ─────────────────────────────────────────────
-#  COMPORTAMIENTO DE CARTERA
-# ─────────────────────────────────────────────
-
-def tab_comportamiento_cartera(df_moras: pd.DataFrame | None):
-    st.markdown(
-        "<div class='kpi-banner'><h1>Comportamiento de Cartera</h1>"
-        "<p>Análisis de cohortes, transiciones, reincidencia y salidas a través de las 10 campañas</p></div>",
-        unsafe_allow_html=True,
-    )
-
-    if df_moras is None:
-        st.info("Sube el archivo de moras (Consolidado) para ver este análisis.")
+        st.info("Sube el archivo GENERAL_CARTERA_MORAS para ver este análisis.")
         return
 
     nodama_col = _get_nodama_col(df_moras)
@@ -2159,7 +1701,7 @@ def tab_comportamiento_cartera(df_moras: pd.DataFrame | None):
     idsit_col  = _find_col(df_moras, ["idsituacion", "id_situacion", "situacion"])
 
     if not nodama_col or not camp_col:
-        st.error("No se encontraron las columnas NoDama o Campaña en el archivo de moras.")
+        st.error("No se encontraron las columnas NoDama o Campaña en el archivo.")
         return
 
     MORA_LEVELS = ["Inactiva", "Mora 1", "Mora 2", "Mora 3"]
@@ -2171,7 +1713,7 @@ def tab_comportamiento_cartera(df_moras: pd.DataFrame | None):
     }
     CHURN_WINDOW = 3
 
-    def _camp_num(v) -> int:
+    def _cn(v):
         try:
             return int(str(v).upper().replace("C", ""))
         except Exception:
@@ -2188,84 +1730,92 @@ def tab_comportamiento_cartera(df_moras: pd.DataFrame | None):
         "mora 1": "Mora 1", "mora 2": "Mora 2", "mora 3": "Mora 3",
         "1": "Mora 1", "2": "Mora 2", "3": "Mora 3",
     }
-    if mora_col:
-        df["_mora"] = df[mora_col].astype(str).str.strip().str.lower().map(mora_map)
-    else:
-        df["_mora"] = "Mora 1"
-
-    # Reclasificar IdSituacion=0 como Inactiva
-    n_inactivas_reclasif = 0
+    df["_mora"] = (
+        df[mora_col].astype(str).str.strip().str.lower().map(mora_map)
+        if mora_col else pd.Series("Mora 1", index=df.index)
+    )
+    n_inac = 0
     if idsit_col:
         mask = df[idsit_col].astype(str).str.strip() == "0"
         df.loc[mask, "_mora"] = "Inactiva"
-        n_inactivas_reclasif = int(mask.sum())
+        n_inac = int(mask.sum())
 
-    df["_camp_n"] = df[camp_col].apply(_camp_num)
-    df = df[df["_camp_n"] <= 10].copy()
+    df["_cn"] = df[camp_col].apply(_cn)
+    df = df[df["_cn"] <= 10].copy()
 
-    all_camps_raw = sorted(df[camp_col].unique(), key=_camp_num)
-    camp_labels   = all_camps_raw
-    camps_n       = sorted(df["_camp_n"].unique())
+    camps_n      = sorted(df["_cn"].unique())
+    camp_labels  = [f"C{c}" for c in camps_n]
+    pool         = set(df[nodama_col].unique())
+    pool_size    = len(pool)
 
-    # ── Análisis de cohortes (mismo motor que tracking_campanas.py) ───
-    sets: dict[int, set] = {
-        c: set(df[df["_camp_n"] == c][nodama_col]) for c in camps_n
-    }
-    first_camp_d: dict[str, int] = df.groupby(nodama_col)["_camp_n"].min().to_dict()
-    mora_sets: dict[tuple, set] = {}
+    # ── Motor de cohortes ─────────────────────────────────────────────
+    sets = {c: set(df[df["_cn"] == c][nodama_col]) for c in camps_n}
+    first_camp_d = df.groupby(nodama_col)["_cn"].min().to_dict()
+    mora_sets = {}
     for c in camps_n:
-        df_c = df[df["_camp_n"] == c]
-        for mora in MORA_LEVELS:
-            mora_sets[(c, mora)] = set(df_c[df_c["_mora"] == mora][nodama_col])
+        df_c = df[df["_cn"] == c]
+        for m in MORA_LEVELS:
+            mora_sets[(c, m)] = set(df_c[df_c["_mora"] == m][nodama_col])
 
     summary_rows = []
     for i, c in enumerate(camps_n):
-        prev_c = camps_n[i - 1] if i > 0 else None
-        total_set = sets[c]
-        nuevas    = {d for d in total_set if first_camp_d.get(d) == c}
-        retenidas = total_set & sets[prev_c] if prev_c else set()
-        future = [cx for cx in camps_n if cx > c and cx <= c + CHURN_WINDOW]
-        fugadas = (total_set - set().union(*[sets[cx] for cx in future])) if future else set()
+        prev_c  = camps_n[i - 1] if i > 0 else None
+        prev2_c = camps_n[i - 2] if i > 1 else None
+        next_c  = camps_n[i + 1] if i < len(camps_n) - 1 else None
+        total_set   = sets[c]
+        nuevas      = {d for d in total_set if first_camp_d.get(d) == c}
+        de_anterior = (total_set & sets[prev_c]) if prev_c else set()
+        persistentes = (total_set & sets[prev_c] & sets[prev2_c]) if (prev_c and prev2_c) else set()
+        salen       = (total_set - sets[next_c]) if next_c else set()
+        future      = [cx for cx in camps_n if cx > c and cx <= c + CHURN_WINDOW]
+        fugadas     = (total_set - set().union(*[sets[cx] for cx in future])) if future else set()
 
         row = {
-            "camp_n":      c,
-            "camp_label":  f"C{c}",
-            "total":       len(total_set),
-            "nuevas":      len(nuevas),
-            "retenidas":   len(retenidas),
-            "fugadas":     len(fugadas),
-            "saldo_total": df[df["_camp_n"] == c][saldo_col].sum() if saldo_col else 0,
+            "camp_n": c, "camp_label": f"C{c}",
+            "pool_size": pool_size,
+            "total": len(total_set),
+            "pct_pool": round(len(total_set) / pool_size * 100, 1) if pool_size else 0,
+            "nuevas": len(nuevas),
+            "de_anterior": len(de_anterior),
+            "persistentes": len(persistentes),
+            "salen": len(salen),
+            "fugadas": len(fugadas),
+            "saldo_total": df[df["_cn"] == c][saldo_col].sum() if saldo_col else 0,
         }
         for mora in MORA_LEVELS:
             ids_m = mora_sets[(c, mora)]
-            row[f"{mora}_total"]     = len(ids_m)
-            row[f"{mora}_nuevas"]    = len(ids_m & nuevas)
-            row[f"{mora}_retenidas"] = len(ids_m & retenidas)
-            row[f"{mora}_fugadas"]   = len(ids_m & fugadas)
-            row[f"{mora}_saldo"]     = (
-                df[(df["_camp_n"] == c) & (df["_mora"] == mora)][saldo_col].sum()
+            row[f"{mora}_total"]       = len(ids_m)
+            row[f"{mora}_nuevas"]      = len(ids_m & nuevas)
+            row[f"{mora}_de_anterior"] = len(ids_m & de_anterior)
+            row[f"{mora}_persistentes"]= len(ids_m & persistentes)
+            row[f"{mora}_salen"]       = len(ids_m & salen)
+            row[f"{mora}_fugadas"]     = len(ids_m & fugadas)
+            row[f"{mora}_saldo"]       = (
+                df[(df["_cn"] == c) & (df["_mora"] == mora)][saldo_col].sum()
                 if saldo_col else 0
             )
-        if prev_c is not None:
-            inac_prev = mora_sets[(prev_c, "Inactiva")]
-            row["from_inactiva_total"] = len(inac_prev & total_set)
+        if prev_c:
+            inac_p = mora_sets[(prev_c, "Inactiva")]
+            row["fi_total"] = len(inac_p & total_set)
             for mora in MORA_LEVELS:
-                row[f"fi_to_{mora}"] = len(inac_prev & mora_sets[(c, mora)])
+                row[f"fi_to_{mora}"] = len(inac_p & mora_sets[(c, mora)])
         else:
-            row["from_inactiva_total"] = 0
+            row["fi_total"] = 0
             for mora in MORA_LEVELS:
                 row[f"fi_to_{mora}"] = 0
         summary_rows.append(row)
 
-    summary_df = pd.DataFrame(summary_rows)
+    sdf = pd.DataFrame(summary_rows)   # summary dataframe
 
-    # Matriz de transición
+    # Transition matrix
     transitions = []
     for i in range(len(camps_n) - 1):
         c1, c2 = camps_n[i], camps_n[i + 1]
         shared = sets[c1] & sets[c2]
-        df1 = df[(df["_camp_n"] == c1) & df[nodama_col].isin(shared)].set_index(nodama_col)["_mora"]
-        df2 = df[(df["_camp_n"] == c2) & df[nodama_col].isin(shared)].set_index(nodama_col)["_mora"]
+        df1 = (df[(df["_cn"] == c1) & df[nodama_col].isin(shared)]
+               .drop_duplicates(nodama_col).set_index(nodama_col)["_mora"])
+        df2 = (df[(df["_cn"] == c2) & df[nodama_col].isin(shared)]
+               .drop_duplicates(nodama_col).set_index(nodama_col)["_mora"])
         joined = df1.to_frame("origen").join(df2.to_frame("destino"), how="inner")
         for (orig, dest), cnt in joined.groupby(["origen", "destino"]).size().items():
             transitions.append({
@@ -2274,680 +1824,501 @@ def tab_comportamiento_cartera(df_moras: pd.DataFrame | None):
             })
     trans_df = pd.DataFrame(transitions) if transitions else pd.DataFrame()
 
-    subtab1, subtab2, subtab3, subtab4 = st.tabs([
-        "Cohortes por Campaña",
-        "Matriz de Transición",
-        "Reincidencia",
-        "Salida de Cuentas",
+    # Exit detail
+    last_camp_d = df.groupby(nodama_col)["_cn"].max().to_dict()
+    max_c = max(camps_n)
+    exits = []
+    for dama, lc in last_camp_d.items():
+        if lc < max_c:
+            sub = df[(df[nodama_col] == dama) & (df["_cn"] == lc)]
+            exits.append({
+                "NoDama": dama,
+                "Última Campaña": f"C{lc}",
+                "Estado al Salir": sub["_mora"].iloc[0] if len(sub) > 0 else "N/A",
+                "Saldo al Salir": float(sub[saldo_col].iloc[0]) if (saldo_col and len(sub) > 0) else 0,
+            })
+    exits_df = pd.DataFrame(exits) if exits else pd.DataFrame()
+
+    # ── KPIs superiores ──────────────────────────────────────────────
+    if n_inac > 0:
+        st.info(f"**{n_inac:,} registros** reclasificados como **Inactiva** (IdSituacion = 0)")
+
+    k1, k2, k3, k4, k5 = st.columns(5)
+    ret_rates = [sdf.loc[i, "de_anterior"] / sdf.loc[i, "total"] * 100
+                 for i in sdf.index if sdf.loc[i, "total"] > 0 and i > 0]
+    avg_ret = sum(ret_rates) / len(ret_rates) if ret_rates else 0
+    with k1: st.metric("Pool de Pendientes", f"{pool_size:,}")
+    with k2: st.metric("Total campañas", f"{len(camps_n)}")
+    with k3: st.metric("Retención promedio", f"{avg_ret:.1f}%")
+    with k4:
+        fuga_camp = sdf.loc[sdf["fugadas"].idxmax(), "camp_label"] if not sdf.empty else "—"
+        fuga_val  = sdf["fugadas"].max() if not sdf.empty else 0
+        st.metric("Mayor fuga", f"{fuga_camp} ({fuga_val:,})")
+    with k5:
+        total_exits = len(exits_df) if not exits_df.empty else 0
+        st.metric("Salidas permanentes", f"{total_exits:,}",
+                  delta=f"{total_exits/pool_size*100:.1f}% del pool" if pool_size else None,
+                  delta_color="inverse")
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    subtab1, subtab2, subtab3, subtab4, subtab5 = st.tabs([
+        "Resumen Ejecutivo",
+        "Por Campaña",
+        "Por Mora",
+        "Salidas",
+        "Transiciones",
     ])
 
     # ══════════════════════════════════════════
-    # TAB 1 — Cohortes por Campaña
+    # SUBTAB 1 — Resumen Ejecutivo
     # ══════════════════════════════════════════
     with subtab1:
         st.markdown("<br>", unsafe_allow_html=True)
 
-        if n_inactivas_reclasif > 0:
-            st.info(
-                f"**{n_inactivas_reclasif:,} registros** reclasificados como **Inactiva** "
-                f"(IdSituacion = 0 / INICIAL)"
-            )
-
-        # KPIs globales
-        total_all  = summary_df["total"].sum()
-        saldo_all  = summary_df["saldo_total"].sum() if saldo_col else 0
-        inac_all   = summary_df["Inactiva_total"].sum()
-        mora_all   = (summary_df["Mora 1_total"] + summary_df["Mora 2_total"] + summary_df["Mora 3_total"]).sum()
-
-        k1, k2, k3, k4 = st.columns(4)
-        with k1:
-            st.metric("Total Registros (todas campañas)", f"{total_all:,}")
-        with k2:
-            st.metric("Saldo Total", fmt_currency(saldo_all) if saldo_col else "—")
-        with k3:
-            st.metric("Total en Mora (1+2+3)", f"{mora_all:,}")
-        with k4:
-            st.metric("Total Inactivas", f"{inac_all:,}",
-                      delta=f"{inac_all/total_all*100:.1f}% del total" if total_all else None,
-                      delta_color="off")
-
-        st.markdown("<br>", unsafe_allow_html=True)
-
-        # Gráfica 1: Barras apiladas Inactiva + Mora 1/2/3 por campaña
-        fig_stack = go.Figure()
+        # Gráfica: Composición (Inactiva + M1/M2/M3) por campaña
+        fig_comp = go.Figure()
         for mora in MORA_LEVELS:
-            fig_stack.add_trace(go.Bar(
-                x=summary_df["camp_label"],
-                y=summary_df[f"{mora}_total"],
-                name=mora,
-                marker_color=MORA_COLORS[mora],
-                hovertemplate=f"<b>%{{x}}</b><br>{mora}: %{{y:,}} damas<extra></extra>",
+            fig_comp.add_trace(go.Bar(
+                x=sdf["camp_label"], y=sdf[f"{mora}_total"],
+                name=mora, marker_color=MORA_COLORS[mora],
+                hovertemplate=f"<b>%{{x}}</b><br>{mora}: %{{y:,}}<extra></extra>",
             ))
-        fig_stack.update_layout(
+        fig_comp.update_layout(
             **PLOTLY_LAYOUT, barmode="stack",
-            title_text="Composición por Estado y Campaña — Inactiva + Mora 1 / 2 / 3",
+            title_text="Composición por Estado y Campaña",
             title_font=dict(size=13, color=COLORS["primary"]),
-            xaxis=dict(type="category", categoryorder="array",
-                       categoryarray=summary_df["camp_label"].tolist(), **_AXIS_DEFAULTS),
-            yaxis=dict(title="Número de Damas", **_AXIS_DEFAULTS),
+            xaxis=dict(type="category", **_AXIS_DEFAULTS),
+            yaxis=dict(title="Damas", **_AXIS_DEFAULTS),
             legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
         )
-        chart_card("Estados por campaña", fig_stack,
-                   key="comp_stack_mora", height_normal=400, height_expanded=580)
+        col_c1, col_c2 = st.columns(2)
 
-        st.markdown("<br>", unsafe_allow_html=True)
+        with col_c1:
+            chart_card("Composición por estado", fig_comp, key="trk_comp", height_normal=380)
 
-        # Gráfica 2: Líneas Nuevas / Retenidas / Fugadas (cohortes)
+        # Gráfica: Nuevas vs De Anterior vs Fugadas
         fig_cohort = go.Figure()
-        cohort_series = [
-            ("nuevas",    "Nuevas",    COLORS["success"],  "dash"),
-            ("retenidas", "Retenidas", COLORS["accent"],   "solid"),
-            ("fugadas",   "Fugadas",   COLORS["danger"],   "dot"),
-        ]
-        for key, label, color, dash in cohort_series:
+        for key, label, color, dash in [
+            ("nuevas",      "Nuevas",        COLORS["success"], "dash"),
+            ("de_anterior", "De Anterior",   COLORS["accent"],  "solid"),
+            ("persistentes","Persistentes",  "#6366F1",         "dot"),
+            ("fugadas",     "Fugadas",       COLORS["danger"],  "longdash"),
+        ]:
             fig_cohort.add_trace(go.Scatter(
-                x=summary_df["camp_label"], y=summary_df[key],
+                x=sdf["camp_label"], y=sdf[key],
                 mode="lines+markers", name=label,
-                line=dict(color=color, width=2.5, dash=dash),
-                marker=dict(size=7),
+                line=dict(color=color, width=2, dash=dash), marker=dict(size=6),
                 hovertemplate=f"<b>%{{x}}</b><br>{label}: %{{y:,}}<extra></extra>",
             ))
         fig_cohort.update_layout(
             **PLOTLY_LAYOUT,
-            title_text=f"Cohortes: Nuevas, Retenidas y Fugadas por Campaña  (ventana fuga = {CHURN_WINDOW} camps.)",
+            title_text="Tendencias: Nuevas / De Anterior / Persistentes / Fugadas",
             title_font=dict(size=13, color=COLORS["primary"]),
-            xaxis=dict(type="category", categoryorder="array",
-                       categoryarray=summary_df["camp_label"].tolist(), **_AXIS_DEFAULTS),
-            yaxis=dict(title="Número de Damas", **_AXIS_DEFAULTS),
+            xaxis=dict(type="category", **_AXIS_DEFAULTS),
+            yaxis=dict(title="Damas", **_AXIS_DEFAULTS),
             legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
         )
-        chart_card("Cohortes: Nuevas / Retenidas / Fugadas", fig_cohort,
-                   key="comp_cohort_lines", height_normal=400, height_expanded=580)
+        with col_c2:
+            chart_card("Tendencias de cohorte", fig_cohort, key="trk_cohort", height_normal=380)
 
         st.markdown("<br>", unsafe_allow_html=True)
 
-        # Gráfica 3: Saldo por campaña
+        # Gráfica saldo
         if saldo_col:
             fig_saldo = go.Figure(go.Bar(
-                x=summary_df["camp_label"], y=summary_df["saldo_total"],
+                x=sdf["camp_label"], y=sdf["saldo_total"],
                 marker_color=COLORS["accent"],
-                text=summary_df["saldo_total"].apply(
-                    lambda v: f"${v/1e6:.1f}M" if v >= 1e6 else f"${v/1e3:.0f}K"
-                ),
-                textposition="outside", textfont=dict(size=10, color=COLORS["text"]),
-                hovertemplate="<b>%{x}</b><br>Saldo: $%{y:,.0f}<extra></extra>",
+                text=sdf["saldo_total"].apply(lambda v: f"${v/1e6:.1f}M" if v >= 1e6 else f"${v/1e3:.0f}K"),
+                textposition="outside", textfont=dict(size=10),
+                hovertemplate="<b>%{x}</b><br>$%{y:,.0f}<extra></extra>",
             ))
             fig_saldo.update_layout(
                 **PLOTLY_LAYOUT,
                 title_text="Saldo Total por Campaña",
                 title_font=dict(size=13, color=COLORS["primary"]),
-                xaxis=dict(type="category", categoryorder="array",
-                           categoryarray=summary_df["camp_label"].tolist(), **_AXIS_DEFAULTS),
+                xaxis=dict(type="category", **_AXIS_DEFAULTS),
                 yaxis=dict(title="Saldo ($)", **_AXIS_DEFAULTS),
             )
-            chart_card("Saldo total por campaña", fig_saldo,
-                       key="comp_saldo_camp", height_normal=380, height_expanded=560)
+            chart_card("Saldo por campaña", fig_saldo, key="trk_saldo", height_normal=360)
             st.markdown("<br>", unsafe_allow_html=True)
 
-        # ── Tabla detallada por campaña (misma estructura que el reporte Excel) ──
-        st.markdown("---")
-        st.markdown("#### Detalle por Campaña")
-
-        camp_options = summary_df["camp_label"].tolist()
-        sel_camp = st.selectbox("Seleccionar campaña:", camp_options, key="sel_camp_cohort")
-        r = summary_df[summary_df["camp_label"] == sel_camp].iloc[0]
-        tot = int(r["total"])
-        fug_tot = int(r["fugadas"])
-
-        # KPIs de campaña
-        kc1, kc2, kc3, kc4 = st.columns(4)
-        with kc1:
-            st.metric("Total damas", f"{tot:,}")
-        with kc2:
-            st.metric("Nuevas", f"{int(r['nuevas']):,}",
-                      delta=f"{r['nuevas']/tot*100:.1f}% del total" if tot else None,
-                      delta_color="off")
-        with kc3:
-            st.metric("Retenidas", f"{int(r['retenidas']):,}",
-                      delta=f"{r['retenidas']/tot*100:.1f}% del total" if tot else None,
-                      delta_color="off")
-        with kc4:
-            st.metric(f"Fuga (no aparecen en sig. {CHURN_WINDOW} camps.)",
-                      f"{fug_tot:,}",
-                      delta=f"{fug_tot/tot*100:.1f}% del total" if tot else None,
-                      delta_color="inverse")
-
-        st.markdown("<br>", unsafe_allow_html=True)
-
-        # Tabla de moras — misma estructura que el reporte
-        detail_rows = []
-        for mora in MORA_LEVELS:
-            m_tot = int(r.get(f"{mora}_total", 0))
-            m_nue = int(r.get(f"{mora}_nuevas", 0))
-            m_ret = int(r.get(f"{mora}_retenidas", 0))
-            m_fug = int(r.get(f"{mora}_fugadas", 0))
-            m_sld = r.get(f"{mora}_saldo", 0)
-            detail_rows.append({
-                "Nivel de Mora":  mora,
-                "Total":          m_tot,
-                "%":              f"{m_tot/tot*100:.1f}%" if tot else "—",
-                "Nuevas":         m_nue,
-                "% Nuevas":       f"{m_nue/m_tot*100:.1f}%" if m_tot else "—",
-                "Retenidas":      m_ret,
-                "% Ret.":         f"{m_ret/m_tot*100:.1f}%" if m_tot else "—",
-                "Fugadas":        m_fug,
-                "% Fuga":         f"{m_fug/m_tot*100:.1f}%" if m_tot else "—",
-                "Saldo":          fmt_currency(m_sld) if saldo_col else "—",
+        # Tabla resumen ejecutiva
+        st.markdown("#### Tabla Resumen Ejecutiva")
+        exec_rows = []
+        for _, r in sdf.iterrows():
+            tot = int(r["total"])
+            exec_rows.append({
+                "Campaña":           r["camp_label"],
+                "Pendientes":        tot,
+                "% del Pool":        f"{r['pct_pool']:.1f}%",
+                "Nuevas":            int(r["nuevas"]),
+                "% Nuevas":          f"{r['nuevas']/tot*100:.1f}%" if tot else "—",
+                "De Anterior":       int(r["de_anterior"]),
+                "% Retención":       f"{r['de_anterior']/tot*100:.1f}%" if tot else "—",
+                "Persistentes":      int(r["persistentes"]),
+                "Salen Sig. Camp.":  int(r["salen"]),
+                "Fugadas (3c)":      int(r["fugadas"]),
+                "% Fuga":            f"{r['fugadas']/tot*100:.1f}%" if tot else "—",
+                "Inactiva":          int(r["Inactiva_total"]),
+                "Mora 1":            int(r["Mora 1_total"]),
+                "Mora 2":            int(r["Mora 2_total"]),
+                "Mora 3":            int(r["Mora 3_total"]),
+                "Saldo":             fmt_currency(r["saldo_total"]) if saldo_col else "—",
             })
-        detail_df = pd.DataFrame(detail_rows)
-
-        # Color por mora
-        def _color_row(row):
-            colors = {
-                "Inactiva": "background-color: #E2E8F0",
-                "Mora 1":   "background-color: #FEF9C3",
-                "Mora 2":   "background-color: #FFEDD5",
-                "Mora 3":   "background-color: #FEE2E2",
-            }
-            c = colors.get(row["Nivel de Mora"], "")
-            return [c] * len(row)
-
-        styled = detail_df.style.apply(_color_row, axis=1)
-        st.dataframe(styled, use_container_width=True, hide_index=True)
-
-        # Bloque de Inactivas previas (si aplica)
-        fi_total = int(r.get("from_inactiva_total", 0))
-        if fi_total > 0:
-            st.markdown("<br>", unsafe_allow_html=True)
-            st.markdown("**Cuentas Inactivas de la campaña anterior que reaparecen:**")
-            fi_detail = []
-            for mora in MORA_LEVELS:
-                cnt = int(r.get(f"fi_to_{mora}", 0))
-                m_tot_d = int(r.get(f"{mora}_total", 0))
-                fi_detail.append({
-                    "Estado destino":         mora,
-                    "Vinieron de Inactiva":   cnt,
-                    "% de las Inactivas":     f"{cnt/fi_total*100:.1f}%" if fi_total else "—",
-                    f"% del total {mora}":    f"{cnt/m_tot_d*100:.1f}%" if m_tot_d else "—",
-                })
-            st.dataframe(pd.DataFrame(fi_detail), use_container_width=True, hide_index=True)
-
-        st.markdown("<br>", unsafe_allow_html=True)
-
-        # Tabla compacta con todas las campañas
-        with st.expander("Ver tabla compacta — todas las campañas"):
-            compact_rows = []
-            for _, rv in summary_df.iterrows():
-                tot_v = int(rv["total"])
-                compact_rows.append({
-                    "Campaña":   rv["camp_label"],
-                    "Total":     tot_v,
-                    "Nuevas":    int(rv["nuevas"]),
-                    "% Nuevas":  f"{rv['nuevas']/tot_v*100:.1f}%" if tot_v else "—",
-                    "Retenidas": int(rv["retenidas"]),
-                    "% Ret.":    f"{rv['retenidas']/tot_v*100:.1f}%" if tot_v else "—",
-                    "Fugadas":   int(rv["fugadas"]),
-                    "% Fuga":    f"{rv['fugadas']/tot_v*100:.1f}%" if tot_v else "—",
-                    "Inactiva":  int(rv["Inactiva_total"]),
-                    "Mora 1":    int(rv["Mora 1_total"]),
-                    "Mora 2":    int(rv["Mora 2_total"]),
-                    "Mora 3":    int(rv["Mora 3_total"]),
-                    "Saldo":     fmt_currency(rv["saldo_total"]) if saldo_col else "—",
-                })
-            st.dataframe(pd.DataFrame(compact_rows), use_container_width=True, hide_index=True)
+        st.dataframe(pd.DataFrame(exec_rows), use_container_width=True, hide_index=True)
 
     # ══════════════════════════════════════════
-    # TAB 2 — Matriz de Transición
+    # SUBTAB 2 — Por Campaña
     # ══════════════════════════════════════════
     with subtab2:
         st.markdown("<br>", unsafe_allow_html=True)
 
-        if trans_df.empty:
-            st.info("No hay suficientes campañas para calcular transiciones.")
+        sel_camp = st.selectbox("Seleccionar campaña:", sdf["camp_label"].tolist(), key="trk_sel_camp")
+        r = sdf[sdf["camp_label"] == sel_camp].iloc[0]
+        tot = int(r["total"])
+        prev_lbl = f"C{int(r['camp_n'])-1}" if r["camp_n"] > 1 else None
+
+        # KPIs
+        c1, c2, c3, c4, c5 = st.columns(5)
+        with c1: st.metric("Total damas", f"{tot:,}")
+        with c2: st.metric("% del Pool", f"{r['pct_pool']:.1f}%")
+        with c3:
+            st.metric("Nuevas", f"{int(r['nuevas']):,}",
+                      delta=f"{r['nuevas']/tot*100:.1f}%" if tot else None, delta_color="off")
+        with c4:
+            st.metric(f"De {prev_lbl}" if prev_lbl else "De anterior", f"{int(r['de_anterior']):,}",
+                      delta=f"{r['de_anterior']/tot*100:.1f}%" if tot else None, delta_color="off")
+        with c5:
+            st.metric("Fugadas (3c)", f"{int(r['fugadas']):,}",
+                      delta=f"{r['fugadas']/tot*100:.1f}%" if tot else None, delta_color="inverse")
+
+        st.markdown("<br>", unsafe_allow_html=True)
+
+        # Tabla mora detallada
+        st.markdown("**Desglose por estado de mora:**")
+        detail_rows = []
+        for mora in MORA_LEVELS:
+            m_tot  = int(r.get(f"{mora}_total", 0))
+            m_nue  = int(r.get(f"{mora}_nuevas", 0))
+            m_ant  = int(r.get(f"{mora}_de_anterior", 0))
+            m_per  = int(r.get(f"{mora}_persistentes", 0))
+            m_sal  = int(r.get(f"{mora}_salen", 0))
+            m_fug  = int(r.get(f"{mora}_fugadas", 0))
+            m_sld  = r.get(f"{mora}_saldo", 0)
+            detail_rows.append({
+                "Estado":       mora,
+                "Total":        m_tot,
+                "%":            f"{m_tot/tot*100:.1f}%" if tot else "—",
+                "Nuevas":       m_nue,
+                "% Nuevas":     f"{m_nue/m_tot*100:.1f}%" if m_tot else "—",
+                "De Anterior":  m_ant,
+                "% De Ant.":    f"{m_ant/m_tot*100:.1f}%" if m_tot else "—",
+                "Persistentes": m_per,
+                "Salen":        m_sal,
+                "Fugadas":      m_fug,
+                "% Fuga":       f"{m_fug/m_tot*100:.1f}%" if m_tot else "—",
+                "Saldo":        fmt_currency(m_sld) if saldo_col else "—",
+            })
+
+        def _color_mora(row):
+            c = {"Inactiva": "background-color:#E2E8F0",
+                 "Mora 1": "background-color:#FEF9C3",
+                 "Mora 2": "background-color:#FFEDD5",
+                 "Mora 3": "background-color:#FEE2E2"}.get(row["Estado"], "")
+            return [c] * len(row)
+
+        st.dataframe(
+            pd.DataFrame(detail_rows).style.apply(_color_mora, axis=1),
+            use_container_width=True, hide_index=True,
+        )
+
+        # Inactivas del período anterior
+        fi = int(r.get("fi_total", 0))
+        if fi > 0:
+            st.markdown("<br>", unsafe_allow_html=True)
+            st.markdown(f"**Inactivas de {prev_lbl} que reaparecen en {sel_camp}: {fi:,}**")
+            fi_rows = []
+            for mora in MORA_LEVELS:
+                cnt = int(r.get(f"fi_to_{mora}", 0))
+                m_tot_d = int(r.get(f"{mora}_total", 0))
+                fi_rows.append({
+                    "→ Estado":           mora,
+                    "Cuentas":            cnt,
+                    "% de Inactivas":     f"{cnt/fi*100:.1f}%" if fi else "—",
+                    f"% del total {mora}":f"{cnt/m_tot_d*100:.1f}%" if m_tot_d else "—",
+                })
+            st.dataframe(pd.DataFrame(fi_rows), use_container_width=True, hide_index=True)
+
+        # Mini bar chart para la campaña seleccionada
+        st.markdown("<br>", unsafe_allow_html=True)
+        fig_bar = go.Figure()
+        for mora in MORA_LEVELS:
+            m_tot = int(r.get(f"{mora}_total", 0))
+            fig_bar.add_trace(go.Bar(
+                name=mora, x=["Nuevas", "De Anterior", "Persistentes", "Fugadas"],
+                y=[int(r.get(f"{mora}_nuevas", 0)), int(r.get(f"{mora}_de_anterior", 0)),
+                   int(r.get(f"{mora}_persistentes", 0)), int(r.get(f"{mora}_fugadas", 0))],
+                marker_color=MORA_COLORS[mora],
+                hovertemplate=f"{mora}: %{{y:,}}<extra></extra>",
+            ))
+        fig_bar.update_layout(
+            **PLOTLY_LAYOUT, barmode="stack",
+            title_text=f"Distribución de métricas — {sel_camp}",
+            title_font=dict(size=12, color=COLORS["primary"]),
+            xaxis=dict(**_AXIS_DEFAULTS), yaxis=dict(title="Damas", **_AXIS_DEFAULTS),
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+            height=340,
+        )
+        st.plotly_chart(fig_bar, use_container_width=True, key=f"trk_cbar_{sel_camp}")
+
+    # ══════════════════════════════════════════
+    # SUBTAB 3 — Por Mora
+    # ══════════════════════════════════════════
+    with subtab3:
+        st.markdown("<br>", unsafe_allow_html=True)
+
+        sel_mora = st.selectbox("Seleccionar estado:", MORA_LEVELS, key="trk_sel_mora")
+
+        # Trend table for selected mora
+        mora_rows = []
+        for _, r in sdf.iterrows():
+            tot = int(r["total"])
+            m_tot = int(r.get(f"{sel_mora}_total", 0))
+            mora_rows.append({
+                "Campaña":       r["camp_label"],
+                "Total Estado":  m_tot,
+                "% Campaña":     f"{m_tot/tot*100:.1f}%" if tot else "—",
+                "% Pool":        f"{m_tot/pool_size*100:.1f}%" if pool_size else "—",
+                "Nuevas":        int(r.get(f"{sel_mora}_nuevas", 0)),
+                "% Nuevas":      f"{r.get(f'{sel_mora}_nuevas',0)/m_tot*100:.1f}%" if m_tot else "—",
+                "De Anterior":   int(r.get(f"{sel_mora}_de_anterior", 0)),
+                "% Retención":   f"{r.get(f'{sel_mora}_de_anterior',0)/m_tot*100:.1f}%" if m_tot else "—",
+                "Persistentes":  int(r.get(f"{sel_mora}_persistentes", 0)),
+                "Fugadas":       int(r.get(f"{sel_mora}_fugadas", 0)),
+                "% Fuga":        f"{r.get(f'{sel_mora}_fugadas',0)/m_tot*100:.1f}%" if m_tot else "—",
+                "Saldo":         fmt_currency(r.get(f"{sel_mora}_saldo", 0)) if saldo_col else "—",
+            })
+        st.dataframe(pd.DataFrame(mora_rows), use_container_width=True, hide_index=True)
+
+        st.markdown("<br>", unsafe_allow_html=True)
+
+        # Line chart for the selected mora
+        fig_mora_line = go.Figure()
+        for key, label, color, dash in [
+            (f"{sel_mora}_total",       "Total",       MORA_COLORS[sel_mora], "solid"),
+            (f"{sel_mora}_nuevas",      "Nuevas",      COLORS["success"],     "dash"),
+            (f"{sel_mora}_de_anterior", "De Anterior", COLORS["accent"],      "dot"),
+            (f"{sel_mora}_fugadas",     "Fugadas",     COLORS["danger"],      "longdash"),
+        ]:
+            fig_mora_line.add_trace(go.Scatter(
+                x=sdf["camp_label"], y=sdf[key],
+                mode="lines+markers", name=label,
+                line=dict(color=color, width=2, dash=dash), marker=dict(size=6),
+                hovertemplate=f"<b>%{{x}}</b><br>{label}: %{{y:,}}<extra></extra>",
+            ))
+        fig_mora_line.update_layout(
+            **PLOTLY_LAYOUT,
+            title_text=f"Evolución de {sel_mora} a través de C1–C10",
+            title_font=dict(size=13, color=COLORS["primary"]),
+            xaxis=dict(type="category", **_AXIS_DEFAULTS),
+            yaxis=dict(title="Damas", **_AXIS_DEFAULTS),
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+        )
+        chart_card(f"Tendencia {sel_mora}", fig_mora_line, key=f"trk_ml_{sel_mora}", height_normal=380)
+
+        st.markdown("<br>", unsafe_allow_html=True)
+
+        # Comparativa todos los estados — una línea por mora
+        st.markdown("#### Comparativa de todos los estados")
+        fig_all = go.Figure()
+        for mora in MORA_LEVELS:
+            fig_all.add_trace(go.Scatter(
+                x=sdf["camp_label"], y=sdf[f"{mora}_total"],
+                mode="lines+markers", name=mora,
+                line=dict(color=MORA_COLORS[mora], width=2), marker=dict(size=6),
+                hovertemplate=f"<b>%{{x}}</b><br>{mora}: %{{y:,}}<extra></extra>",
+            ))
+        fig_all.update_layout(
+            **PLOTLY_LAYOUT,
+            title_text="Volumen de cada estado por campaña",
+            title_font=dict(size=13, color=COLORS["primary"]),
+            xaxis=dict(type="category", **_AXIS_DEFAULTS),
+            yaxis=dict(title="Damas", **_AXIS_DEFAULTS),
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+        )
+        chart_card("Todos los estados", fig_all, key="trk_all_mora", height_normal=380)
+
+    # ══════════════════════════════════════════
+    # SUBTAB 4 — Salidas
+    # ══════════════════════════════════════════
+    with subtab4:
+        st.markdown("<br>", unsafe_allow_html=True)
+
+        if exits_df.empty:
+            st.info("No se encontraron cuentas con salida permanente.")
         else:
-            # ── Selector de transición ────────────────────────────────
-            trans_options = sorted(
-                trans_df[["de", "a"]].drop_duplicates().apply(
-                    lambda r: f"{r['de']} → {r['a']}", axis=1
-                ).tolist(),
-                key=lambda s: int(s.split("→")[0].strip().replace("C", ""))
+            n_exits = len(exits_df)
+            e1, e2, e3 = st.columns(3)
+            with e1: st.metric("Total salidas permanentes", f"{n_exits:,}")
+            with e2: st.metric("% del pool", f"{n_exits/pool_size*100:.1f}%" if pool_size else "—")
+            with e3:
+                still = pool_size - n_exits
+                st.metric("Aún presentes en C10", f"{still:,}")
+
+            st.markdown("<br>", unsafe_allow_html=True)
+
+            # Salidas por campaña y mora
+            grp = (
+                exits_df.groupby(["Última Campaña", "Estado al Salir"])
+                .agg(Cuentas=("NoDama", "count"), Saldo=("Saldo al Salir", "sum"))
+                .reset_index()
             )
-            sel_trans = st.selectbox(
-                "Selecciona la transición a visualizar:",
-                trans_options, key="sel_trans"
-            )
-            c_from, c_to = [s.strip() for s in sel_trans.split("→")]
+            pivot_exit = grp.pivot_table(
+                index="Última Campaña", columns="Estado al Salir",
+                values="Cuentas", fill_value=0, aggfunc="sum"
+            ).reindex(columns=[m for m in MORA_LEVELS if m in grp["Estado al Salir"].values], fill_value=0)
 
-            sub = trans_df[(trans_df["de"] == c_from) & (trans_df["a"] == c_to)]
-
-            # Pivot 4×4
-            pivot = sub.pivot_table(
-                index="origen", columns="destino",
-                values="cuentas", fill_value=0, aggfunc="sum"
-            ).reindex(index=MORA_LEVELS, columns=MORA_LEVELS, fill_value=0)
-
-            total_shared = int(pivot.values.sum())
-
-            st.markdown(
-                f"**Damas presentes en ambas campañas ({c_from} y {c_to}): {total_shared:,}**"
-            )
-            st.caption(
-                "Cada celda muestra cuántas damas tenían el estado de la fila en "
-                f"{c_from} y pasaron al estado de la columna en {c_to}."
-            )
-
-            col_heat, col_kpi = st.columns([3, 2])
-
-            with col_heat:
-                # Heatmap de transición
-                z_vals    = pivot.values.tolist()
-                z_pct     = [[round(v / total_shared * 100, 1) if total_shared else 0
-                               for v in row] for row in z_vals]
-                text_heat = [[f"{v:,}<br>({p}%)" for v, p in zip(row_v, row_p)]
-                             for row_v, row_p in zip(z_vals, z_pct)]
-
-                fig_heat = go.Figure(go.Heatmap(
-                    z=z_vals,
-                    x=[f"→ {m}" for m in MORA_LEVELS],
-                    y=MORA_LEVELS,
-                    text=text_heat, texttemplate="%{text}",
-                    textfont=dict(size=12, color="black"),
-                    colorscale=[
-                        [0.0, "#FFFFFF"], [0.3, "#BFDBFE"],
-                        [0.6, "#3B82F6"], [1.0, "#1A3C6E"],
-                    ],
-                    showscale=True,
-                    hovertemplate=(
-                        "<b>%{y} → %{x}</b><br>"
-                        "Damas: %{z:,}<extra></extra>"
-                    ),
-                ))
-                fig_heat.update_layout(
-                    **PLOTLY_LAYOUT,
-                    title_text=f"Matriz de Transición {c_from} → {c_to}",
-                    title_font=dict(size=13, color=COLORS["primary"]),
-                    xaxis=dict(title=f"Estado en {c_to}", **_AXIS_DEFAULTS),
-                    yaxis=dict(title=f"Estado en {c_from}", autorange="reversed",
-                               **_AXIS_DEFAULTS),
+            col_e1, col_e2 = st.columns([3, 2])
+            with col_e1:
+                fig_exit = go.Figure()
+                for mora in MORA_LEVELS:
+                    if mora in grp["Estado al Salir"].values:
+                        sub_e = grp[grp["Estado al Salir"] == mora].set_index("Última Campaña")
+                        fig_exit.add_trace(go.Bar(
+                            x=sub_e.index, y=sub_e["Cuentas"],
+                            name=mora, marker_color=MORA_COLORS[mora],
+                            hovertemplate=f"<b>%{{x}}</b><br>{mora}: %{{y:,}}<extra></extra>",
+                        ))
+                fig_exit.update_layout(
+                    **PLOTLY_LAYOUT, barmode="stack",
+                    title_text="Salidas por campaña y estado",
+                    title_font=dict(size=12, color=COLORS["primary"]),
+                    xaxis=dict(type="category", categoryorder="array",
+                               categoryarray=[f"C{c}" for c in range(1, 11)], **_AXIS_DEFAULTS),
+                    yaxis=dict(title="Cuentas", **_AXIS_DEFAULTS),
+                    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
                     height=360,
                 )
-                st.plotly_chart(fig_heat, use_container_width=True,
-                                key=f"heat_{c_from}_{c_to}")
+                st.plotly_chart(fig_exit, use_container_width=True, key="trk_exit_bar")
 
-            with col_kpi:
-                st.markdown(f"**Tasas de transición desde {c_from}**")
-                for mora_orig in MORA_LEVELS:
-                    orig_total = int(pivot.loc[mora_orig].sum()) if mora_orig in pivot.index else 0
-                    if orig_total == 0:
+            with col_e2:
+                st.markdown("**Distribución por estado al salir:**")
+                exit_by_mora = exits_df["Estado al Salir"].value_counts().reset_index()
+                exit_by_mora.columns = ["Estado", "Cuentas"]
+                exit_by_mora["% del Total"] = exit_by_mora["Cuentas"].apply(
+                    lambda v: f"{v/n_exits*100:.1f}%"
+                )
+                st.dataframe(exit_by_mora, use_container_width=True, hide_index=True)
+
+                st.markdown("<br>", unsafe_allow_html=True)
+                st.markdown("**Saldo promedio al salir por estado:**")
+                saldo_by_mora = exits_df.groupby("Estado al Salir")["Saldo al Salir"].mean().reset_index()
+                saldo_by_mora.columns = ["Estado", "Saldo Promedio"]
+                saldo_by_mora["Saldo Promedio"] = saldo_by_mora["Saldo Promedio"].apply(fmt_currency)
+                st.dataframe(saldo_by_mora, use_container_width=True, hide_index=True)
+
+            st.markdown("<br>", unsafe_allow_html=True)
+            st.markdown("#### Listado de salidas permanentes")
+            st.dataframe(
+                exits_df.head(3000),
+                use_container_width=True, hide_index=True, height=400,
+            )
+
+    # ══════════════════════════════════════════
+    # SUBTAB 5 — Transiciones
+    # ══════════════════════════════════════════
+    with subtab5:
+        st.markdown("<br>", unsafe_allow_html=True)
+
+        if trans_df.empty:
+            st.info("No hay datos de transición disponibles.")
+        else:
+            trans_options = [
+                f"C{camps_n[i]} → C{camps_n[i+1]}" for i in range(len(camps_n)-1)
+            ]
+            sel_t = st.selectbox("Seleccionar transición:", trans_options, key="trk_sel_trans")
+            c_from = sel_t.split("→")[0].strip()
+            c_to   = sel_t.split("→")[1].strip()
+
+            sub_t = trans_df[(trans_df["de"] == c_from) & (trans_df["a"] == c_to)]
+            pivot_t = (
+                sub_t.pivot_table(index="origen", columns="destino",
+                                  values="cuentas", fill_value=0, aggfunc="sum")
+                .reindex(index=MORA_LEVELS, columns=MORA_LEVELS, fill_value=0)
+            )
+            total_sh = int(pivot_t.values.sum())
+
+            st.markdown(f"**Damas presentes en ambas campañas: {total_sh:,}**")
+            st.caption("Fila = estado en campaña origen  |  Columna = estado en campaña destino")
+
+            col_h, col_k = st.columns([3, 2])
+            with col_h:
+                z = pivot_t.values.tolist()
+                z_pct = [[round(v/total_sh*100,1) if total_sh else 0 for v in row] for row in z]
+                text_h = [[f"{v:,}\n({p}%)" for v, p in zip(rv, rp)]
+                          for rv, rp in zip(z, z_pct)]
+                fig_h = go.Figure(go.Heatmap(
+                    z=z, x=[f"→ {m}" for m in MORA_LEVELS], y=MORA_LEVELS,
+                    text=text_h, texttemplate="%{text}",
+                    textfont=dict(size=11),
+                    colorscale=[[0,"#FFFFFF"],[0.3,"#BFDBFE"],[0.7,"#3B82F6"],[1,"#1A3C6E"]],
+                    showscale=True,
+                    hovertemplate="<b>%{y} → %{x}</b><br>%{z:,} damas<extra></extra>",
+                ))
+                fig_h.update_layout(
+                    **PLOTLY_LAYOUT,
+                    title_text=f"Matriz de Transición {c_from} → {c_to}",
+                    title_font=dict(size=12, color=COLORS["primary"]),
+                    xaxis=dict(title=f"Estado en {c_to}", **_AXIS_DEFAULTS),
+                    yaxis=dict(title=f"Estado en {c_from}", autorange="reversed", **_AXIS_DEFAULTS),
+                    height=360,
+                )
+                st.plotly_chart(fig_h, use_container_width=True, key=f"trk_heat_{c_from}_{c_to}")
+
+            with col_k:
+                st.markdown(f"**Tasas de transición desde {c_from}:**")
+                for mora_o in MORA_LEVELS:
+                    o_tot = int(pivot_t.loc[mora_o].sum()) if mora_o in pivot_t.index else 0
+                    if o_tot == 0:
                         continue
+                    bg = {"Inactiva":"#E2E8F0","Mora 1":"#FEF9C3","Mora 2":"#FFEDD5","Mora 3":"#FEE2E2"}.get(mora_o,"#fff")
+                    detail = "  ·  ".join(
+                        f"→ {d}: <b>{int(pivot_t.loc[mora_o,d])}</b> ({round(pivot_t.loc[mora_o,d]/o_tot*100,1)}%)"
+                        for d in MORA_LEVELS if mora_o in pivot_t.index and d in pivot_t.columns
+                    )
                     st.markdown(
-                        f"<div style='background:{MORA_COLORS[mora_orig]};padding:6px 10px;"
-                        f"border-radius:6px;margin-bottom:6px'>"
-                        f"<b>{mora_orig}</b> ({orig_total:,} damas)<br>"
-                        + "  ".join(
-                            f"→ {dest}: <b>{int(pivot.loc[mora_orig, dest])}</b> "
-                            f"({round(pivot.loc[mora_orig, dest]/orig_total*100, 1) if orig_total else 0}%)"
-                            for dest in MORA_LEVELS
-                            if mora_orig in pivot.index and dest in pivot.columns
-                        )
-                        + "</div>",
+                        f"<div style='background:{bg};padding:6px 10px;border-radius:6px;"
+                        f"margin-bottom:6px'><b>{mora_o}</b> — {o_tot:,} damas<br>{detail}</div>",
                         unsafe_allow_html=True,
                     )
 
             st.markdown("<br>", unsafe_allow_html=True)
 
-            # ── Bloque Inactivas: evolución a lo largo de todas las campañas ──
-            st.markdown("---")
-            st.markdown("#### Migración de Inactivas → Mora X (todas las campañas)")
-            st.caption(
-                "Cuentas que tenían estado Inactiva en la campaña anterior y su estado en la siguiente."
-            )
-
-            fi_rows = []
-            for _, r in summary_df.iterrows():
-                fi = int(r.get("from_inactiva_total", 0))
-                if fi == 0:
-                    continue
-                fi_rows.append({
-                    "Campaña":           r["camp_label"],
-                    "Total de Inactivas": fi,
-                    "→ Inactiva":        int(r.get("fi_to_Inactiva", 0)),
-                    "→ Mora 1":          int(r.get("fi_to_Mora 1", 0)),
-                    "→ Mora 2":          int(r.get("fi_to_Mora 2", 0)),
-                    "→ Mora 3":          int(r.get("fi_to_Mora 3", 0)),
-                })
-            fi_df = pd.DataFrame(fi_rows)
-
-            if not fi_df.empty:
-                col_fi_bar, col_fi_tbl = st.columns([3, 2])
-                with col_fi_bar:
-                    fig_fi = go.Figure()
-                    for dest, color in [
-                        ("→ Inactiva", MORA_COLORS["Inactiva"]),
-                        ("→ Mora 1",   MORA_COLORS["Mora 1"]),
-                        ("→ Mora 2",   MORA_COLORS["Mora 2"]),
-                        ("→ Mora 3",   MORA_COLORS["Mora 3"]),
-                    ]:
-                        fig_fi.add_trace(go.Bar(
-                            x=fi_df["Campaña"], y=fi_df[dest],
-                            name=dest, marker_color=color,
-                            hovertemplate=f"<b>%{{x}}</b><br>{dest}: %{{y:,}}<extra></extra>",
-                        ))
-                    fig_fi.update_layout(
-                        **PLOTLY_LAYOUT, barmode="stack",
-                        title_text="Inactivas del período anterior → estado en campaña actual",
-                        title_font=dict(size=13, color=COLORS["primary"]),
-                        xaxis=dict(type="category", **_AXIS_DEFAULTS),
-                        yaxis=dict(title="Número de Damas", **_AXIS_DEFAULTS),
-                        legend=dict(orientation="h", yanchor="bottom", y=1.02,
-                                    xanchor="right", x=1),
-                        height=360,
-                    )
-                    st.plotly_chart(fig_fi, use_container_width=True, key="fi_stack")
-                with col_fi_tbl:
-                    st.markdown("**Tabla de transición de Inactivas**")
-                    st.dataframe(fi_df, use_container_width=True, hide_index=True)
-            else:
-                st.info("No hay datos de transición desde estado Inactiva.")
-
-            st.markdown("<br>", unsafe_allow_html=True)
-
-            # ── Tabla global de todas las transiciones ─────────────────
-            st.markdown("#### Resumen de todas las transiciones")
-            all_trans_rows = []
-            for opt in trans_options:
-                cf, ct = [s.strip() for s in opt.split("→")]
-                sub_t  = trans_df[(trans_df["de"] == cf) & (trans_df["a"] == ct)]
-                pv     = sub_t.pivot_table(
-                    index="origen", columns="destino",
-                    values="cuentas", fill_value=0, aggfunc="sum"
-                ).reindex(index=MORA_LEVELS, columns=MORA_LEVELS, fill_value=0)
-                total_t = int(pv.values.sum())
-                for mora in MORA_LEVELS:
-                    orig_t = int(pv.loc[mora].sum()) if mora in pv.index else 0
-                    if orig_t == 0:
-                        continue
-                    for dest in MORA_LEVELS:
-                        val = int(pv.loc[mora, dest]) if mora in pv.index and dest in pv.columns else 0
-                        all_trans_rows.append({
-                            "Transición": opt,
-                            "Origen":     mora,
-                            "Destino":    dest,
-                            "Damas":      val,
-                            "% del Origen": f"{val/orig_t*100:.1f}%" if orig_t else "—",
-                        })
-            if all_trans_rows:
-                at_df = pd.DataFrame(all_trans_rows)
-                st.dataframe(at_df, use_container_width=True, hide_index=True, height=380)
-
-    # ══════════════════════════════════════════
-    # TAB 3 — Reincidencia
-    # ══════════════════════════════════════════
-    with subtab3:
-        st.markdown("<br>", unsafe_allow_html=True)
-
-        # Count unique campaigns per dama
-        camps_per_dama = (
-            df[df[camp_col].isin(camp_labels)]
-            .groupby(nodama_col)[camp_col]
-            .nunique()
-            .reset_index()
-            .rename(columns={camp_col: "num_camps"})
-        )
-
-        total_damas_uniq = len(camps_per_dama)
-        solo_1      = (camps_per_dama["num_camps"] == 1).sum()
-        dos_tres    = camps_per_dama["num_camps"].between(2, 3).sum()
-        cuatro_plus = (camps_per_dama["num_camps"] >= 4).sum()
-
-        pct_1   = solo_1      / total_damas_uniq * 100 if total_damas_uniq > 0 else 0
-        pct_23  = dos_tres    / total_damas_uniq * 100 if total_damas_uniq > 0 else 0
-        pct_4p  = cuatro_plus / total_damas_uniq * 100 if total_damas_uniq > 0 else 0
-
-        k1, k2, k3, k4 = st.columns(4)
-        with k1:
-            st.metric("Total Damas Únicas", f"{total_damas_uniq:,}")
-        with k2:
-            st.metric("Solo 1 campaña", f"{solo_1:,}", delta=f"{pct_1:.1f}%", delta_color="off")
-        with k3:
-            st.metric("2 – 3 campañas", f"{dos_tres:,}", delta=f"{pct_23:.1f}%", delta_color="off")
-        with k4:
-            st.metric("4+ campañas", f"{cuatro_plus:,}", delta=f"{pct_4p:.1f}%", delta_color="off")
-
-        st.markdown("<br>", unsafe_allow_html=True)
-
-        col_hist, col_pie = st.columns(2)
-
-        with col_hist:
-            dist_camps = (
-                camps_per_dama["num_camps"]
-                .value_counts()
-                .reindex(range(1, 11), fill_value=0)
-                .reset_index()
-            )
-            dist_camps.columns = ["Num Campañas", "Damas"]
-
-            fig_hist = go.Figure(go.Bar(
-                x=dist_camps["Num Campañas"].astype(str),
-                y=dist_camps["Damas"],
-                marker_color=PASTEL_SEQ[:10],
-                text=dist_camps["Damas"], textposition="outside",
-                textfont=dict(size=11, color=COLORS["text"]),
-                hovertemplate="<b>%{x} campaña(s)</b><br>Damas: %{y:,}<extra></extra>",
-            ))
-            fig_hist.update_layout(
-                **PLOTLY_LAYOUT,
-                title_text="Distribución: ¿En cuántas campañas aparece cada dama?",
-                title_font=dict(size=13, color=COLORS["primary"]),
-                xaxis=dict(title="Número de Campañas", type="category", **_AXIS_DEFAULTS),
-                yaxis=dict(title="Número de Damas", **_AXIS_DEFAULTS),
-            )
-            chart_card("Campañas por dama — distribución", fig_hist,
-                       key="reinc_hist", height_normal=380, height_expanded=560)
-
-        with col_pie:
-            pie_labels = ["Solo 1 campaña", "2 – 3 campañas", "4+ campañas"]
-            pie_values = [solo_1, dos_tres, cuatro_plus]
-            pie_colors = [COLORS["accent"], COLORS["warning"], COLORS["danger"]]
-
-            fig_pie = go.Figure(go.Pie(
-                labels=pie_labels, values=pie_values,
-                hole=0.55,
-                marker_colors=pie_colors,
-                textinfo="label+percent",
-                textfont=dict(size=13, color=COLORS["text"]),
-                hovertemplate="<b>%{label}</b><br>Damas: %{value:,}<br>%{percent}<extra></extra>",
-            ))
-            fig_pie.update_layout(
-                **PLOTLY_LAYOUT,
-                title_text="Damas únicas vs recurrentes",
-                title_font=dict(size=13, color=COLORS["primary"]),
-                legend=dict(orientation="h", yanchor="bottom", y=-0.15, xanchor="center", x=0.5),
-                annotations=[dict(
-                    text=f"<b>{pct_1:.0f}%</b><br><span style='font-size:10px'>solo 1</span>",
-                    x=0.5, y=0.5, showarrow=False,
-                    font=dict(size=16, color=COLORS["primary"]),
-                    xref="paper", yref="paper",
-                )],
-            )
-            chart_card("Única vs recurrente", fig_pie,
-                       key="reinc_pie", height_normal=380, height_expanded=560)
-
-        st.markdown("<br>", unsafe_allow_html=True)
-
-        # Top damas by number of campaigns
-        st.markdown("#### Top Damas por Número de Campañas")
-
-        # last mora per dama
-        if mora_col:
-            last_mora = (
-                df[df[camp_col].isin(camp_labels)]
-                .sort_values(camp_col, key=lambda s: s.map(_camp_num))
-                .groupby(nodama_col)["_mora"]
-                .last()
-                .reset_index()
-                .rename(columns={"_mora": "Última Mora"})
-            )
-        else:
-            last_mora = pd.DataFrame(columns=[nodama_col, "Última Mora"])
-
-        # list of campaigns per dama
-        camp_list_per_dama = (
-            df[df[camp_col].isin(camp_labels)]
-            .sort_values(camp_col, key=lambda s: s.map(_camp_num))
-            .groupby(nodama_col)[camp_col]
-            .apply(lambda x: ", ".join(x.unique()))
-            .reset_index()
-            .rename(columns={camp_col: "Campañas"})
-        )
-
-        top_damas = (
-            camps_per_dama
-            .sort_values("num_camps", ascending=False)
-            .head(30)
-            .merge(camp_list_per_dama, on=nodama_col, how="left")
-            .merge(last_mora, on=nodama_col, how="left")
-            .rename(columns={nodama_col: "NoDama", "num_camps": "Num Campañas"})
-        )
-        st.dataframe(top_damas[["NoDama", "Num Campañas", "Campañas", "Última Mora"]],
-                     use_container_width=True, hide_index=True, height=400)
-
-    # ══════════════════════════════════════════
-    # TAB 4 — Salida de Cuentas
-    # ══════════════════════════════════════════
-    with subtab4:
-        st.markdown("<br>", unsafe_allow_html=True)
-
-        df_active = df[df[camp_col].isin(camp_labels)].copy()
-
-        last_camp_per_dama = (
-            df_active
-            .sort_values(camp_col, key=lambda s: s.map(_camp_num))
-            .groupby(nodama_col)
-            .agg(
-                last_camp=(camp_col, "last"),
-                last_mora=("_mora", "last"),
-            )
-            .reset_index()
-        )
-
-        max_camp = camp_labels[-1] if camp_labels else None
-
-        if max_camp:
-            last_camp_per_dama["still_active"] = last_camp_per_dama["last_camp"] == max_camp
-        else:
-            last_camp_per_dama["still_active"] = False
-
-        permanently_exited = last_camp_per_dama[~last_camp_per_dama["still_active"]]
-        still_active       = last_camp_per_dama[last_camp_per_dama["still_active"]]
-
-        n_exited = len(permanently_exited)
-        n_active = len(still_active)
-        total_u  = len(last_camp_per_dama)
-
-        k1, k2, k3 = st.columns(3)
-        with k1:
-            st.metric("Damas aún activas (en C10)", f"{n_active:,}")
-        with k2:
-            st.metric("Damas salidas permanentemente", f"{n_exited:,}")
-        with k3:
-            pct_exit = n_exited / total_u * 100 if total_u > 0 else 0
-            st.metric("% de salida acumulada", f"{pct_exit:.1f}%")
-
-        st.markdown("<br>", unsafe_allow_html=True)
-
-        # Bar: count of damas whose last campaign is Cn (exits per campaign)
-        exit_counts = (
-            last_camp_per_dama
-            .groupby("last_camp")
-            .size()
-            .reindex(camp_labels, fill_value=0)
-            .reset_index()
-        )
-        exit_counts.columns = ["Campaña", "Damas"]
-
-        # Distinguish active vs exited for coloring
-        exit_counts["tipo"] = exit_counts["Campaña"].apply(
-            lambda c: "Aún activas" if c == max_camp else "Salida permanente"
-        )
-
-        fig_exit = go.Figure()
-        for tipo, color in [("Salida permanente", COLORS["danger"]),
-                             ("Aún activas",       COLORS["success"])]:
-            mask = exit_counts["tipo"] == tipo
-            fig_exit.add_trace(go.Bar(
-                x=exit_counts.loc[mask, "Campaña"],
-                y=exit_counts.loc[mask, "Damas"],
-                name=tipo, marker_color=color,
-                text=exit_counts.loc[mask, "Damas"],
-                textposition="outside", textfont=dict(size=10, color=COLORS["text"]),
-                hovertemplate=f"<b>%{{x}}</b><br>{tipo}: %{{y:,}} damas<extra></extra>",
-            ))
-        fig_exit.update_layout(
-            **PLOTLY_LAYOUT, barmode="stack",
-            title_text="Última campaña de cada dama — ¿Cuándo salen del portafolio?",
-            title_font=dict(size=13, color=COLORS["primary"]),
-            xaxis=dict(type="category", categoryorder="array",
-                       categoryarray=camp_labels, **_AXIS_DEFAULTS),
-            yaxis=dict(title="Número de Damas", **_AXIS_DEFAULTS),
-            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-        )
-        chart_card("Damas cuya última aparición fue en cada campaña", fig_exit,
-                   key="salida_last_camp", height_normal=400, height_expanded=580)
-
-        st.markdown("<br>", unsafe_allow_html=True)
-
-        # Mora distribution at exit (permanently exited only)
-        if not permanently_exited.empty and mora_col:
-            st.markdown("#### Nivel de mora en la última campaña (damas con salida permanente)")
-
-            exit_mora_counts = (
-                permanently_exited
-                .groupby(["last_camp", "last_mora"])
-                .size()
-                .unstack(fill_value=0)
-                .reindex(columns=MORA_LEVELS, fill_value=0)
-                .reindex(index=[c for c in camp_labels if c != max_camp], fill_value=0)
-                .reset_index()
-                .rename(columns={"last_camp": "Campaña"})
-            )
-
-            fig_exit_mora = go.Figure()
-            for nivel in MORA_LEVELS:
-                color = MORA_COLORS[nivel]
-                if nivel in exit_mora_counts.columns:
-                    fig_exit_mora.add_trace(go.Bar(
-                        x=exit_mora_counts["Campaña"],
-                        y=exit_mora_counts[nivel],
-                        name=nivel, marker_color=color,
-                        hovertemplate=f"<b>%{{x}}</b><br>{nivel} al salir: %{{y:,}} damas<extra></extra>",
-                    ))
-            fig_exit_mora.update_layout(
-                **PLOTLY_LAYOUT, barmode="stack",
-                title_text="Nivel de Mora al Momento de la Salida (por campaña)",
-                title_font=dict(size=13, color=COLORS["primary"]),
-                xaxis=dict(type="category", categoryorder="array",
-                           categoryarray=[c for c in camp_labels if c != max_camp],
-                           **_AXIS_DEFAULTS),
-                yaxis=dict(title="Número de Damas", **_AXIS_DEFAULTS),
-                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-            )
-            chart_card("Mora al salir del portafolio (permanente)", fig_exit_mora,
-                       key="salida_mora_exit", height_normal=400, height_expanded=580)
-
-            st.markdown("<br>", unsafe_allow_html=True)
-
-            # KPIs: mora distribution at exit (incluye Inactiva)
-            exit_mora_total = permanently_exited["last_mora"].value_counts()
-            n_exit_total    = len(permanently_exited)
-            exit_cols = st.columns(len(MORA_LEVELS))
-            for col_k, nivel in zip(exit_cols, MORA_LEVELS):
-                n_nivel = exit_mora_total.get(nivel, 0)
-                pct_n   = n_nivel / n_exit_total * 100 if n_exit_total > 0 else 0
-                with col_k:
-                    st.metric(f"Salieron como {nivel}", f"{n_nivel:,}",
-                              delta=f"{pct_n:.1f}% de salidas", delta_color="off")
-
+            # Tabla resumen todas las transiciones
+            with st.expander("Ver tabla de todas las transiciones"):
+                all_t_rows = []
+                for opt in trans_options:
+                    cf = opt.split("→")[0].strip()
+                    ct = opt.split("→")[1].strip()
+                    s  = trans_df[(trans_df["de"]==cf)&(trans_df["a"]==ct)]
+                    pv = (s.pivot_table(index="origen",columns="destino",
+                                        values="cuentas",fill_value=0,aggfunc="sum")
+                           .reindex(index=MORA_LEVELS,columns=MORA_LEVELS,fill_value=0))
+                    for mo in MORA_LEVELS:
+                        ot = int(pv.loc[mo].sum()) if mo in pv.index else 0
+                        if ot == 0:
+                            continue
+                        for md in MORA_LEVELS:
+                            v = int(pv.loc[mo,md]) if mo in pv.index and md in pv.columns else 0
+                            all_t_rows.append({
+                                "Transición": opt, "Origen": mo, "Destino": md,
+                                "Damas": v,
+                                "% del Origen": f"{v/ot*100:.1f}%" if ot else "—",
+                            })
+                if all_t_rows:
+                    st.dataframe(pd.DataFrame(all_t_rows), use_container_width=True,
+                                 hide_index=True, height=400)
 
 # ─────────────────────────────────────────────
 #  PANTALLA DE BIENVENIDA
@@ -3093,12 +2464,11 @@ def main():
         st.info(" Filtros activos — " + " · ".join(partes))
 
     # ── Tabs ──────────────────────────────────────────────────────────
-    tab1, tab2, tab3, tab4, tab5 = st.tabs([
+    tab1, tab2, tab3, tab4 = st.tabs([
         " Resumen General",
         " Temporalidad",
         "Operaciones y Territorio",
-        " Moras",
-        " Comportamiento de Cartera",
+        " Tracking Completo",
     ])
     with tab1:
         tab_resumen(metrics)
@@ -3107,9 +2477,7 @@ def main():
     with tab3:
         tab_flujo(metrics)
     with tab4:
-        tab_moras(metrics, st.session_state.df_moras)
-    with tab5:
-        tab_comportamiento_cartera(st.session_state.df_moras)
+        tab_tracking(st.session_state.df_moras)
 
 
 if __name__ == "__main__":
