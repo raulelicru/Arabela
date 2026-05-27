@@ -1450,7 +1450,7 @@ def tab_flujo(metrics: dict):
     if df_moras_ss is not None:
         ruta_col    = _find_col(df_moras_ss, ["ruta", "rutas", "route"])
         nodama_mora = _get_nodama_col(df_moras_ss)
-        nodama_col  = _get_merged_nodama_col(metrics["df"])
+        nodama_col  = _find_col(metrics["df"], ["nodama", "no dama", "númdama", "numdama", "número de dama", "num_dama"])
         valor_col   = metrics.get("valor_col")
 
         if ruta_col and nodama_mora and nodama_col:
