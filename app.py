@@ -2389,27 +2389,112 @@ def tab_comportamiento_cartera(df_moras: pd.DataFrame | None):
                        key="comp_saldo_camp", height_normal=380, height_expanded=560)
             st.markdown("<br>", unsafe_allow_html=True)
 
-        # Tabla resumen completa
-        st.markdown("#### Resumen de Cohortes por Campaña")
-        tbl_rows = []
-        for _, r in summary_df.iterrows():
-            tot = int(r["total"])
-            tbl_rows.append({
-                "Campaña":    r["camp_label"],
-                "Total":      tot,
-                "Nuevas":     int(r["nuevas"]),
-                "% Nuevas":   f"{r['nuevas']/tot*100:.1f}%" if tot else "—",
-                "Retenidas":  int(r["retenidas"]),
-                "% Ret.":     f"{r['retenidas']/tot*100:.1f}%" if tot else "—",
-                "Fugadas":    int(r["fugadas"]),
-                "% Fuga":     f"{r['fugadas']/tot*100:.1f}%" if tot else "—",
-                "Inactiva":   int(r["Inactiva_total"]),
-                "Mora 1":     int(r["Mora 1_total"]),
-                "Mora 2":     int(r["Mora 2_total"]),
-                "Mora 3":     int(r["Mora 3_total"]),
-                "Saldo":      fmt_currency(r["saldo_total"]) if saldo_col else "—",
+        # ── Tabla detallada por campaña (misma estructura que el reporte Excel) ──
+        st.markdown("---")
+        st.markdown("#### Detalle por Campaña")
+
+        camp_options = summary_df["camp_label"].tolist()
+        sel_camp = st.selectbox("Seleccionar campaña:", camp_options, key="sel_camp_cohort")
+        r = summary_df[summary_df["camp_label"] == sel_camp].iloc[0]
+        tot = int(r["total"])
+        fug_tot = int(r["fugadas"])
+
+        # KPIs de campaña
+        kc1, kc2, kc3, kc4 = st.columns(4)
+        with kc1:
+            st.metric("Total damas", f"{tot:,}")
+        with kc2:
+            st.metric("Nuevas", f"{int(r['nuevas']):,}",
+                      delta=f"{r['nuevas']/tot*100:.1f}% del total" if tot else None,
+                      delta_color="off")
+        with kc3:
+            st.metric("Retenidas", f"{int(r['retenidas']):,}",
+                      delta=f"{r['retenidas']/tot*100:.1f}% del total" if tot else None,
+                      delta_color="off")
+        with kc4:
+            st.metric(f"Fuga (no aparecen en sig. {CHURN_WINDOW} camps.)",
+                      f"{fug_tot:,}",
+                      delta=f"{fug_tot/tot*100:.1f}% del total" if tot else None,
+                      delta_color="inverse")
+
+        st.markdown("<br>", unsafe_allow_html=True)
+
+        # Tabla de moras — misma estructura que el reporte
+        detail_rows = []
+        for mora in MORA_LEVELS:
+            m_tot = int(r.get(f"{mora}_total", 0))
+            m_nue = int(r.get(f"{mora}_nuevas", 0))
+            m_ret = int(r.get(f"{mora}_retenidas", 0))
+            m_fug = int(r.get(f"{mora}_fugadas", 0))
+            m_sld = r.get(f"{mora}_saldo", 0)
+            detail_rows.append({
+                "Nivel de Mora":  mora,
+                "Total":          m_tot,
+                "%":              f"{m_tot/tot*100:.1f}%" if tot else "—",
+                "Nuevas":         m_nue,
+                "% Nuevas":       f"{m_nue/m_tot*100:.1f}%" if m_tot else "—",
+                "Retenidas":      m_ret,
+                "% Ret.":         f"{m_ret/m_tot*100:.1f}%" if m_tot else "—",
+                "Fugadas":        m_fug,
+                "% Fuga":         f"{m_fug/m_tot*100:.1f}%" if m_tot else "—",
+                "Saldo":          fmt_currency(m_sld) if saldo_col else "—",
             })
-        st.dataframe(pd.DataFrame(tbl_rows), use_container_width=True, hide_index=True)
+        detail_df = pd.DataFrame(detail_rows)
+
+        # Color por mora
+        def _color_row(row):
+            colors = {
+                "Inactiva": "background-color: #E2E8F0",
+                "Mora 1":   "background-color: #FEF9C3",
+                "Mora 2":   "background-color: #FFEDD5",
+                "Mora 3":   "background-color: #FEE2E2",
+            }
+            c = colors.get(row["Nivel de Mora"], "")
+            return [c] * len(row)
+
+        styled = detail_df.style.apply(_color_row, axis=1)
+        st.dataframe(styled, use_container_width=True, hide_index=True)
+
+        # Bloque de Inactivas previas (si aplica)
+        fi_total = int(r.get("from_inactiva_total", 0))
+        if fi_total > 0:
+            st.markdown("<br>", unsafe_allow_html=True)
+            st.markdown("**Cuentas Inactivas de la campaña anterior que reaparecen:**")
+            fi_detail = []
+            for mora in MORA_LEVELS:
+                cnt = int(r.get(f"fi_to_{mora}", 0))
+                m_tot_d = int(r.get(f"{mora}_total", 0))
+                fi_detail.append({
+                    "Estado destino":         mora,
+                    "Vinieron de Inactiva":   cnt,
+                    "% de las Inactivas":     f"{cnt/fi_total*100:.1f}%" if fi_total else "—",
+                    f"% del total {mora}":    f"{cnt/m_tot_d*100:.1f}%" if m_tot_d else "—",
+                })
+            st.dataframe(pd.DataFrame(fi_detail), use_container_width=True, hide_index=True)
+
+        st.markdown("<br>", unsafe_allow_html=True)
+
+        # Tabla compacta con todas las campañas
+        with st.expander("Ver tabla compacta — todas las campañas"):
+            compact_rows = []
+            for _, rv in summary_df.iterrows():
+                tot_v = int(rv["total"])
+                compact_rows.append({
+                    "Campaña":   rv["camp_label"],
+                    "Total":     tot_v,
+                    "Nuevas":    int(rv["nuevas"]),
+                    "% Nuevas":  f"{rv['nuevas']/tot_v*100:.1f}%" if tot_v else "—",
+                    "Retenidas": int(rv["retenidas"]),
+                    "% Ret.":    f"{rv['retenidas']/tot_v*100:.1f}%" if tot_v else "—",
+                    "Fugadas":   int(rv["fugadas"]),
+                    "% Fuga":    f"{rv['fugadas']/tot_v*100:.1f}%" if tot_v else "—",
+                    "Inactiva":  int(rv["Inactiva_total"]),
+                    "Mora 1":    int(rv["Mora 1_total"]),
+                    "Mora 2":    int(rv["Mora 2_total"]),
+                    "Mora 3":    int(rv["Mora 3_total"]),
+                    "Saldo":     fmt_currency(rv["saldo_total"]) if saldo_col else "—",
+                })
+            st.dataframe(pd.DataFrame(compact_rows), use_container_width=True, hide_index=True)
 
     # ══════════════════════════════════════════
     # TAB 2 — Matriz de Transición
