@@ -2329,57 +2329,45 @@ def tab_tracking(df_moras: pd.DataFrame | None):
         st.markdown(
             "<div class='kpi-banner' style='margin-bottom:1rem'>"
             "<h2 style='font-size:1.3rem'>Flujo: Inactivas → Mora 1 → Mora 2 → Mora 3</h2>"
-            "<p style='font-size:0.85rem'>Carga el archivo de pendientes de Inactivas (1-14 días) "
-            "para ver cómo evolucionan hacia las categorías de mora.</p></div>",
+            "<p style='font-size:0.85rem'>Seguimiento de cuentas Inactivas (IdSituacion = 0) "
+            "y su progresión hacia Mora 1, Mora 2 y Mora 3.</p></div>",
             unsafe_allow_html=True,
         )
 
-        file_inac = st.file_uploader(
-            "Archivo de Pendientes Inactivas (Excel)",
-            type=["xlsx", "xls"],
-            key="up_inactivas",
-            help="Debe contener una columna NoDama con los números de las damas pendientes de pago (1-14 días de atraso).",
-        )
+        # Las Inactivas ya están en la base de moras (IdSituacion=0 → _mora="Inactiva")
+        # Las usamos como el pool de "pendientes de inactivas" por campaña
+        FI_COLORS = {
+            "Mora1 desde Inactivas": "#7C3AED",
+            "Mora1 Nuevas":          "#16A34A",
+            "Nuevas M2-M3":          "#2563EB",
+            "Permanecen M2":         "#EAB308",
+            "Permanecen M3":         "#F97316",
+            "No continúan":          "#EF4444",
+        }
 
-        pendientes_inac: set | None = None
-        if file_inac:
-            try:
-                df_inac = read_excel_safe(file_inac)
-                nd_inac = _get_nodama_col(df_inac)
-                if nd_inac is None:
-                    nd_inac = df_inac.columns[0]
-                pendientes_inac = set(df_inac[nd_inac].astype(str).str.strip().unique())
-                st.success(f"{len(pendientes_inac):,} NoDamas cargadas desde el archivo de Inactivas.")
-            except Exception as ex:
-                st.error(f"No se pudo leer el archivo: {ex}")
+        # Pool global de Inactivas: todas las NoDamas que aparecen como Inactiva en cualquier campaña
+        pendientes_inac = set().union(*[mora_sets[(c, "Inactiva")] for c in camps_n])
 
-        if pendientes_inac is None:
+        if not pendientes_inac:
             st.info(
-                "Sube el archivo de pendientes de Inactivas para activar este análisis.\n\n"
-                "Si no tienes el archivo, el análisis de los otros subtabs ya incluye la categoría "
-                "**Inactiva** (IdSituacion = 0) dentro de la base de moras."
+                "No se encontraron cuentas Inactivas (IdSituacion = 0) en la base de moras. "
+                "Verifica que el archivo contenga la columna **IdSituacion**."
             )
         else:
             # ── Calcular métricas por campaña ────────────────────────────
-            FI_COLORS = {
-                "Mora1 desde Inactivas": "#7C3AED",
-                "Mora1 Nuevas":          "#16A34A",
-                "Nuevas M2-M3":          "#2563EB",
-                "Permanecen M2":         "#EAB308",
-                "Permanecen M3":         "#F97316",
-                "No continúan":          "#EF4444",
-            }
-
             fi_rows = []
             for i, c in enumerate(camps_n):
                 prev_c = camps_n[i - 1] if i > 0 else None
                 m1 = mora_sets[(c, "Mora 1")]
                 m2 = mora_sets[(c, "Mora 2")]
                 m3 = mora_sets[(c, "Mora 3")]
-                all_cur = sets[c]
+                # Inactivas de la campaña anterior (las que pueden pasar a Mora 1)
+                inac_prev = mora_sets[(prev_c, "Inactiva")] if prev_c else set()
+                all_cur  = sets[c]
 
-                mora1_desde_inac = m1 & pendientes_inac
-                mora1_nueva      = m1 - pendientes_inac
+                # Mora 1: viene de Inactivas campaña anterior vs es nueva entrada
+                mora1_desde_inac = m1 & inac_prev if prev_c else set()
+                mora1_nueva      = m1 - inac_prev if prev_c else m1
 
                 if prev_c:
                     m1_prev  = mora_sets[(prev_c, "Mora 1")]
@@ -2402,8 +2390,9 @@ def tab_tracking(df_moras: pd.DataFrame | None):
                 total_reportado = activos + len(no_continuan)
 
                 fi_rows.append({
-                    "camp_n":           c,
-                    "Campaña":          f"C{c}",
+                    "camp_n":                c,
+                    "Campaña":               f"C{c}",
+                    "Inactivas (camp)":      len(mora_sets[(c, "Inactiva")]),
                     "Mora1 desde Inactivas": len(mora1_desde_inac),
                     "Mora1 Nuevas":          len(mora1_nueva),
                     "Nuevas M2-M3":          len(nuevas_m2_m3),
@@ -2412,8 +2401,8 @@ def tab_tracking(df_moras: pd.DataFrame | None):
                     "No continúan":          len(no_continuan),
                     "Activos":               activos,
                     "Total":                 total_reportado,
-                    # pct helpers
-                    "_m1_inac_pct": round(len(mora1_desde_inac) / len(m1) * 100, 1) if m1 else 0,
+                    "_m1_inac_pct": round(len(mora1_desde_inac) / len(inac_prev) * 100, 1)
+                                    if inac_prev else 0,
                     "_perm_m2_pct": round(len(permanecen_m2) / len(mora_sets[(prev_c, "Mora 1")]) * 100, 1)
                                     if prev_c and mora_sets[(prev_c, "Mora 1")] else 0,
                     "_perm_m3_pct": round(len(permanecen_m3) / len(mora_sets[(prev_c, "Mora 2")]) * 100, 1)
@@ -2426,15 +2415,17 @@ def tab_tracking(df_moras: pd.DataFrame | None):
 
             # ── KPIs ──────────────────────────────────────────────────────
             total_m1_all  = sum(len(mora_sets[(c, "Mora 1")]) for c in camps_n)
+            total_inac_all = sum(len(mora_sets[(c, "Inactiva")]) for c in camps_n)
             total_inac_m1 = fi_df["Mora1 desde Inactivas"].sum()
+            avg_conv      = fi_df["_m1_inac_pct"].iloc[1:].mean() if len(fi_df) > 1 else 0
             avg_perm_m2   = fi_df["_perm_m2_pct"].iloc[1:].mean() if len(fi_df) > 1 else 0
             avg_perm_m3   = fi_df["_perm_m3_pct"].iloc[1:].mean() if len(fi_df) > 1 else 0
             avg_fuga      = fi_df["_fuga_pct"].iloc[1:].mean() if len(fi_df) > 1 else 0
 
             ki1, ki2, ki3, ki4, ki5 = st.columns(5)
-            with ki1: st.metric("Pool Inactivas", f"{len(pendientes_inac):,}")
-            with ki2: st.metric("Mora1 desde Inactivas", f"{total_inac_m1:,}",
-                                delta=f"{total_inac_m1/total_m1_all*100:.1f}% del total M1" if total_m1_all else None)
+            with ki1: st.metric("Total Inactivas (todas las camps)", f"{total_inac_all:,}")
+            with ki2: st.metric("Inactivas → Mora1 (acumulado)", f"{total_inac_m1:,}",
+                                delta=f"Conv. prom. {avg_conv:.1f}%" if avg_conv else None)
             with ki3: st.metric("Permanencia M1→M2 prom.", f"{avg_perm_m2:.1f}%")
             with ki4: st.metric("Permanencia M2→M3 prom.", f"{avg_perm_m3:.1f}%")
             with ki5: st.metric("Fuga promedio", f"{avg_fuga:.1f}%")
@@ -2442,8 +2433,9 @@ def tab_tracking(df_moras: pd.DataFrame | None):
             st.markdown("<br>", unsafe_allow_html=True)
 
             # ── Tabla resumen ─────────────────────────────────────────────
-            cat_cols = ["Mora1 desde Inactivas", "Mora1 Nuevas", "Nuevas M2-M3",
-                        "Permanecen M2", "Permanecen M3", "No continúan", "Total"]
+            cat_cols = ["Inactivas (camp)", "Mora1 desde Inactivas", "Mora1 Nuevas",
+                        "Nuevas M2-M3", "Permanecen M2", "Permanecen M3",
+                        "No continúan", "Total"]
             display_df = fi_df[["Campaña"] + cat_cols].copy()
             totals = {"Campaña": "TOTAL"}
             for col in cat_cols:
@@ -2454,7 +2446,7 @@ def tab_tracking(df_moras: pd.DataFrame | None):
 
             st.markdown("<br>", unsafe_allow_html=True)
 
-            # ── Gráfica: barras apiladas ──────────────────────────────────
+            # ── Gráficas ──────────────────────────────────────────────────
             col_g1, col_g2 = st.columns(2)
 
             with col_g1:
@@ -2463,9 +2455,7 @@ def tab_tracking(df_moras: pd.DataFrame | None):
                                 "Permanecen M2", "Permanecen M3", "No continúan"]
                 for col in stacked_cols:
                     fig_fi.add_trace(go.Bar(
-                        x=fi_df["Campaña"],
-                        y=fi_df[col],
-                        name=col,
+                        x=fi_df["Campaña"], y=fi_df[col], name=col,
                         marker_color=FI_COLORS[col],
                         hovertemplate=f"<b>%{{x}}</b><br>{col}: %{{y:,}}<extra></extra>",
                     ))
@@ -2484,26 +2474,32 @@ def tab_tracking(df_moras: pd.DataFrame | None):
             with col_g2:
                 fig_perm = go.Figure()
                 fig_perm.add_trace(go.Scatter(
+                    x=fi_df["Campaña"], y=fi_df["Inactivas (camp)"],
+                    mode="lines+markers", name="Inactivas",
+                    line=dict(color="#94A3B8", width=2),
+                    hovertemplate="<b>%{x}</b><br>Inactivas: %{y:,}<extra></extra>",
+                ))
+                fig_perm.add_trace(go.Scatter(
+                    x=fi_df["Campaña"], y=fi_df["Mora1 desde Inactivas"],
+                    mode="lines+markers", name="→ Mora1",
+                    line=dict(color=FI_COLORS["Mora1 desde Inactivas"], width=2),
+                    hovertemplate="<b>%{x}</b><br>Mora1 desde Inactivas: %{y:,}<extra></extra>",
+                ))
+                fig_perm.add_trace(go.Scatter(
                     x=fi_df["Campaña"], y=fi_df["Permanecen M2"],
-                    mode="lines+markers", name="Permanecen M2",
+                    mode="lines+markers", name="Perm. M2",
                     line=dict(color=FI_COLORS["Permanecen M2"], width=2),
                     hovertemplate="<b>%{x}</b><br>Permanecen M2: %{y:,}<extra></extra>",
                 ))
                 fig_perm.add_trace(go.Scatter(
                     x=fi_df["Campaña"], y=fi_df["Permanecen M3"],
-                    mode="lines+markers", name="Permanecen M3",
+                    mode="lines+markers", name="Perm. M3",
                     line=dict(color=FI_COLORS["Permanecen M3"], width=2),
                     hovertemplate="<b>%{x}</b><br>Permanecen M3: %{y:,}<extra></extra>",
                 ))
-                fig_perm.add_trace(go.Scatter(
-                    x=fi_df["Campaña"], y=fi_df["No continúan"],
-                    mode="lines+markers", name="No continúan",
-                    line=dict(color=FI_COLORS["No continúan"], width=2, dash="dot"),
-                    hovertemplate="<b>%{x}</b><br>No continúan: %{y:,}<extra></extra>",
-                ))
                 fig_perm.update_layout(
                     **PLOTLY_LAYOUT,
-                    title_text="Permanencia y fuga entre campañas",
+                    title_text="Evolución: Inactivas → Moras",
                     title_font=dict(size=12, color=COLORS["primary"]),
                     xaxis=dict(title="Campaña", **_AXIS_DEFAULTS),
                     yaxis=dict(title="Cuentas", **_AXIS_DEFAULTS),
@@ -2514,22 +2510,25 @@ def tab_tracking(df_moras: pd.DataFrame | None):
                 st.plotly_chart(fig_perm, use_container_width=True, key="fi_line_perm")
 
             # ── Tabla de tasas ────────────────────────────────────────────
-            st.markdown("#### Tasas de permanencia y fuga por transición")
+            st.markdown("#### Tasas de conversión y permanencia por transición")
             perm_rows = []
             for i, row in fi_df.iterrows():
                 if row["camp_n"] == camps_n[0]:
                     continue
-                prev_label = f"C{camps_n[i-1]}"
+                prev_c_i = camps_n[i - 1]
                 perm_rows.append({
-                    "Transición":         f"{prev_label} → {row['Campaña']}",
-                    "M1 anterior":        len(mora_sets[(camps_n[i-1], "Mora 1")]),
-                    "Permanecen M2":      row["Permanecen M2"],
-                    "Tasa perm. M2":      f"{row['_perm_m2_pct']:.1f}%",
-                    "M2 anterior":        len(mora_sets[(camps_n[i-1], "Mora 2")]),
-                    "Permanecen M3":      row["Permanecen M3"],
-                    "Tasa perm. M3":      f"{row['_perm_m3_pct']:.1f}%",
-                    "No continúan":       row["No continúan"],
-                    "Tasa fuga":          f"{row['_fuga_pct']:.1f}%",
+                    "Transición":              f"C{prev_c_i} → {row['Campaña']}",
+                    "Inactivas anterior":      len(mora_sets[(prev_c_i, "Inactiva")]),
+                    "→ Mora1":                 row["Mora1 desde Inactivas"],
+                    "Conv. Inac→M1":           f"{row['_m1_inac_pct']:.1f}%",
+                    "M1 anterior":             len(mora_sets[(prev_c_i, "Mora 1")]),
+                    "Permanecen M2":           row["Permanecen M2"],
+                    "Tasa perm. M2":           f"{row['_perm_m2_pct']:.1f}%",
+                    "M2 anterior":             len(mora_sets[(prev_c_i, "Mora 2")]),
+                    "Permanecen M3":           row["Permanecen M3"],
+                    "Tasa perm. M3":           f"{row['_perm_m3_pct']:.1f}%",
+                    "No continúan":            row["No continúan"],
+                    "Tasa fuga":               f"{row['_fuga_pct']:.1f}%",
                 })
             if perm_rows:
                 st.dataframe(pd.DataFrame(perm_rows), use_container_width=True, hide_index=True)
