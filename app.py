@@ -1450,11 +1450,6 @@ def tab_flujo(metrics: dict):
     chart_card("Vamos a tiempo con la meta de cobranza",
                plot_bullet(metrics),
                key="bullet", height_normal=280, height_expanded=400)
-    st.markdown("<br>", unsafe_allow_html=True)
-    # Waterfall
-    chart_card("Como va bajando la deuda campaña a campaña",
-               plot_waterfall(metrics["df"], metrics["valor_col"]),
-               key="waterfall", height_normal=420, height_expanded=600)
     st.divider()
 
     # ── KPIs: cambio de temporalidad ─────────────────────────────────
