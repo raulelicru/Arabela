@@ -225,7 +225,7 @@ PLOTLY_LAYOUT = dict(
     paper_bgcolor=COLORS["bg"],
     plot_bgcolor="#f9fafb",
     font=dict(color=COLORS["text"], family="Inter, sans-serif", size=12),
-    margin=dict(l=40, r=20, t=50, b=40),
+    margin=dict(l=40, r=20, t=50, b=60),
     hovermode="x unified",
 )
 # Defaults de ejes — aplicar por separado cuando no se sobreescriben
@@ -670,7 +670,7 @@ def plot_columnas_agrupadas(df: pd.DataFrame, valor_col: str) -> go.Figure:
         barmode="group",
         xaxis_title="Campaña", yaxis_title="Monto ($)",
         height=380,
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+        legend=dict(orientation="h", yanchor="top", y=-0.18, xanchor="center", x=0.5),
     )
     return fig
 
@@ -715,7 +715,7 @@ def plot_100pct_apilado(df: pd.DataFrame) -> go.Figure:
         xaxis_title="Campaña", yaxis_title="% de Damas",
         yaxis_range=[0, 110],
         height=360,
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+        legend=dict(orientation="h", yanchor="top", y=-0.18, xanchor="center", x=0.5),
     )
     return fig
 
@@ -836,7 +836,7 @@ def plot_linea_tendencia(df: pd.DataFrame, valor_col: str, fecha_col: str | None
         title_font=dict(size=14, color=COLORS["primary"]),
         xaxis_title=x_title, yaxis_title="Monto ($)",
         height=380,
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+        legend=dict(orientation="h", yanchor="top", y=-0.18, xanchor="center", x=0.5),
     )
     return fig
 
@@ -870,7 +870,7 @@ def plot_area_apilada(df: pd.DataFrame, valor_col: str, fecha_col: str | None = 
         title_font=dict(size=14, color=COLORS["primary"]),
         xaxis_title=x_title, yaxis_title="Monto Total ($)",
         height=380,
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+        legend=dict(orientation="h", yanchor="top", y=-0.18, xanchor="center", x=0.5),
     )
     return fig
 
@@ -1892,7 +1892,7 @@ def tab_tracking(df_moras: pd.DataFrame | None):
             title_font=dict(size=13, color=COLORS["primary"]),
             xaxis=dict(type="category", **_AXIS_DEFAULTS),
             yaxis=dict(title="Damas", **_AXIS_DEFAULTS),
-            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+            legend=dict(orientation="h", yanchor="top", y=-0.18, xanchor="center", x=0.5),
         )
         col_c1, col_c2 = st.columns(2)
 
@@ -1933,7 +1933,7 @@ def tab_tracking(df_moras: pd.DataFrame | None):
             yaxis2=dict(title="% que se va", overlaying="y", side="right",
                         ticksuffix="%", range=[0, 120],
                         showgrid=False, **_AXIS_DEFAULTS),
-            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+            legend=dict(orientation="h", yanchor="top", y=-0.18, xanchor="center", x=0.5),
         )
         with col_c2:
             chart_card("Tendencias de cohorte", fig_cohort, key="trk_cohort", height_normal=380)
@@ -2083,7 +2083,7 @@ def tab_tracking(df_moras: pd.DataFrame | None):
             title_text=f"Resumen de {sel_camp}",
             title_font=dict(size=12, color=COLORS["primary"]),
             xaxis=dict(**_AXIS_DEFAULTS), yaxis=dict(title="Damas", **_AXIS_DEFAULTS),
-            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+            legend=dict(orientation="h", yanchor="top", y=-0.18, xanchor="center", x=0.5),
             height=340,
         )
         st.plotly_chart(fig_bar, use_container_width=True, key=f"trk_cbar_{sel_camp}")
@@ -2139,7 +2139,7 @@ def tab_tracking(df_moras: pd.DataFrame | None):
             title_font=dict(size=13, color=COLORS["primary"]),
             xaxis=dict(type="category", **_AXIS_DEFAULTS),
             yaxis=dict(title="Damas", **_AXIS_DEFAULTS),
-            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+            legend=dict(orientation="h", yanchor="top", y=-0.18, xanchor="center", x=0.5),
         )
         chart_card(f"Tendencia {sel_mora}", fig_mora_line, key=f"trk_ml_{sel_mora}", height_normal=380)
 
@@ -2161,7 +2161,7 @@ def tab_tracking(df_moras: pd.DataFrame | None):
             title_font=dict(size=13, color=COLORS["primary"]),
             xaxis=dict(type="category", **_AXIS_DEFAULTS),
             yaxis=dict(title="Damas", **_AXIS_DEFAULTS),
-            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+            legend=dict(orientation="h", yanchor="top", y=-0.18, xanchor="center", x=0.5),
         )
         chart_card("Todos los estados", fig_all, key="trk_all_mora", height_normal=380)
 
@@ -2213,7 +2213,7 @@ def tab_tracking(df_moras: pd.DataFrame | None):
                     xaxis=dict(type="category", categoryorder="array",
                                categoryarray=[f"C{c}" for c in range(1, 11)], **_AXIS_DEFAULTS),
                     yaxis=dict(title="Cuentas", **_AXIS_DEFAULTS),
-                    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+                    legend=dict(orientation="h", yanchor="top", y=-0.18, xanchor="center", x=0.5),
                     height=360,
                 )
                 st.plotly_chart(fig_exit, use_container_width=True, key="trk_exit_bar")
@@ -2477,8 +2477,8 @@ def tab_tracking(df_moras: pd.DataFrame | None):
                     title_font=dict(size=12, color=COLORS["primary"]),
                     xaxis=dict(title="Campaña", **_AXIS_DEFAULTS),
                     yaxis=dict(title="Cuentas", **_AXIS_DEFAULTS),
-                    legend=dict(orientation="h", yanchor="bottom", y=1.02,
-                                xanchor="right", x=1, font=dict(size=9)),
+                    legend=dict(orientation="h", yanchor="top", y=-0.18,
+                                xanchor="center", x=0.5, font=dict(size=9)),
                     height=380,
                 )
                 st.plotly_chart(fig_fi, use_container_width=True, key="fi_bar_stacked")
@@ -2515,8 +2515,8 @@ def tab_tracking(df_moras: pd.DataFrame | None):
                     title_font=dict(size=12, color=COLORS["primary"]),
                     xaxis=dict(title="Campaña", **_AXIS_DEFAULTS),
                     yaxis=dict(title="Cuentas", **_AXIS_DEFAULTS),
-                    legend=dict(orientation="h", yanchor="bottom", y=1.02,
-                                xanchor="right", x=1, font=dict(size=9)),
+                    legend=dict(orientation="h", yanchor="top", y=-0.18,
+                                xanchor="center", x=0.5, font=dict(size=9)),
                     height=380,
                 )
                 st.plotly_chart(fig_perm, use_container_width=True, key="fi_line_perm")
