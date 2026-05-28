@@ -1584,7 +1584,7 @@ def tab_flujo(metrics: dict):
 
                     # Orden de rutas: mayor número de moras primero
                     orden_rutas = ruta_dist[ruta_col].tolist()
-                    camps_sorted = sorted(ruta_camp["Campaña"].unique())
+                    camps_sorted = _sort_camps(ruta_camp["Campaña"].unique())
                     pivot_pct = (
                         ruta_camp.pivot_table(index=ruta_col, columns="Campaña",
                                               values="% en ruta", aggfunc="sum", fill_value=0)
