@@ -1058,10 +1058,10 @@ def plot_bullet(metrics: dict) -> go.Figure:
     ))
     for meta in metas:
         fig.add_shape(type="line", x0=meta, x1=meta, y0=-0.5, y1=0.5,
-                      line=dict(color="#000000", width=2, dash="dash"),
+                      line=dict(color=COLORS["primary"], width=2, dash="dash"),
                       row=1, col=1)
         fig.add_annotation(x=meta, y=0.55, text=f"Meta {meta}%",
-                           showarrow=False, font=dict(size=10, color=COLORS["muted"]),
+                           showarrow=False, font=dict(size=10, color=COLORS["primary"]),
                            xanchor="center")
     fig.update_layout(
         **PLOTLY_LAYOUT,
