@@ -1484,7 +1484,6 @@ def tab_flujo(metrics: dict):
 
         if ruta_col and nodama_mora and nodama_col:
             st.divider()
-            st.markdown("### Que ruta tiene mas moras")
 
             # Cruzar moras con pendientes para obtener el monto
             pendientes  = metrics["df"][metrics["df"]["Estado_Pago"] == "Pendiente"].copy()
