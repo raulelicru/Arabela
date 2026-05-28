@@ -1464,7 +1464,7 @@ def tab_flujo(metrics: dict):
         total_pend = len(pend_df)
         n_camps    = pend_df[camp_col].astype(str).nunique()
         c1, c2     = st.columns(2)
-        with c1: st.metric(" Damas que cambiaron de temporalidad", f"{total_pend:,}")
+        with c1: st.metric(" Damas reclasificadas por temporalidad", f"{total_pend:,}")
         with c2: st.metric(" Cierre de Campaña",                   f"{n_camps}")
         st.markdown("<br>", unsafe_allow_html=True)
 
