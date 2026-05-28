@@ -749,10 +749,10 @@ def plot_funnel(df: pd.DataFrame, saldo_col: str) -> go.Figure:
 
 
 def _fmt_camp(code: str) -> str:
-    """202608 → 'Camp. 08'  (solo los últimos 2 dígitos son el número de campaña)."""
+    """202608 → 'C-8'  (solo los últimos 2 dígitos son el número de campaña)."""
     c = str(code).strip()
     if len(c) == 6 and c.isdigit():
-        return f"Camp. {c[4:]}"
+        return f"C-{int(c[4:])}"
     return c
 
 
@@ -1744,7 +1744,7 @@ def tab_tracking(df_moras: pd.DataFrame | None):
     df = df[df["_cn"] <= 10].copy()
 
     camps_n      = sorted(df["_cn"].unique())
-    camp_labels  = [f"C{c}" for c in camps_n]
+    camp_labels  = [f"C-{c}" for c in camps_n]
     pool         = set(df[nodama_col].unique())
     pool_size    = len(pool)
 
@@ -1772,7 +1772,7 @@ def tab_tracking(df_moras: pd.DataFrame | None):
         fugadas     = (total_set - set().union(*[sets[cx] for cx in future])) if future else set()
 
         row = {
-            "camp_n": c, "camp_label": f"C{c}",
+            "camp_n": c, "camp_label": f"C-{c}",
             "pool_size": pool_size,
             "total": len(total_set),
             "pct_pool": round(len(total_set) / total_all_camps * 100, 1) if total_all_camps else 0,
@@ -1820,7 +1820,7 @@ def tab_tracking(df_moras: pd.DataFrame | None):
         joined = df1.to_frame("origen").join(df2.to_frame("destino"), how="inner")
         for (orig, dest), cnt in joined.groupby(["origen", "destino"]).size().items():
             transitions.append({
-                "de": f"C{c1}", "a": f"C{c2}",
+                "de": f"C-{c1}", "a": f"C-{c2}",
                 "origen": orig, "destino": dest, "cuentas": int(cnt),
             })
     trans_df = pd.DataFrame(transitions) if transitions else pd.DataFrame()
@@ -1834,7 +1834,7 @@ def tab_tracking(df_moras: pd.DataFrame | None):
             sub = df[(df[nodama_col] == dama) & (df["_cn"] == lc)]
             exits.append({
                 "NoDama": dama,
-                "Última Campaña": f"C{lc}",
+                "Última Campaña": f"C-{lc}",
                 "Estado al Salir": sub["_mora"].iloc[0] if len(sub) > 0 else "N/A",
                 "Saldo al Salir": float(sub[saldo_col].iloc[0]) if (saldo_col and len(sub) > 0) else 0,
             })
@@ -1996,7 +1996,7 @@ def tab_tracking(df_moras: pd.DataFrame | None):
         sel_camp = st.selectbox("Seleccionar campaña:", sdf["camp_label"].tolist(), key="trk_sel_camp")
         r = sdf[sdf["camp_label"] == sel_camp].iloc[0]
         tot = int(r["total"])
-        prev_lbl = f"C{int(r['camp_n'])-1}" if r["camp_n"] > 1 else None
+        prev_lbl = f"C-{int(r['camp_n'])-1}" if r["camp_n"] > 1 else None
 
         # KPIs
         c1, c2, c3, c4, c5 = st.columns(5)
@@ -2214,7 +2214,7 @@ def tab_tracking(df_moras: pd.DataFrame | None):
                     title_text="Damas que salieron de la cartera por campaña",
                     title_font=dict(size=12, color=COLORS["primary"]),
                     xaxis=dict(type="category", categoryorder="array",
-                               categoryarray=[f"C{c}" for c in range(1, 11)], **_AXIS_DEFAULTS),
+                               categoryarray=[f"C-{c}" for c in range(1, 11)], **_AXIS_DEFAULTS),
                     yaxis=dict(title="Cuentas", **_AXIS_DEFAULTS),
                     legend=dict(orientation="h", yanchor="top", y=-0.18, xanchor="center", x=0.5),
                     height=360,
@@ -2254,7 +2254,7 @@ def tab_tracking(df_moras: pd.DataFrame | None):
             st.info("No hay datos de transición disponibles.")
         else:
             trans_options = [
-                f"C{camps_n[i]} → C{camps_n[i+1]}" for i in range(len(camps_n)-1)
+                f"C-{camps_n[i]} → C-{camps_n[i+1]}" for i in range(len(camps_n)-1)
             ]
             sel_t = st.selectbox("Seleccionar transición:", trans_options, key="trk_sel_trans")
             c_from = sel_t.split("→")[0].strip()
@@ -2407,7 +2407,7 @@ def tab_tracking(df_moras: pd.DataFrame | None):
 
                 fi_rows.append({
                     "camp_n":                c,
-                    "Campaña":               f"C{c}",
+                    "Campaña":               f"C-{c}",
                     "Inactivas (camp)":      len(mora_sets[(c, "Inactiva")]),
                     "Mora1 desde Inactivas": len(mora1_desde_inac),
                     "Mora1 Nuevas":          len(mora1_nueva),
@@ -2532,7 +2532,7 @@ def tab_tracking(df_moras: pd.DataFrame | None):
                     continue
                 prev_c_i = camps_n[i - 1]
                 perm_rows.append({
-                    "Transición":              f"C{prev_c_i} → {row['Campaña']}",
+                    "Transición":              f"C-{prev_c_i} → {row['Campaña']}",
                     "Inactivas anterior":      len(mora_sets[(prev_c_i, "Inactiva")]),
                     "→ Mora1":                 row["Mora1 desde Inactivas"],
                     "Conv. Inac→M1":           f"{row['_m1_inac_pct']:.1f}%",
