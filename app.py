@@ -1588,19 +1588,19 @@ def tab_flujo(metrics: dict):
                     pivot_pct = (
                         ruta_camp.pivot_table(index=ruta_col, columns="Campaña",
                                               values="% en ruta", aggfunc="sum", fill_value=0)
-                        .reindex(orden_rutas, fill_value=0)
+                        .reindex(index=orden_rutas, columns=camps_sorted, fill_value=0)
                     )
                     pivot_cnt = (
                         ruta_camp.pivot_table(index=ruta_col, columns="Campaña",
                                               values="Damas", aggfunc="sum", fill_value=0)
-                        .reindex(orden_rutas, fill_value=0)
+                        .reindex(index=orden_rutas, columns=camps_sorted, fill_value=0)
                     )
 
                     # Pivot: filas = ruta (orden: más moras primero), columnas = campaña
                     pivot_heat = (
                         ruta_camp.pivot_table(index=ruta_col, columns="Campaña",
                                               values="Damas", aggfunc="sum", fill_value=0)
-                        .reindex(orden_rutas, fill_value=0)
+                        .reindex(index=orden_rutas, columns=camps_sorted, fill_value=0)
                     )
                     pivot_heat_pct = (
                         pivot_heat.div(pivot_heat.sum(axis=0), axis=1) * 100
