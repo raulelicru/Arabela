@@ -965,7 +965,7 @@ def plot_heatmap(df: pd.DataFrame, valor_col: str, fecha_col: str | None = None)
     fig = go.Figure(go.Heatmap(
         z=z, x=x_labels, y=anios,
         text=text_z, texttemplate="%{text}",
-        textfont=dict(size=12, color="white"),
+        textfont=dict(size=12, color=COLORS["primary"]),
         colorscale=[[0, COLORS["danger"]], [0.5, COLORS["warning"]], [1, COLORS["success"]]],
         zmin=0, zmax=100,
         colorbar=dict(title="% Cobrado", ticksuffix="%"),
