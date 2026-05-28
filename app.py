@@ -1557,40 +1557,6 @@ def tab_flujo(metrics: dict):
                     )
                     chart_card("Cuanto dinero en mora tiene cada ruta", fig_ruta_m, key="ruta_moras_monto", height_normal=420)
 
-                # Gráfica resumen: barras horizontales con etiquetas de monto
-                st.markdown("<br>", unsafe_allow_html=True)
-                rutas_lbl = [f"Ruta {r}" for r in ruta_dist[ruta_col]]
-                has_monto  = valor_col and "Monto" in ruta_dist.columns
-                bar_text   = [
-                    f"{d:,}  ·  ${m/1e6:.1f}M" if has_monto else f"{d:,}"
-                    for d, m in zip(ruta_dist["Damas"],
-                                    ruta_dist["Monto"] if has_monto else [0]*len(ruta_dist))
-                ]
-                colors_bar = [
-                    PASTEL_SEQ[i % len(PASTEL_SEQ)] for i in range(len(rutas_lbl))
-                ]
-                fig_resumen = go.Figure(go.Bar(
-                    y=rutas_lbl, x=ruta_dist["Damas"],
-                    orientation="h",
-                    marker_color=colors_bar,
-                    text=bar_text,
-                    textposition="outside",
-                    textfont=dict(size=12, color=COLORS["text"]),
-                    hovertemplate=(
-                        "<b>%{y}</b><br>Damas en mora: %{x:,}<br>"
-                        + ("Monto: $%{customdata:,.0f}<extra></extra>"
-                           if has_monto else "<extra></extra>")
-                    ),
-                    customdata=ruta_dist["Monto"] if has_monto else None,
-                ))
-                fig_resumen.update_layout(
-                    **{**PLOTLY_LAYOUT, "margin": dict(l=80, r=160, t=20, b=20)},
-                    height=max(340, len(rutas_lbl) * 42),
-                    xaxis=dict(visible=False, **_AXIS_DEFAULTS),
-                    yaxis=dict(autorange="reversed", **_AXIS_DEFAULTS),
-                )
-                st.plotly_chart(fig_resumen, use_container_width=True, key="plot_resumen_ruta",
-                                config={"displayModeBar": False})
 
                 # ── Desglose de campañas por ruta ──────────────────────
                 camp_col_ruta = _find_col(df_cruce, ["aniocampaña", "aniocampana", "anio", "año", "campaña"])
