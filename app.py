@@ -458,6 +458,13 @@ def load_and_clean_data(df_cartera: pd.DataFrame, df_saldos: pd.DataFrame,
             fecha_fin_col = candidate
             break
 
+    # Drop join key and downcast numeric columns to reduce memory footprint
+    df_merged = df_merged.drop(columns=["_key"], errors="ignore")
+    for col in df_merged.select_dtypes(include=["int64"]).columns:
+        df_merged[col] = pd.to_numeric(df_merged[col], downcast="integer")
+    for col in df_merged.select_dtypes(include=["float64"]).columns:
+        df_merged[col] = pd.to_numeric(df_merged[col], downcast="float")
+
     return {
         "merged":           df_merged,
         "saldo_col":        saldo_col,
@@ -1334,16 +1341,23 @@ def render_sidebar(data: dict | None) -> dict:
 
 
 def apply_filters(df: pd.DataFrame, filters: dict) -> pd.DataFrame:
-    dff = df.copy()
-    # Filtro por Año Campaña Saldo (multiselect)
-    camp_col = filters.get("camp_col")
+    camp_col  = filters.get("camp_col")
     seleccion = filters.get("campañas", [])
-    if camp_col and seleccion and camp_col in dff.columns:
-        dff = dff[dff[camp_col].astype(str).isin(seleccion)]
-    # Filtro por estado
-    if filters.get("estado") and filters["estado"] != "Todos":
-        dff = dff[dff["Estado_Pago"] == filters["estado"]]
-    return dff
+    estado    = filters.get("estado", "Todos")
+
+    camp_active   = bool(camp_col and seleccion and camp_col in df.columns)
+    estado_active = bool(estado and estado != "Todos")
+
+    if not camp_active and not estado_active:
+        return df.copy()  # full copy so tabs can mutate columns safely
+
+    mask = pd.Series(True, index=df.index)
+    if camp_active:
+        mask &= df[camp_col].astype(str).isin(seleccion)
+    if estado_active:
+        mask &= df["Estado_Pago"] == estado
+
+    return df.loc[mask].copy()
 
 
 # ─────────────────────────────────────────────
@@ -2658,11 +2672,14 @@ def main():
             with st.spinner("Cruzando Cartera × Saldos Actualizados…"):
                 try:
                     st.session_state.data = load_and_clean_data(
-                        st.session_state.df_cartera.copy(),
-                        st.session_state.df_saldos.copy(),
+                        st.session_state.df_cartera,
+                        st.session_state.df_saldos,
                         mapping,
                     )
                     st.session_state.mapping = mapping
+                    # Free the raw uploaded DataFrames — no longer needed after merge
+                    st.session_state.df_cartera = None
+                    st.session_state.df_saldos = None
                     n = len(st.session_state.data["merged"])
                     st.success(f" Cruce completado — **{n:,}** registros consolidados.")
                     st.rerun()
