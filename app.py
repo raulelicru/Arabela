@@ -1004,7 +1004,7 @@ def plot_bullet(metrics: dict) -> go.Figure:
     pct   = metrics["pct_cumplimiento"]
     total = metrics["monto_total"]
     cob   = metrics["monto_cobrado"]
-    metas = [50, 60]
+    metas = [50, 63]
     fig = make_subplots(rows=1, cols=1)
     fig.add_trace(go.Bar(
         x=[pct], y=["% Damas que pagaron"],
