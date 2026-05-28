@@ -1468,9 +1468,10 @@ def tab_flujo(metrics: dict):
         with c2: st.metric(" Cierre de Campaña",                   f"{n_camps}")
         st.markdown("<br>", unsafe_allow_html=True)
 
-    chart_card("Cuantas damas deben en cada campaña",
-               plot_damas_por_temporalidad(metrics["df"]),
-               key="cambio_temp", height_normal=400, height_expanded=580)
+    fig_temp = plot_damas_por_temporalidad(metrics["df"])
+    fig_temp.update_layout(height=400)
+    st.plotly_chart(fig_temp, use_container_width=True, key="plot_cambio_temp",
+                    config={"displayModeBar": False, "scrollZoom": True})
     st.markdown("<br>", unsafe_allow_html=True)
 
     # ── Análisis de Rutas (viene del archivo de moras) ───────────────
