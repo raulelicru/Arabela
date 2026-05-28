@@ -1450,6 +1450,11 @@ def tab_flujo(metrics: dict):
     chart_card("Vamos a tiempo con la meta de cobranza",
                plot_bullet(metrics),
                key="bullet", height_normal=280, height_expanded=400)
+    st.markdown("<br>", unsafe_allow_html=True)
+    fig_wf = plot_waterfall(metrics["df"], metrics["valor_col"])
+    fig_wf.update_layout(height=420)
+    st.plotly_chart(fig_wf, use_container_width=True, key="plot_waterfall",
+                    config={"displayModeBar": False, "scrollZoom": True})
     st.divider()
 
     # ── KPIs: cambio de temporalidad ─────────────────────────────────
