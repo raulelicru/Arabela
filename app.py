@@ -1557,15 +1557,40 @@ def tab_flujo(metrics: dict):
                     )
                     chart_card("Cuanto dinero en mora tiene cada ruta", fig_ruta_m, key="ruta_moras_monto", height_normal=420)
 
-                # Tabla resumen
+                # Gráfica resumen: barras horizontales doble eje (damas + monto)
                 st.markdown("<br>", unsafe_allow_html=True)
-                tabla_ruta = ruta_dist.rename(columns={
-                    ruta_col: "Ruta", "Damas": "Damas en Mora",
-                    "Monto": "Monto en Mora", "% del total": "% del Total"
-                })
-                if "Monto en Mora" in tabla_ruta.columns:
-                    tabla_ruta["Monto en Mora"] = tabla_ruta["Monto en Mora"].apply(lambda x: f"${x:,.2f}")
-                st.dataframe(tabla_ruta, use_container_width=True, hide_index=True)
+                rutas_lbl = [f"Ruta {r}" for r in ruta_dist[ruta_col]]
+                fig_resumen = go.Figure()
+                fig_resumen.add_trace(go.Bar(
+                    y=rutas_lbl, x=ruta_dist["Damas"],
+                    orientation="h", name="Damas en Mora",
+                    marker_color=COLORS["accent"],
+                    text=ruta_dist["Damas"].astype(str),
+                    textposition="auto",
+                    hovertemplate="<b>%{y}</b><br>Damas: %{x:,}<extra></extra>",
+                ))
+                if valor_col and "Monto" in ruta_dist.columns:
+                    fig_resumen.add_trace(go.Scatter(
+                        y=rutas_lbl, x=ruta_dist["Monto"],
+                        mode="markers+text",
+                        name="Monto en Mora",
+                        marker=dict(color=COLORS["primary"], size=10, symbol="diamond"),
+                        text=ruta_dist["Monto"].apply(lambda v: f"${v/1e6:.1f}M" if v >= 1e6 else f"${v/1e3:.0f}K"),
+                        textposition="middle right",
+                        xaxis="x2",
+                        hovertemplate="<b>%{y}</b><br>Monto: $%{x:,.0f}<extra></extra>",
+                    ))
+                fig_resumen.update_layout(
+                    **PLOTLY_LAYOUT,
+                    height=max(320, len(rutas_lbl) * 38),
+                    barmode="overlay",
+                    xaxis=dict(title="Damas en Mora", **_AXIS_DEFAULTS),
+                    xaxis2=dict(title="Monto en Mora ($)", overlaying="x", side="top", **_AXIS_DEFAULTS),
+                    yaxis=dict(autorange="reversed", **_AXIS_DEFAULTS),
+                    legend=dict(orientation="h", yanchor="top", y=-0.12, xanchor="center", x=0.5),
+                )
+                st.plotly_chart(fig_resumen, use_container_width=True, key="plot_resumen_ruta",
+                                config={"displayModeBar": False})
 
                 # ── Desglose de campañas por ruta ──────────────────────
                 camp_col_ruta = _find_col(df_cruce, ["aniocampaña", "aniocampana", "anio", "año", "campaña"])
