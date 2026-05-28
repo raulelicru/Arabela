@@ -1465,7 +1465,7 @@ def tab_flujo(metrics: dict):
         n_camps    = pend_df[camp_col].astype(str).nunique()
         c1, c2     = st.columns(2)
         with c1: st.metric(" Damas que cambiaron de temporalidad", f"{total_pend:,}")
-        with c2: st.metric(" Temporalidades con pendientes",       f"{n_camps}")
+        with c2: st.metric(" Cierre de Campaña",                   f"{n_camps}")
         st.markdown("<br>", unsafe_allow_html=True)
 
     chart_card("Cuantas damas deben en cada campaña",
