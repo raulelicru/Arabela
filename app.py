@@ -1671,7 +1671,7 @@ def tab_flujo(metrics: dict):
                     )
                     total_camp_sel = int(detalle_camp["Damas"].sum())
                     st.caption(f"{camp_sel} — {total_camp_sel:,} damas en mora en total")
-                    st.dataframe(detalle_camp, use_container_width=True, hide_index=True)
+                    st.dataframe(detalle_camp, use_container_width=False, hide_index=True, height=320, width=480)
 
     else:
         st.info("Sube el archivo de moras para ver el analisis por ruta.")
