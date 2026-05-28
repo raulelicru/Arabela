@@ -1845,8 +1845,10 @@ def tab_tracking(df_moras: pd.DataFrame | None):
         st.info(f"**{n_inac:,} registros** reclasificados como **Inactiva** (IdSituacion = 0)")
 
     k1, k2, k3, k4, k5 = st.columns(5)
-    ret_rates = [sdf.loc[i, "de_anterior"] / sdf.loc[i, "total"] * 100
-                 for i in sdf.index if sdf.loc[i, "total"] > 0 and i > 0]
+    ret_rates = [
+        (sdf.loc[i, "total"] - sdf.loc[i, "nuevas"]) / sdf.loc[i - 1, "total"] * 100
+        for i in sdf.index if i > 0 and sdf.loc[i - 1, "total"] > 0
+    ]
     avg_ret = sum(ret_rates) / len(ret_rates) if ret_rates else 0
     with k1: st.metric("Pool de Pendientes", f"{pool_size:,}")
     with k2: st.metric("Total campañas", f"{len(camps_n)}")
@@ -1971,7 +1973,8 @@ def tab_tracking(df_moras: pd.DataFrame | None):
                 "Nuevas":            int(r["nuevas"]),
                 "% Nuevas":          f"{r['nuevas']/tot*100:.1f}%" if tot else "—",
                 "De Anterior":       int(r["de_anterior"]),
-                "% Retención":       f"{r['de_anterior']/tot*100:.1f}%" if tot else "—",
+                "% Retención":       f"{(tot - r['nuevas']) / sdf.loc[sdf['camp_n'] == r['camp_n'] - 1, 'total'].values[0] * 100:.1f}%"
+                                     if r["camp_n"] > camps_n[0] and sdf.loc[sdf["camp_n"] == r["camp_n"] - 1, "total"].values[0] > 0 else "—",
                 "Persistentes":      int(r["persistentes"]),
                 "Salen Sig. Camp.":  int(r["salen"]),
                 "Fugadas (3c)":      int(r["fugadas"]),
