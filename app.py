@@ -7,9 +7,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
-import plotly.express as px
 from plotly.subplots import make_subplots
-from sklearn.linear_model import LinearRegression
 import warnings
 import io
 
@@ -572,12 +570,12 @@ def predict_recovery(ts: pd.DataFrame, horizon: int = 10) -> pd.DataFrame:
     if len(df) < 3:
         return pd.DataFrame()
 
-    df["x"] = np.arange(len(df))
-    model    = LinearRegression()
-    model.fit(df[["x"]], df["valor"])
+    x = np.arange(len(df), dtype=float)
+    y = df["valor"].values.astype(float)
+    slope, intercept = np.polyfit(x, y, 1)
 
-    future_x = np.arange(len(df), len(df) + horizon).reshape(-1, 1)
-    future_y = model.predict(future_x)
+    future_x = np.arange(len(df), len(df) + horizon, dtype=float)
+    future_y = slope * future_x + intercept
 
     # Etiquetas de campaña proyectadas (siguientes números después del último)
     last_label = str(df["fecha"].iloc[-1])
@@ -587,7 +585,8 @@ def predict_recovery(ts: pd.DataFrame, horizon: int = 10) -> pd.DataFrame:
     except ValueError:
         future_labels = [f"Proy.{i+1}" for i in range(horizon)]
 
-    residuals = df["valor"].values - model.predict(df[["x"]])
+    fitted    = slope * x + intercept
+    residuals = y - fitted
     std_err   = np.std(residuals) * 1.5
 
     return pd.DataFrame({
