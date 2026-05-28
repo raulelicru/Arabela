@@ -1380,7 +1380,7 @@ def tab_resumen(metrics: dict):
                    key="pct100", height_normal=360)
 
     # Fila 2: solo Donut
-    chart_card("De cada 10 damas, cuantas pagaron",
+    chart_card("Damas cobradas vs pendientes",
                plot_kpi_donut(metrics["pagados"], metrics["pendientes"]),
                key="donut", height_normal=320)
 
