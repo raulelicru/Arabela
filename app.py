@@ -1570,8 +1570,8 @@ def tab_flujo(metrics: dict):
                         .reset_index(name="Damas")
                     )
                     ruta_camp["Campaña"] = ruta_camp[camp_col_ruta].astype(str).str.strip().apply(_fmt_camp)
-                    total_por_ruta = ruta_camp.groupby(ruta_col)["Damas"].transform("sum")
-                    ruta_camp["% en ruta"] = (ruta_camp["Damas"] / total_por_ruta * 100).round(1)
+                    total_por_camp = ruta_camp.groupby("Campaña")["Damas"].transform("sum")
+                    ruta_camp["% en ruta"] = (ruta_camp["Damas"] / total_por_camp.replace(0, np.nan) * 100).round(1).fillna(0)
 
                     # Orden de rutas: mayor número de moras primero
                     orden_rutas = ruta_dist[ruta_col].tolist()
