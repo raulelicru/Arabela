@@ -1750,6 +1750,7 @@ def tab_tracking(df_moras: pd.DataFrame | None):
 
     # ── Motor de cohortes ─────────────────────────────────────────────
     sets = {c: set(df[df["_cn"] == c][nodama_col]) for c in camps_n}
+    total_all_camps = sum(len(sets[c]) for c in camps_n)   # denominador para % del Pool
     first_camp_d = df.groupby(nodama_col)["_cn"].min().to_dict()
     mora_sets = {}
     for c in camps_n:
@@ -1774,7 +1775,7 @@ def tab_tracking(df_moras: pd.DataFrame | None):
             "camp_n": c, "camp_label": f"C{c}",
             "pool_size": pool_size,
             "total": len(total_set),
-            "pct_pool": round(len(total_set) / pool_size * 100, 1) if pool_size else 0,
+            "pct_pool": round(len(total_set) / total_all_camps * 100, 1) if total_all_camps else 0,
             "nuevas": len(nuevas),
             "de_anterior": len(de_anterior),
             "persistentes": len(persistentes),
