@@ -1033,7 +1033,7 @@ def plot_bullet(metrics: dict) -> go.Figure:
         marker=dict(
             color=COLORS["success"] if pct >= 60 else COLORS["warning"] if pct >= 50 else COLORS["danger"],
         ),
-        text=[f"  {pct:.1f}%"], textposition="outside",
+        text=[f"{pct:.1f}%"], textposition="inside",
         textfont=dict(size=14, color=COLORS["primary"]),
         width=0.4,
         hovertemplate=f"Cumplimiento actual: {pct:.1f}%<extra></extra>",
