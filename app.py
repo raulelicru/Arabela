@@ -628,7 +628,7 @@ def plot_kpi_donut(pagados: int, pendientes: int) -> go.Figure:
         xref="paper", yref="paper",
     )
     fig.update_layout(
-        title_text="¿Cuántas damas ya pagaron?",
+        title_text="Damas cobradas vs pendientes",
         title_font=dict(size=14, color=COLORS["primary"]),
         height=320,
         showlegend=True,
@@ -665,7 +665,7 @@ def plot_columnas_agrupadas(df: pd.DataFrame, valor_col: str) -> go.Figure:
     ))
     fig.update_layout(
         **PLOTLY_LAYOUT,
-        title_text="Monto Cobrado vs Pendiente por Campaña",
+        title_text="Monto cobrado vs pendiente por campaña",
         title_font=dict(size=14, color=COLORS["primary"]),
         barmode="group",
         xaxis_title="Campaña", yaxis_title="Monto ($)",
@@ -709,7 +709,7 @@ def plot_100pct_apilado(df: pd.DataFrame) -> go.Figure:
                   annotation_text="  Meta 60%", annotation_font_color="#000000")
     fig.update_layout(
         **PLOTLY_LAYOUT,
-        title_text="¿Qué % de la cartera se recuperó por campaña?",
+        title_text="% de recuperación por campaña",
         title_font=dict(size=14, color=COLORS["primary"]),
         barmode="stack",
         xaxis_title="Campaña", yaxis_title="% de Damas",
@@ -740,7 +740,7 @@ def plot_funnel(df: pd.DataFrame, saldo_col: str) -> go.Figure:
     ))
     fig.update_layout(
         **PLOTLY_LAYOUT,
-        title_text="Embudo de Cobranza · ¿Dónde está la cartera?",
+        title_text="¿Dónde está la cartera?",
         title_font=dict(size=14, color=COLORS["primary"]),
         height=380,
     )
@@ -832,7 +832,7 @@ def plot_linea_tendencia(df: pd.DataFrame, valor_col: str, fecha_col: str | None
         ))
     fig.update_layout(
         **PLOTLY_LAYOUT,
-        title_text="Tendencia de Recuperación" + (" por Mes" if fecha_col else " por Campaña"),
+        title_text="Recuperación" + (" por mes" if fecha_col else " por campaña"),
         title_font=dict(size=14, color=COLORS["primary"]),
         xaxis_title=x_title, yaxis_title="Monto ($)",
         height=380,
@@ -866,7 +866,7 @@ def plot_area_apilada(df: pd.DataFrame, valor_col: str, fecha_col: str | None = 
     ))
     fig.update_layout(
         **PLOTLY_LAYOUT,
-        title_text="Evolución de Montos: Cobrado y Pendiente" + (" por Mes" if fecha_col else " por Campaña"),
+        title_text="Cobrado y pendiente" + (" por mes" if fecha_col else " por campaña"),
         title_font=dict(size=14, color=COLORS["primary"]),
         xaxis_title=x_title, yaxis_title="Monto Total ($)",
         height=380,
@@ -923,7 +923,7 @@ def plot_heatmap(df: pd.DataFrame, valor_col: str, fecha_col: str | None = None)
                 hovertemplate="<b>Campaña %{x}</b><br>% Cobrado: %{y:.1f}%<extra></extra>",
             ))
             fig.update_layout(**PLOTLY_LAYOUT, height=340,
-                              title_text="% Cobrado por Campaña",
+                              title_text="% cobrado por campaña",
                               title_font=dict(size=14, color=COLORS["primary"]))
             return fig
         df["_anio"] = df["_camp_str"].str[:4]
@@ -991,7 +991,7 @@ def plot_waterfall(df: pd.DataFrame, valor_col: str) -> go.Figure:
     ))
     fig.update_layout(
         **PLOTLY_LAYOUT,
-        title_text="Cascada de Recuperación · Cómo se reduce la deuda",
+        title_text="Cómo se reduce la deuda campaña a campaña",
         title_font=dict(size=14, color=COLORS["primary"]),
         xaxis_title="", yaxis_title="Monto ($)",
         height=420,
@@ -1044,7 +1044,7 @@ def plot_bullet(metrics: dict) -> go.Figure:
                            xanchor="center")
     fig.update_layout(
         **PLOTLY_LAYOUT,
-        title_text="Cumplimiento Actual vs Metas de Cobranza",
+        title_text="Avance de cobranza vs meta",
         title_font=dict(size=14, color=COLORS["primary"]),
         barmode="overlay",
         xaxis=dict(range=[0, 115], ticksuffix="%", gridcolor=COLORS["grid"]),
@@ -1082,7 +1082,7 @@ def plot_top_damas(df: pd.DataFrame, saldo_col: str, n: int = 15) -> go.Figure:
     ))
     fig.update_layout(
         **PLOTLY_LAYOUT,
-        title_text=f"Top {n} damas con más deuda pendiente",
+        title_text=f"Las {n} damas con más deuda",
         title_font=dict(size=14, color=COLORS["primary"]),
         xaxis_title="Saldo Pendiente ($)", yaxis_title="",
         height=max(320, n * 26),
@@ -1124,7 +1124,7 @@ def plot_prediction(ts: pd.DataFrame, pred_df: pd.DataFrame) -> go.Figure:
                                 font=dict(size=10, color=COLORS["muted"]), xanchor="left")
     fig.update_layout(
         **PLOTLY_LAYOUT,
-        title_text="Proyección de saldo pendiente para próximas campañas",
+        title_text="Proyección de deuda pendiente",
         title_font=dict(size=14, color=COLORS["primary"]),
         xaxis_title="Campaña", yaxis_title="Saldo ($)",
         height=440, bargap=0.2, barmode="group",
@@ -1164,7 +1164,7 @@ def plot_damas_por_temporalidad(df: pd.DataFrame) -> go.Figure:
     ))
     fig.update_layout(
         **PLOTLY_LAYOUT,
-        title_text=f"Damas pendientes por temporalidad — {dist.values.sum():,} damas en total",
+        title_text=f"Damas pendientes por campaña ({dist.values.sum():,} en total)",
         title_font=dict(size=14, color=COLORS["primary"]),
         xaxis=dict(type="category", tickangle=-45),
         xaxis_title="Temporalidad (Año Campaña Saldo)",
@@ -1233,7 +1233,7 @@ def plot_delta_campanas(df: pd.DataFrame) -> go.Figure:
 
     fig.update_layout(
         **PLOTLY_LAYOUT,
-        title_text="¿Cuánto cobramos en cada campaña? (comparación vs campaña anterior)",
+        title_text="Cobro por campaña vs campaña anterior",
         title_font=dict(size=14, color=COLORS["primary"]),
         xaxis=dict(type="category", tickangle=-30),
         xaxis_title="Campaña",
@@ -1888,7 +1888,7 @@ def tab_tracking(df_moras: pd.DataFrame | None):
             ))
         fig_comp.update_layout(
             **PLOTLY_LAYOUT, barmode="stack",
-            title_text="Composición por Estado y Campaña",
+            title_text="Damas por estado en cada campaña",
             title_font=dict(size=13, color=COLORS["primary"]),
             xaxis=dict(type="category", **_AXIS_DEFAULTS),
             yaxis=dict(title="Damas", **_AXIS_DEFAULTS),
@@ -1915,7 +1915,7 @@ def tab_tracking(df_moras: pd.DataFrame | None):
             ))
         fig_cohort.update_layout(
             **PLOTLY_LAYOUT,
-            title_text="Tendencias: Nuevas / De Anterior / Persistentes / Fugadas",
+            title_text="Cuentas nuevas, retenidas y que se van por campaña",
             title_font=dict(size=13, color=COLORS["primary"]),
             xaxis=dict(type="category", **_AXIS_DEFAULTS),
             yaxis=dict(title="Damas", **_AXIS_DEFAULTS),
@@ -1937,7 +1937,7 @@ def tab_tracking(df_moras: pd.DataFrame | None):
             ))
             fig_saldo.update_layout(
                 **PLOTLY_LAYOUT,
-                title_text="Saldo Total por Campaña",
+                title_text="Saldo pendiente por campaña",
                 title_font=dict(size=13, color=COLORS["primary"]),
                 xaxis=dict(type="category", **_AXIS_DEFAULTS),
                 yaxis=dict(title="Saldo ($)", **_AXIS_DEFAULTS),
@@ -2066,7 +2066,7 @@ def tab_tracking(df_moras: pd.DataFrame | None):
             ))
         fig_bar.update_layout(
             **PLOTLY_LAYOUT, barmode="stack",
-            title_text=f"Distribución de métricas — {sel_camp}",
+            title_text=f"Resumen de {sel_camp}",
             title_font=dict(size=12, color=COLORS["primary"]),
             xaxis=dict(**_AXIS_DEFAULTS), yaxis=dict(title="Damas", **_AXIS_DEFAULTS),
             legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
@@ -2121,7 +2121,7 @@ def tab_tracking(df_moras: pd.DataFrame | None):
             ))
         fig_mora_line.update_layout(
             **PLOTLY_LAYOUT,
-            title_text=f"Evolución de {sel_mora} a través de C1–C10",
+            title_text=f"{sel_mora} — cómo evoluciona en cada campaña",
             title_font=dict(size=13, color=COLORS["primary"]),
             xaxis=dict(type="category", **_AXIS_DEFAULTS),
             yaxis=dict(title="Damas", **_AXIS_DEFAULTS),
@@ -2143,7 +2143,7 @@ def tab_tracking(df_moras: pd.DataFrame | None):
             ))
         fig_all.update_layout(
             **PLOTLY_LAYOUT,
-            title_text="Volumen de cada estado por campaña",
+            title_text="Cuántas damas hay en cada estado por campaña",
             title_font=dict(size=13, color=COLORS["primary"]),
             xaxis=dict(type="category", **_AXIS_DEFAULTS),
             yaxis=dict(title="Damas", **_AXIS_DEFAULTS),
@@ -2194,7 +2194,7 @@ def tab_tracking(df_moras: pd.DataFrame | None):
                         ))
                 fig_exit.update_layout(
                     **PLOTLY_LAYOUT, barmode="stack",
-                    title_text="Salidas por campaña y estado",
+                    title_text="Damas que salieron de la cartera por campaña",
                     title_font=dict(size=12, color=COLORS["primary"]),
                     xaxis=dict(type="category", categoryorder="array",
                                categoryarray=[f"C{c}" for c in range(1, 11)], **_AXIS_DEFAULTS),
@@ -2270,7 +2270,7 @@ def tab_tracking(df_moras: pd.DataFrame | None):
                 ))
                 fig_h.update_layout(
                     **PLOTLY_LAYOUT,
-                    title_text=f"Matriz de Transición {c_from} → {c_to}",
+                    title_text=f"¿A dónde fueron las damas de {c_from} en {c_to}?",
                     title_font=dict(size=12, color=COLORS["primary"]),
                     xaxis=dict(title=f"Estado en {c_to}", **_AXIS_DEFAULTS),
                     yaxis=dict(title=f"Estado en {c_from}", autorange="reversed", **_AXIS_DEFAULTS),
@@ -2459,7 +2459,7 @@ def tab_tracking(df_moras: pd.DataFrame | None):
                     ))
                 fig_fi.update_layout(
                     **PLOTLY_LAYOUT, barmode="stack",
-                    title_text="Composición por categoría y campaña",
+                    title_text="Origen de las cuentas por campaña",
                     title_font=dict(size=12, color=COLORS["primary"]),
                     xaxis=dict(title="Campaña", **_AXIS_DEFAULTS),
                     yaxis=dict(title="Cuentas", **_AXIS_DEFAULTS),
@@ -2497,7 +2497,7 @@ def tab_tracking(df_moras: pd.DataFrame | None):
                 ))
                 fig_perm.update_layout(
                     **PLOTLY_LAYOUT,
-                    title_text="Evolución: Inactivas → Moras",
+                    title_text="Inactivas que pasan a Mora 1, 2 y 3",
                     title_font=dict(size=12, color=COLORS["primary"]),
                     xaxis=dict(title="Campaña", **_AXIS_DEFAULTS),
                     yaxis=dict(title="Cuentas", **_AXIS_DEFAULTS),
