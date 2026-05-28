@@ -653,9 +653,11 @@ def plot_columnas_agrupadas(df: pd.DataFrame, valor_col: str) -> go.Figure:
     grp = df.groupby([camp_col, "Estado_Pago"])[valor_col].sum().reset_index()
     grp[camp_col] = grp[camp_col].astype(str)
     camps = sorted(grp[camp_col].unique())
-    camp_labels = [_fmt_camp(c) for c in camps]
-    pagado    = grp[grp["Estado_Pago"] == "Pagado"].set_index(camp_col)[valor_col].reindex(camps, fill_value=0)
-    pendiente = grp[grp["Estado_Pago"] == "Pendiente"].set_index(camp_col)[valor_col].reindex(camps, fill_value=0)
+    camp_labels = _sort_camps([_fmt_camp(c) for c in camps])
+    raw_to_fmt  = {c: _fmt_camp(c) for c in camps}
+    camps_sorted = sorted(camps, key=lambda c: _camp_sort_key(raw_to_fmt[c]))
+    pagado    = grp[grp["Estado_Pago"] == "Pagado"].set_index(camp_col)[valor_col].reindex(camps_sorted, fill_value=0)
+    pendiente = grp[grp["Estado_Pago"] == "Pendiente"].set_index(camp_col)[valor_col].reindex(camps_sorted, fill_value=0)
     fig = go.Figure()
     fig.add_trace(go.Bar(
         x=camp_labels, y=pagado.values, name=" Cobrado",
@@ -688,7 +690,7 @@ def plot_100pct_apilado(df: pd.DataFrame) -> go.Figure:
         return _base_fig()
     grp = df.groupby([camp_col, "Estado_Pago"]).size().reset_index(name="n")
     grp[camp_col] = grp[camp_col].astype(str)
-    camps = sorted(grp[camp_col].unique())
+    camps = sorted(grp[camp_col].unique(), key=lambda c: _camp_sort_key(_fmt_camp(c)))
     camp_labels = [_fmt_camp(c) for c in camps]
     total_by_camp = grp.groupby(camp_col)["n"].sum()
     pagado    = grp[grp["Estado_Pago"] == "Pagado"].set_index(camp_col)["n"].reindex(camps, fill_value=0)
@@ -762,6 +764,19 @@ def _fmt_camp(code: str) -> str:
     return c
 
 
+def _camp_sort_key(label: str):
+    """Ordena etiquetas 'C-N' numéricamente; el resto alfabéticamente al final."""
+    s = str(label)
+    if s.startswith("C-") and s[2:].isdigit():
+        return (0, int(s[2:]))
+    return (1, s)
+
+
+def _sort_camps(labels) -> list:
+    """Devuelve la lista/índice de etiquetas de campaña en orden numérico."""
+    return sorted(labels, key=_camp_sort_key)
+
+
 def _fecha_valida(df: pd.DataFrame, fecha_col: str) -> bool:
     """Devuelve True si la columna tiene fechas reales (año >= 2000)."""
     if fecha_col not in df.columns:
@@ -798,7 +813,7 @@ def _get_time_axis(df: pd.DataFrame, valor_col: str, fecha_col: str | None):
 
     cobrado   = df[df["Estado_Pago"] == "Pagado"].groupby(grp_col)[valor_col].sum()
     pendiente = df[df["Estado_Pago"] == "Pendiente"].groupby(grp_col)[valor_col].sum()
-    periods   = sorted(set(cobrado.index) | set(pendiente.index))
+    periods   = _sort_camps(set(cobrado.index) | set(pendiente.index))
     cob_vals  = cobrado.reindex(periods, fill_value=0).values
     pen_vals  = pendiente.reindex(periods, fill_value=0).values
     return periods, cob_vals, pen_vals, x_title
@@ -918,8 +933,8 @@ def plot_heatmap(df: pd.DataFrame, valor_col: str, fecha_col: str | None = None)
             grp = df.groupby(camp_col)
             pct = (grp.apply(lambda x: (x["Estado_Pago"] == "Pagado").sum() / len(x) * 100)
                    .reset_index(name="pct"))
-            pct[camp_col] = pct[camp_col].astype(str)
-            pct = pct.sort_values(camp_col)
+            pct[camp_col] = pct[camp_col].astype(str).apply(_fmt_camp)
+            pct = pct.iloc[sorted(range(len(pct)), key=lambda i: _camp_sort_key(pct[camp_col].iloc[i]))]
             fig = go.Figure(go.Bar(
                 x=pct[camp_col], y=pct["pct"],
                 marker=dict(color=pct["pct"],
@@ -1153,7 +1168,8 @@ def plot_damas_por_temporalidad(df: pd.DataFrame) -> go.Figure:
 
     pendientes = df[df["Estado_Pago"] == "Pendiente"].copy()
     pendientes[camp_col] = pendientes[camp_col].astype(str).str.strip().apply(_fmt_camp)
-    dist = pendientes.groupby(camp_col).size().sort_index()
+    dist = pendientes.groupby(camp_col).size()
+    dist = dist.reindex(_sort_camps(dist.index))
 
     fig = go.Figure(go.Bar(
         x=dist.index.tolist(),
@@ -1191,7 +1207,7 @@ def plot_delta_campanas(df: pd.DataFrame) -> go.Figure:
     pagado = df[df["Estado_Pago"] == "Pagado"].groupby(camp_col).size()
     pct    = (pagado / total * 100).fillna(0)
     pct.index = pct.index.astype(str).map(_fmt_camp)
-    pct    = pct.sort_index()
+    pct = pct.reindex(_sort_camps(pct.index))
 
     if len(pct) < 2:
         return _base_fig()
