@@ -1584,11 +1584,10 @@ def tab_flujo(metrics: dict):
                     customdata=ruta_dist["Monto"] if has_monto else None,
                 ))
                 fig_resumen.update_layout(
-                    **PLOTLY_LAYOUT,
+                    **{**PLOTLY_LAYOUT, "margin": dict(l=80, r=160, t=20, b=20)},
                     height=max(340, len(rutas_lbl) * 42),
                     xaxis=dict(visible=False, **_AXIS_DEFAULTS),
                     yaxis=dict(autorange="reversed", **_AXIS_DEFAULTS),
-                    margin=dict(l=80, r=160, t=20, b=20),
                 )
                 st.plotly_chart(fig_resumen, use_container_width=True, key="plot_resumen_ruta",
                                 config={"displayModeBar": False})
