@@ -1434,11 +1434,10 @@ def tab_temporalidad(metrics: dict):
         key="linea", height_normal=380, height_expanded=560,
     )
     st.markdown("<br>", unsafe_allow_html=True)
-    chart_card(
-        "En que meses se cobra mejor (mapa de calor)" + (" por mes" if usando_fechas else ""),
-        plot_heatmap(metrics["df"], metrics["valor_col"], fi),
-        key="heatmap", height_normal=340, height_expanded=500,
-    )
+    fig_heatmap = plot_heatmap(metrics["df"], metrics["valor_col"], fi)
+    fig_heatmap.update_layout(height=340)
+    st.plotly_chart(fig_heatmap, use_container_width=True, key="plot_heatmap",
+                    config={"displayModeBar": False, "scrollZoom": True})
 
 
 def tab_flujo(metrics: dict):
