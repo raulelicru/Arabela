@@ -2362,13 +2362,11 @@ def tab_tracking(df_moras: pd.DataFrame | None):
                 m1 = mora_sets[(c, "Mora 1")]
                 m2 = mora_sets[(c, "Mora 2")]
                 m3 = mora_sets[(c, "Mora 3")]
-                # Inactivas de la campaña anterior (las que pueden pasar a Mora 1)
-                inac_prev = mora_sets[(prev_c, "Inactiva")] if prev_c else set()
                 all_cur  = sets[c]
 
-                # Mora 1: viene de Inactivas campaña anterior vs es nueva entrada
-                mora1_desde_inac = m1 & inac_prev if prev_c else set()
-                mora1_nueva      = m1 - inac_prev if prev_c else m1
+                # Mora 1: viene del pool global de Inactivas vs es nueva entrada
+                mora1_desde_inac = m1 & pendientes_inac   # en M1 Y alguna vez fue Inactiva
+                mora1_nueva      = m1 - pendientes_inac   # en M1, nunca apareció como Inactiva
 
                 if prev_c:
                     m1_prev  = mora_sets[(prev_c, "Mora 1")]
@@ -2402,8 +2400,7 @@ def tab_tracking(df_moras: pd.DataFrame | None):
                     "No continúan":          len(no_continuan),
                     "Activos":               activos,
                     "Total":                 total_reportado,
-                    "_m1_inac_pct": round(len(mora1_desde_inac) / len(inac_prev) * 100, 1)
-                                    if inac_prev else 0,
+                    "_m1_inac_pct": round(len(mora1_desde_inac) / len(m1) * 100, 1) if m1 else 0,
                     "_perm_m2_pct": round(len(permanecen_m2) / len(mora_sets[(prev_c, "Mora 1")]) * 100, 1)
                                     if prev_c and mora_sets[(prev_c, "Mora 1")] else 0,
                     "_perm_m3_pct": round(len(permanecen_m3) / len(mora_sets[(prev_c, "Mora 2")]) * 100, 1)
