@@ -1899,26 +1899,40 @@ def tab_tracking(df_moras: pd.DataFrame | None):
         with col_c1:
             chart_card("Composición por estado", fig_comp, key="trk_comp", height_normal=380)
 
-        # Gráfica: Nuevas vs De Anterior vs Fugadas
+        # Gráfica: Nuevas vs Fugadas (barras) + % Fuga (línea eje secundario)
+        pct_fuga = sdf.apply(
+            lambda r: round(r["fugadas"] / r["total"] * 100, 1) if r["total"] else 0, axis=1
+        )
         fig_cohort = go.Figure()
-        for key, label, color, dash in [
-            ("nuevas",      "Nuevas",        COLORS["success"], "dash"),
-            ("de_anterior", "De Anterior",   COLORS["accent"],  "solid"),
-            ("persistentes","Persistentes",  "#6366F1",         "dot"),
-            ("fugadas",     "Fugadas",       COLORS["danger"],  "longdash"),
-        ]:
-            fig_cohort.add_trace(go.Scatter(
-                x=sdf["camp_label"], y=sdf[key],
-                mode="lines+markers", name=label,
-                line=dict(color=color, width=2, dash=dash), marker=dict(size=6),
-                hovertemplate=f"<b>%{{x}}</b><br>{label}: %{{y:,}}<extra></extra>",
-            ))
+        fig_cohort.add_trace(go.Bar(
+            x=sdf["camp_label"], y=sdf["nuevas"],
+            name="Cuentas nuevas", marker_color=COLORS["success"],
+            text=sdf["nuevas"], textposition="outside", textfont=dict(size=9),
+            hovertemplate="<b>%{x}</b><br>Cuentas nuevas: %{y:,}<extra></extra>",
+        ))
+        fig_cohort.add_trace(go.Bar(
+            x=sdf["camp_label"], y=sdf["fugadas"],
+            name="Se van (fugadas)", marker_color=COLORS["danger"],
+            text=sdf["fugadas"], textposition="outside", textfont=dict(size=9),
+            hovertemplate="<b>%{x}</b><br>Se van: %{y:,}<extra></extra>",
+        ))
+        fig_cohort.add_trace(go.Scatter(
+            x=sdf["camp_label"], y=pct_fuga,
+            name="% que se va", mode="lines+markers",
+            line=dict(color="#6366F1", width=2, dash="dot"), marker=dict(size=7),
+            yaxis="y2",
+            hovertemplate="<b>%{x}</b><br>% que se va: %{y:.1f}%<extra></extra>",
+        ))
         fig_cohort.update_layout(
             **PLOTLY_LAYOUT,
-            title_text="Cuentas nuevas, retenidas y que se van por campaña",
+            barmode="group",
+            title_text="Cuentas que entran vs cuentas que se van por campaña",
             title_font=dict(size=13, color=COLORS["primary"]),
             xaxis=dict(type="category", **_AXIS_DEFAULTS),
             yaxis=dict(title="Damas", **_AXIS_DEFAULTS),
+            yaxis2=dict(title="% que se va", overlaying="y", side="right",
+                        ticksuffix="%", range=[0, 120],
+                        showgrid=False, **_AXIS_DEFAULTS),
             legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
         )
         with col_c2:
