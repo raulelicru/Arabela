@@ -1859,16 +1859,14 @@ def tab_tracking(df_moras: pd.DataFrame | None, metrics: dict | None = None):
     exits_df = pd.DataFrame(exits) if exits else pd.DataFrame()
 
     # ── KPIs superiores ──────────────────────────────────────────────
-    # Usar df_moras crudo (sin filtrar) para reflejar el total real del archivo
-    _raw       = df_moras                                           # archivo completo sin filtrar
-    _saldo_raw = _find_col(_raw, ["saldodama", "saldo", "importe", "monto", "importenetofactura"])
-    _nod_raw   = _get_nodama_col(_raw)
+    # Usar df_moras crudo (sin filtrar) con las mismas columnas ya encontradas
+    _raw = df_moras
 
-    base_inac   = _raw[_nod_raw].nunique()                          # ~29k damas únicas
-    saldo_inac  = (_raw.drop_duplicates(subset=_nod_raw)[_saldo_raw].sum()
-                   if _saldo_raw else None)                         # saldo de esas damas (sin duplicar)
+    base_inac   = _raw[nodama_col].nunique()                        # ~29k damas únicas
+    saldo_inac  = (_raw.drop_duplicates(subset=nodama_col)[saldo_col].sum()
+                   if saldo_col else None)                          # saldo de esas damas (sin duplicar)
     base_moras  = len(_raw)                                         # ~84k registros totales
-    saldo_moras = _raw[_saldo_raw].sum() if _saldo_raw else None    # saldo suma de todos los registros
+    saldo_moras = _raw[saldo_col].sum() if saldo_col else None      # saldo suma de todos los registros
 
     st.markdown(
         f"<div class='kpi-banner' style='margin-bottom:0.5rem'>"
