@@ -1876,7 +1876,7 @@ def tab_tracking(df_moras: pd.DataFrame | None):
     )
     k1, k2, k3, k4 = st.columns(4)
     with k1:
-        st.metric("Base Damas Inactivas", f"{base_inac:,}")
+        st.metric("Base Damas Inactivas", f"{pool_size:,}")
     with k2:
         st.metric("Saldo Damas Inactivas",
                   fmt_currency(saldo_inac) if saldo_inac is not None else "—")
@@ -1888,20 +1888,19 @@ def tab_tracking(df_moras: pd.DataFrame | None):
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    k1, k2, k3, k4, k5 = st.columns(5)
+    k1, k2, k3, k4 = st.columns(4)
     ret_rates = [
         (sdf.loc[i, "total"] - sdf.loc[i, "nuevas"]) / sdf.loc[i - 1, "total"] * 100
         for i in sdf.index if i > 0 and sdf.loc[i - 1, "total"] > 0
     ]
     avg_ret = sum(ret_rates) / len(ret_rates) if ret_rates else 0
-    with k1: st.metric("Pool de Pendientes", f"{pool_size:,}")
-    with k2: st.metric("Total campañas", f"{len(camps_n)}")
-    with k3: st.metric("Retención promedio", f"{avg_ret:.1f}%")
-    with k4:
+    with k1: st.metric("Total campañas", f"{len(camps_n)}")
+    with k2: st.metric("Retención promedio", f"{avg_ret:.1f}%")
+    with k3:
         fuga_camp = sdf.loc[sdf["fugadas"].idxmax(), "camp_label"] if not sdf.empty else "—"
         fuga_val  = sdf["fugadas"].max() if not sdf.empty else 0
         st.metric("Mayor fuga", f"{fuga_camp} ({fuga_val:,})")
-    with k5:
+    with k4:
         total_exits = len(exits_df) if not exits_df.empty else 0
         st.metric("Salidas permanentes", f"{total_exits:,}",
                   delta=f"{total_exits/pool_size*100:.1f}% del pool" if pool_size else None,
