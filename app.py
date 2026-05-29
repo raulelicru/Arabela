@@ -1860,8 +1860,33 @@ def tab_tracking(df_moras: pd.DataFrame | None):
     exits_df = pd.DataFrame(exits) if exits else pd.DataFrame()
 
     # ── KPIs superiores ──────────────────────────────────────────────
-    if n_inac > 0:
-        st.info(f"**{n_inac:,} registros** reclasificados como **Inactiva** (IdSituacion = 0)")
+    # Calcular métricas globales de inactivas vs moras
+    df_inac  = df[df["_mora"] == "Inactiva"]
+    df_moras_act = df[df["_mora"].isin(["Mora 1", "Mora 2", "Mora 3"])]
+    base_inac    = df_inac[nodama_col].nunique()
+    base_moras   = df_moras_act[nodama_col].nunique()
+    saldo_inac   = df_inac[saldo_col].sum()   if saldo_col else None
+    saldo_moras  = df_moras_act[saldo_col].sum() if saldo_col else None
+
+    st.markdown(
+        f"<div class='kpi-banner' style='margin-bottom:0.5rem'>"
+        f"<h2 style='margin:0'>Resumen General · Damas no pagadas e inactivas: "
+        f"<b>{base_inac:,}</b></h2></div>",
+        unsafe_allow_html=True,
+    )
+    k1, k2, k3, k4 = st.columns(4)
+    with k1:
+        st.metric("Base Damas Inactivas", f"{base_inac:,}")
+    with k2:
+        st.metric("Saldo Damas Inactivas",
+                  fmt_currency(saldo_inac) if saldo_inac is not None else "—")
+    with k3:
+        st.metric("Base Damas en Mora", f"{base_moras:,}")
+    with k4:
+        st.metric("Saldo Total Damas en Mora",
+                  fmt_currency(saldo_moras) if saldo_moras is not None else "—")
+
+    st.markdown("<br>", unsafe_allow_html=True)
 
     k1, k2, k3, k4, k5 = st.columns(5)
     ret_rates = [
