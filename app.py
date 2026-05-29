@@ -1859,13 +1859,16 @@ def tab_tracking(df_moras: pd.DataFrame | None, metrics: dict | None = None):
     exits_df = pd.DataFrame(exits) if exits else pd.DataFrame()
 
     # ── KPIs superiores ──────────────────────────────────────────────
-    # Todos los KPIs vienen del archivo de moras (df_moras)
-    df_inac      = df[df["_mora"] == "Inactiva"]
-    df_moras_act = df[df["_mora"].isin(["Mora 1", "Mora 2", "Mora 3"])]
-    base_inac    = df_inac[nodama_col].nunique()
-    base_moras   = pool_size                                              # total de damas en el archivo
-    saldo_inac   = df_inac[saldo_col].sum()   if saldo_col else None
-    saldo_moras  = df[saldo_col].sum()        if saldo_col else None      # saldo total del archivo
+    # Usar df_moras crudo (sin filtrar) para reflejar el total real del archivo
+    _raw       = df_moras                                           # archivo completo sin filtrar
+    _saldo_raw = _find_col(_raw, ["saldodama", "saldo", "importe", "monto", "importenetofactura"])
+    _nod_raw   = _get_nodama_col(_raw)
+
+    base_inac   = _raw[_nod_raw].nunique()                          # ~29k damas únicas
+    saldo_inac  = (_raw.drop_duplicates(subset=_nod_raw)[_saldo_raw].sum()
+                   if _saldo_raw else None)                         # saldo de esas damas (sin duplicar)
+    base_moras  = len(_raw)                                         # ~84k registros totales
+    saldo_moras = _raw[_saldo_raw].sum() if _saldo_raw else None    # saldo suma de todos los registros
 
     st.markdown(
         f"<div class='kpi-banner' style='margin-bottom:0.5rem'>"
