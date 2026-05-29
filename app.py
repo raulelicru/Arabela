@@ -1703,13 +1703,12 @@ def _get_nodama_col(df: pd.DataFrame) -> str | None:
 # ─────────────────────────────────────────────
 
 def tab_tracking(df_moras: pd.DataFrame | None):
-    st.markdown(
-        "<div class='kpi-banner'><h1>Tracking Completo de Cartera</h1>"
-        "<p>Seguimiento de pendientes de pago a través de las 10 campañas operativas</p></div>",
-        unsafe_allow_html=True,
-    )
-
     if df_moras is None:
+        st.markdown(
+            "<div class='kpi-banner'><h1>Tracking Completo de Cartera</h1>"
+            "<p>Seguimiento de pendientes de pago a través de las 10 campañas operativas</p></div>",
+            unsafe_allow_html=True,
+        )
         st.info("Sube el archivo GENERAL_CARTERA_MORAS para ver este análisis.")
         return
 
@@ -1870,8 +1869,9 @@ def tab_tracking(df_moras: pd.DataFrame | None):
 
     st.markdown(
         f"<div class='kpi-banner' style='margin-bottom:0.5rem'>"
-        f"<h2 style='margin:0'>Resumen General · Damas no pagadas e inactivas: "
-        f"<b>{base_inac:,}</b></h2></div>",
+        f"<h1 style='margin:0 0 0.25rem'>Tracking Completo de Cartera</h1>"
+        f"<p style='margin:0;opacity:.8'>Seguimiento de pendientes de pago a través de las 10 campañas operativas"
+        f" · Damas no pagadas e inactivas: <b>{base_inac:,}</b></p></div>",
         unsafe_allow_html=True,
     )
     k1, k2, k3, k4 = st.columns(4)
