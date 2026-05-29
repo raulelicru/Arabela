@@ -1885,8 +1885,9 @@ def tab_tracking(df_moras: pd.DataFrame | None, metrics: dict | None = None):
     with k1:
         st.metric("Base Damas Inactivas", f"{base_display:,}")
     with k2:
+        saldo_display = metrics["monto_pendiente"] if (metrics and "monto_pendiente" in metrics) else saldo_inac
         st.metric("Saldo Damas Inactivas",
-                  fmt_currency(saldo_inac) if saldo_inac is not None else "—")
+                  fmt_currency(saldo_display) if saldo_display is not None else "—")
     with k3:
         st.metric("Base Damas en Mora", f"{base_moras:,}")
     with k4:
