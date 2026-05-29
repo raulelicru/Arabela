@@ -1859,20 +1859,13 @@ def tab_tracking(df_moras: pd.DataFrame | None, metrics: dict | None = None):
     exits_df = pd.DataFrame(exits) if exits else pd.DataFrame()
 
     # ── KPIs superiores ──────────────────────────────────────────────
-    # Calcular métricas globales de inactivas vs moras
-    df_inac  = df[df["_mora"] == "Inactiva"]
+    # Todos los KPIs vienen del archivo de moras (df_moras)
+    df_inac      = df[df["_mora"] == "Inactiva"]
     df_moras_act = df[df["_mora"].isin(["Mora 1", "Mora 2", "Mora 3"])]
     base_inac    = df_inac[nodama_col].nunique()
-    base_moras   = df_moras_act[nodama_col].nunique()
+    base_moras   = pool_size                                              # total de damas en el archivo
     saldo_inac   = df_inac[saldo_col].sum()   if saldo_col else None
-    saldo_moras  = df_moras_act[saldo_col].sum() if saldo_col else None
-
-    # Base desde el archivo principal (mismo cálculo que Operaciones y Territorio)
-    base_principal = None
-    if metrics and "df" in metrics:
-        _pend = metrics["df"][metrics["df"]["Estado_Pago"] == "Pendiente"]
-        base_principal = len(_pend)
-    base_display = base_principal if base_principal is not None else pool_size
+    saldo_moras  = df[saldo_col].sum()        if saldo_col else None      # saldo total del archivo
 
     st.markdown(
         f"<div class='kpi-banner' style='margin-bottom:0.5rem'>"
@@ -1883,11 +1876,10 @@ def tab_tracking(df_moras: pd.DataFrame | None, metrics: dict | None = None):
     )
     k1, k2, k3, k4 = st.columns(4)
     with k1:
-        st.metric("Base Damas Inactivas", f"{base_display:,}")
+        st.metric("Base Damas Inactivas", f"{base_inac:,}")
     with k2:
-        saldo_display = metrics["monto_pendiente"] if (metrics and "monto_pendiente" in metrics) else saldo_inac
         st.metric("Saldo Damas Inactivas",
-                  fmt_currency(saldo_display) if saldo_display is not None else "—")
+                  fmt_currency(saldo_inac) if saldo_inac is not None else "—")
     with k3:
         st.metric("Base Damas en Mora", f"{base_moras:,}")
     with k4:
