@@ -1924,21 +1924,35 @@ def tab_tracking(df_moras: pd.DataFrame | None):
     with subtab1:
         st.markdown("<br>", unsafe_allow_html=True)
 
-        # Gráfica: Composición (Inactiva + M1/M2/M3) por campaña
+        # Gráfica: Mora 1/2/3 como barras apiladas + Inactiva como línea (eje secundario)
         fig_comp = go.Figure()
-        for mora in MORA_LEVELS:
+        for mora in ["Mora 1", "Mora 2", "Mora 3"]:
             fig_comp.add_trace(go.Bar(
                 x=sdf["camp_label"], y=sdf[f"{mora}_total"],
-                name=mora, marker_color=MORA_COLORS[mora],
+                name=mora, marker_color=MORA_COLORS[mora], yaxis="y",
                 hovertemplate=f"<b>%{{x}}</b><br>{mora}: %{{y:,}}<extra></extra>",
             ))
+        fig_comp.add_trace(go.Scatter(
+            x=sdf["camp_label"], y=sdf["Inactiva_total"],
+            name="Inactiva", mode="lines+markers+text",
+            line=dict(color=COLORS["primary"], width=2.5),
+            marker=dict(size=8, color=COLORS["primary"]),
+            text=sdf["Inactiva_total"].apply(lambda v: f"{v:,}"),
+            textposition="top center",
+            textfont=dict(size=10, color=COLORS["primary"]),
+            yaxis="y2",
+            hovertemplate="<b>%{x}</b><br>Inactiva: %{y:,}<extra></extra>",
+        ))
         fig_comp.update_layout(
-            **PLOTLY_LAYOUT, barmode="stack",
-            title_text="Damas por estado en cada campaña",
-            title_font=dict(size=13, color=COLORS["primary"]),
+            **{**PLOTLY_LAYOUT, "margin": dict(t=20, b=80, l=10, r=10)},
+            barmode="stack",
             xaxis=dict(type="category", **_AXIS_DEFAULTS),
-            yaxis=dict(title="Damas", **_AXIS_DEFAULTS),
-            legend=dict(orientation="h", yanchor="top", y=-0.18, xanchor="center", x=0.5),
+            yaxis=dict(title="Damas en Mora", **_AXIS_DEFAULTS),
+            yaxis2=dict(
+                title="Inactivas", overlaying="y", side="right",
+                showgrid=False, **_AXIS_DEFAULTS,
+            ),
+            legend=dict(orientation="h", yanchor="top", y=-0.2, xanchor="center", x=0.5),
         )
         col_c1, col_c2 = st.columns(2)
 
