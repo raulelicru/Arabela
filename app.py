@@ -1348,6 +1348,53 @@ def render_sidebar(data: dict | None) -> dict:
             st.info("Carga los archivos Excel para activar los filtros.")
 
         st.divider()
+
+        # ── Personalización: color de fondo ───────────────────────────
+        st.markdown(
+            "<small style='color:#a8bbcf;font-weight:600;text-transform:uppercase;"
+            "letter-spacing:.05em'>Color de fondo</small>",
+            unsafe_allow_html=True,
+        )
+        PRESETS = {
+            "Gris claro":  "#f0f2f6",
+            "Blanco":      "#ffffff",
+            "Azul suave":  "#e8eef7",
+            "Menta":       "#e8f5f0",
+            "Crema":       "#fdf6ec",
+            "Oscuro":      "#1e2530",
+        }
+        if "bg_color" not in st.session_state:
+            st.session_state.bg_color = "#f0f2f6"
+
+        cols_p = st.columns(3)
+        for i, (name, hex_val) in enumerate(PRESETS.items()):
+            with cols_p[i % 3]:
+                active = st.session_state.bg_color == hex_val
+                border = "3px solid #fff" if active else "2px solid rgba(255,255,255,0.3)"
+                if st.button(
+                    " " if not active else "✓",
+                    key=f"preset_{name}",
+                    help=name,
+                    use_container_width=True,
+                ):
+                    st.session_state.bg_color = hex_val
+                    st.rerun()
+                st.markdown(
+                    f"<div style='background:{hex_val};height:6px;border-radius:3px;"
+                    f"margin-top:-10px;border:{border}'></div>"
+                    f"<p style='font-size:0.65rem;color:#a8bbcf;text-align:center;"
+                    f"margin:2px 0 6px'>{name}</p>",
+                    unsafe_allow_html=True,
+                )
+
+        custom = st.color_picker("Personalizado", st.session_state.bg_color,
+                                 key="color_picker_custom",
+                                 label_visibility="collapsed")
+        if custom != st.session_state.bg_color:
+            st.session_state.bg_color = custom
+            st.rerun()
+
+        st.divider()
         st.markdown(
             f"<small style='color:{COLORS['muted']}'>Motor de Inteligencia de Recuperación</small>",
             unsafe_allow_html=True,
@@ -2652,6 +2699,19 @@ def main():
             st.session_state[key] = default
 
     filters = render_sidebar(st.session_state.data)
+
+    # ── Aplicar color de fondo dinámico ───────────────────────────────
+    _bg = st.session_state.get("bg_color", "#f0f2f6")
+    _is_dark = int(_bg.lstrip("#")[0:2], 16) < 80  # texto adaptado si fondo oscuro
+    _text_color = "#e8edf5" if _is_dark else "#1a3c6e"
+    st.markdown(
+        f"<style>"
+        f"[data-testid='stAppViewContainer'], [data-testid='stMain'], .main "
+        f"{{ background-color: {_bg} !important; }}"
+        f"h1, h2, h3, h4 {{ color: {_text_color} !important; }}"
+        f"</style>",
+        unsafe_allow_html=True,
+    )
 
     # ── Carga de los 2 archivos Excel ─────────────────────────────────
     with st.expander(
