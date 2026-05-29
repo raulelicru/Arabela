@@ -1702,7 +1702,7 @@ def _get_nodama_col(df: pd.DataFrame) -> str | None:
 #  TAB TRACKING COMPLETO
 # ─────────────────────────────────────────────
 
-def tab_tracking(df_moras: pd.DataFrame | None):
+def tab_tracking(df_moras: pd.DataFrame | None, metrics: dict | None = None):
     if df_moras is None:
         st.markdown(
             "<div class='kpi-banner'><h1>Tracking Completo de Cartera</h1>"
@@ -1867,6 +1867,13 @@ def tab_tracking(df_moras: pd.DataFrame | None):
     saldo_inac   = df_inac[saldo_col].sum()   if saldo_col else None
     saldo_moras  = df_moras_act[saldo_col].sum() if saldo_col else None
 
+    # Base desde el archivo principal (mismo cálculo que Operaciones y Territorio)
+    base_principal = None
+    if metrics and "df" in metrics:
+        _pend = metrics["df"][metrics["df"]["Estado_Pago"] == "Pendiente"]
+        base_principal = len(_pend)
+    base_display = base_principal if base_principal is not None else pool_size
+
     st.markdown(
         f"<div class='kpi-banner' style='margin-bottom:0.5rem'>"
         f"<h1 style='margin:0 0 0.25rem'>Tracking Completo de Cartera</h1>"
@@ -1876,7 +1883,7 @@ def tab_tracking(df_moras: pd.DataFrame | None):
     )
     k1, k2, k3, k4 = st.columns(4)
     with k1:
-        st.metric("Base Damas Inactivas", f"{pool_size:,}")
+        st.metric("Base Damas Inactivas", f"{base_display:,}")
     with k2:
         st.metric("Saldo Damas Inactivas",
                   fmt_currency(saldo_inac) if saldo_inac is not None else "—")
@@ -2765,7 +2772,7 @@ def main():
     with tab3:
         tab_flujo(metrics)
     with tab4:
-        tab_tracking(st.session_state.df_moras)
+        tab_tracking(st.session_state.df_moras, metrics)
 
 
 if __name__ == "__main__":
