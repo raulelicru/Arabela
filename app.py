@@ -1934,7 +1934,7 @@ def tab_tracking(df_moras: pd.DataFrame | None, metrics: dict | None = None):
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    k1, k2, k3, k4 = st.columns(4)
+    k1, k2, k3 = st.columns(3)
     ret_rates = [
         (sdf.loc[i, "total"] - sdf.loc[i, "nuevas"]) / sdf.loc[i - 1, "total"] * 100
         for i in sdf.index if i > 0 and sdf.loc[i - 1, "total"] > 0
@@ -1946,11 +1946,6 @@ def tab_tracking(df_moras: pd.DataFrame | None, metrics: dict | None = None):
         fuga_camp = sdf.loc[sdf["fugadas"].idxmax(), "camp_label"] if not sdf.empty else "—"
         fuga_val  = sdf["fugadas"].max() if not sdf.empty else 0
         st.metric("Mayor fuga", f"{fuga_camp} ({fuga_val:,})")
-    with k4:
-        total_exits = len(exits_df) if not exits_df.empty else 0
-        st.metric("Salidas permanentes", f"{total_exits:,}",
-                  delta=f"{total_exits/pool_size*100:.1f}% del pool" if pool_size else None,
-                  delta_color="inverse")
 
     st.markdown("<br>", unsafe_allow_html=True)
 
