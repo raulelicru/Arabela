@@ -1941,7 +1941,7 @@ def tab_tracking(df_moras: pd.DataFrame | None, metrics: dict | None = None):
     ]
     avg_ret = sum(ret_rates) / len(ret_rates) if ret_rates else 0
     with k1: st.metric("Total campañas", f"{len(camps_n)}")
-    with k2: st.metric("Retención promedio", f"{avg_ret:.1f}%")
+    with k2: st.metric("Retención promedio por campaña", f"{avg_ret:.1f}%")
     with k3:
         fuga_camp = sdf.loc[sdf["fugadas"].idxmax(), "camp_label"] if not sdf.empty else "—"
         fuga_val  = sdf["fugadas"].max() if not sdf.empty else 0
