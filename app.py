@@ -275,102 +275,103 @@ def render_column_mapper(df_cartera: pd.DataFrame, df_saldos: pd.DataFrame) -> d
     cols_c = list(df_cartera.columns)
     cols_s = list(df_saldos.columns)
 
+    # Auto-detectar columnas
+    c_dama  = cols_c[_best_guess(cols_c, ["dama", "num", "nro", "id"])]
+    c_anio  = cols_c[_best_guess(cols_c, ["anio", "año", "campaña", "saldo"])]
+    s_dama  = cols_s[_best_guess(cols_s, ["dama", "num", "nro", "id"])]
+    s_anio  = cols_s[_best_guess(cols_s, ["anio", "año", "campaña", "saldo"])]
+    s_saldo = cols_s[_best_guess(cols_s, ["saldocampaña", "saldocampana", "saldo", "deuda", "valor", "monto", "pendiente"])]
+    _c_monto_idx = _best_guess(["(ninguna)"] + cols_c, ["saldocampaña", "saldocampana", "valor", "monto", "deuda", "total"])
+    c_monto_auto = (["(ninguna)"] + cols_c)[_c_monto_idx]
+    c_fecha_inicio_auto = (["(ninguna)"] + cols_c)[_best_guess(["(ninguna)"] + cols_c, ["inicio", "fecha_i", "start", "vigencia", "fecha"])]
+    c_fecha_fin_auto    = (["(ninguna)"] + cols_c)[_best_guess(["(ninguna)"] + cols_c, ["fin", "final", "venc", "end", "termino"])]
+
+    # ── Resumen auto-detectado ────────────────────────────────────────
     st.markdown(
-        f"<div class='card' style='border-left:4px solid {COLORS['warning']};'>"
-        "<b> Mapeo de columnas</b> — Selecciona las columnas de cada archivo.</div>",
+        f"<div style='background:#f0fdf4;border:1px solid #86efac;border-radius:12px;"
+        f"padding:1rem 1.2rem;margin-bottom:1rem'>"
+        f"<p style='margin:0 0 0.5rem;font-weight:700;color:#15803d;font-size:0.95rem'>"
+        f" Archivos detectados correctamente</p>"
+        f"<p style='margin:0;font-size:0.82rem;color:#166534'>"
+        f"Detectamos las columnas automáticamente. Revisa el resumen y confirma para continuar.</p>"
+        f"</div>",
         unsafe_allow_html=True,
     )
 
-    # ── Llave de cruce (misma estructura en ambos archivos) ───────────
-    st.markdown("#####  Llave de cruce — *igual en ambos archivos*")
-    st.caption("Se concatena **Número de Dama + Año Campaña Saldo** en los dos Excel para unirlos.")
-
-    col_a, col_b = st.columns(2)
-    with col_a:
-        st.markdown("** Cartera**")
-        c_dama = st.selectbox(
-            "Número de Dama", cols_c,
-            index=_best_guess(cols_c, ["dama", "num", "nro", "id"]),
-            key="map_c_dama",
+    col_r1, col_r2 = st.columns(2)
+    with col_r1:
+        st.markdown(
+            f"<div style='background:white;border-radius:10px;padding:0.8rem 1rem;"
+            f"border:1px solid #e5e7eb'>"
+            f"<p style='margin:0 0 0.4rem;font-weight:700;color:{COLORS['primary']};font-size:0.85rem'>"
+            f" Archivo Cartera</p>"
+            f"<p style='margin:0;font-size:0.8rem;color:#374151'> N° Dama: <b>{c_dama}</b></p>"
+            f"<p style='margin:0;font-size:0.8rem;color:#374151'> Campaña: <b>{c_anio}</b></p>"
+            f"</div>",
+            unsafe_allow_html=True,
         )
-        c_anio = st.selectbox(
-            "Año Campaña Saldo", cols_c,
-            index=_best_guess(cols_c, ["anio", "año", "campaña", "saldo"]),
-            key="map_c_anio",
-        )
-
-    with col_b:
-        st.markdown("** Saldos Actualizados**")
-        s_dama = st.selectbox(
-            "Número de Dama", cols_s,
-            index=_best_guess(cols_s, ["dama", "num", "nro", "id"]),
-            key="map_s_dama",
-        )
-        s_anio = st.selectbox(
-            "Año Campaña Saldo", cols_s,
-            index=_best_guess(cols_s, ["anio", "año", "campaña", "saldo"]),
-            key="map_s_anio",
+    with col_r2:
+        st.markdown(
+            f"<div style='background:white;border-radius:10px;padding:0.8rem 1rem;"
+            f"border:1px solid #e5e7eb'>"
+            f"<p style='margin:0 0 0.4rem;font-weight:700;color:{COLORS['primary']};font-size:0.85rem'>"
+            f" Archivo Saldos</p>"
+            f"<p style='margin:0;font-size:0.8rem;color:#374151'> N° Dama: <b>{s_dama}</b></p>"
+            f"<p style='margin:0;font-size:0.8rem;color:#374151'> Campaña: <b>{s_anio}</b></p>"
+            f"<p style='margin:0;font-size:0.8rem;color:#374151'> Saldo: <b>{s_saldo}</b></p>"
+            f"</div>",
+            unsafe_allow_html=True,
         )
 
-    st.divider()
+    st.markdown("<br>", unsafe_allow_html=True)
 
-    # ── Columna de saldo (determina quién pagó y cuánto debe) ─────────
-    st.markdown("#####  Columna de saldo en Saldos Actualizados")
-    col_c, col_d = st.columns(2)
-    with col_c:
-        s_saldo = st.selectbox(
-            "Columna con el saldo / deuda ", cols_s,
-            index=_best_guess(cols_s, ["saldocampaña", "saldocampana", "saldo", "deuda", "valor", "monto", "pendiente"]),
-            key="map_s_saldo",
-        )
-    with col_d:
-        st.markdown("")
-        st.info("**Saldo ≥ 51** →  Pagado\n\n**Saldo < 51** →  Pendiente (aún debe)")
-
-    st.divider()
-
-    # ── Monto original en Cartera (opcional) ─────────────────────────
-    st.markdown("#####  Monto original en Cartera *(opcional)*")
-    c_monto = st.selectbox(
-        "Columna con la deuda original de Cartera",
-        ["(ninguna)"] + cols_c,
-        index=_best_guess(["(ninguna)"] + cols_c, ["saldocampaña", "saldocampana", "valor", "monto", "deuda", "total"]),
-        key="map_c_monto",
-        help="Si existe, permite calcular Total Cartera y Total Cobrado.",
-    )
-
-    st.divider()
-
-    # ── Fechas en Cartera (para análisis temporal real) ───────────────
-    st.markdown("#####  Fechas en Cartera *(opcional — activan análisis temporal)*")
-    col_f1, col_f2 = st.columns(2)
-    with col_f1:
-        c_fecha_inicio = st.selectbox(
-            "Columna Fecha de Inicio",
-            ["(ninguna)"] + cols_c,
-            index=_best_guess(["(ninguna)"] + cols_c, ["inicio", "fecha_i", "start", "vigencia", "fecha"]),
-            key="map_c_fecha_inicio",
-        )
-    with col_f2:
-        c_fecha_fin = st.selectbox(
-            "Columna Fecha Final",
-            ["(ninguna)"] + cols_c,
-            index=_best_guess(["(ninguna)"] + cols_c, ["fin", "final", "venc", "end", "termino"]),
-            key="map_c_fecha_fin",
-        )
-
-    st.markdown("")
     if st.button(" Confirmar y procesar", type="primary", use_container_width=True):
         return {
             "c_dama":         c_dama,
             "c_anio":         c_anio,
-            "c_monto":        None if c_monto == "(ninguna)" else c_monto,
+            "c_monto":        None if c_monto_auto == "(ninguna)" else c_monto_auto,
             "s_dama":         s_dama,
             "s_anio":         s_anio,
             "s_saldo":        s_saldo,
-            "c_fecha_inicio": None if c_fecha_inicio == "(ninguna)" else c_fecha_inicio,
-            "c_fecha_fin":    None if c_fecha_fin    == "(ninguna)" else c_fecha_fin,
+            "c_fecha_inicio": None if c_fecha_inicio_auto == "(ninguna)" else c_fecha_inicio_auto,
+            "c_fecha_fin":    None if c_fecha_fin_auto    == "(ninguna)" else c_fecha_fin_auto,
         }
+
+    # ── Ajuste manual (colapsado) ─────────────────────────────────────
+    with st.expander(" Ajustar columnas manualmente"):
+        col_a, col_b = st.columns(2)
+        with col_a:
+            st.markdown("**Cartera**")
+            c_dama  = st.selectbox("N° Dama", cols_c, index=cols_c.index(c_dama), key="map_c_dama")
+            c_anio  = st.selectbox("Año/Campaña", cols_c, index=cols_c.index(c_anio), key="map_c_anio")
+            c_monto_opts = ["(ninguna)"] + cols_c
+            c_monto = st.selectbox("Monto original", c_monto_opts,
+                                   index=c_monto_opts.index(c_monto_auto), key="map_c_monto")
+        with col_b:
+            st.markdown("**Saldos**")
+            s_dama  = st.selectbox("N° Dama", cols_s, index=cols_s.index(s_dama), key="map_s_dama")
+            s_anio  = st.selectbox("Año/Campaña", cols_s, index=cols_s.index(s_anio), key="map_s_anio")
+            s_saldo = st.selectbox("Saldo/Deuda", cols_s, index=cols_s.index(s_saldo), key="map_s_saldo")
+        fecha_opts = ["(ninguna)"] + cols_c
+        fc1, fc2 = st.columns(2)
+        with fc1:
+            c_fecha_inicio = st.selectbox("Fecha inicio", fecha_opts,
+                                          index=fecha_opts.index(c_fecha_inicio_auto), key="map_c_fi")
+        with fc2:
+            c_fecha_fin = st.selectbox("Fecha fin", fecha_opts,
+                                       index=fecha_opts.index(c_fecha_fin_auto), key="map_c_ff")
+        if st.button(" Confirmar ajuste manual", type="primary", use_container_width=True, key="map_manual_ok"):
+            return {
+                "c_dama":         c_dama,
+                "c_anio":         c_anio,
+                "c_monto":        None if c_monto == "(ninguna)" else c_monto,
+                "s_dama":         s_dama,
+                "s_anio":         s_anio,
+                "s_saldo":        s_saldo,
+                "c_fecha_inicio": None if c_fecha_inicio == "(ninguna)" else c_fecha_inicio,
+                "c_fecha_fin":    None if c_fecha_fin    == "(ninguna)" else c_fecha_fin,
+            }
+
     return None
 
 
