@@ -2165,27 +2165,63 @@ def tab_tracking(df_moras: pd.DataFrame | None, metrics: dict | None = None):
                 })
             st.dataframe(pd.DataFrame(fi_rows), use_container_width=True, hide_index=True)
 
-        # Mini bar chart para la campaña seleccionada
+        # Dos gráficas más claras: donut de composición + barras de movimiento
         st.markdown("<br>", unsafe_allow_html=True)
-        fig_bar = go.Figure()
-        for mora in MORA_LEVELS:
-            m_tot = int(r.get(f"{mora}_total", 0))
-            fig_bar.add_trace(go.Bar(
-                name=mora, x=["Nuevas", "De Anterior", "Persistentes", "Fugadas"],
-                y=[int(r.get(f"{mora}_nuevas", 0)), int(r.get(f"{mora}_de_anterior", 0)),
-                   int(r.get(f"{mora}_persistentes", 0)), int(r.get(f"{mora}_fugadas", 0))],
-                marker_color=MORA_COLORS[mora],
-                hovertemplate=f"{mora}: %{{y:,}}<extra></extra>",
+        gcol1, gcol2 = st.columns(2)
+
+        # — Gráfica 1: Donut composición por mora ——————————————————————
+        with gcol1:
+            donut_labels = [m for m in MORA_LEVELS if int(r.get(f"{m}_total", 0)) > 0]
+            donut_values = [int(r.get(f"{m}_total", 0)) for m in donut_labels]
+            donut_colors = [MORA_COLORS[m] for m in donut_labels]
+            fig_donut = go.Figure(go.Pie(
+                labels=donut_labels, values=donut_values,
+                marker_colors=donut_colors,
+                hole=0.55,
+                textinfo="label+percent",
+                textfont=dict(size=11),
+                hovertemplate="<b>%{label}</b><br>%{value:,} damas (%{percent})<extra></extra>",
             ))
-        fig_bar.update_layout(
-            **PLOTLY_LAYOUT, barmode="stack",
-            title_text=f"Resumen de {sel_camp}",
-            title_font=dict(size=12, color=COLORS["primary"]),
-            xaxis=dict(**_AXIS_DEFAULTS), yaxis=dict(title="Damas", **_AXIS_DEFAULTS),
-            legend=dict(orientation="h", yanchor="top", y=-0.18, xanchor="center", x=0.5),
-            height=340,
-        )
-        st.plotly_chart(fig_bar, use_container_width=True, key=f"trk_cbar_{sel_camp}")
+            total_camp = sum(donut_values)
+            fig_donut.add_annotation(
+                text=f"<b>{total_camp:,}</b><br>total",
+                x=0.5, y=0.5, showarrow=False,
+                font=dict(size=14, color=COLORS["primary"]),
+            )
+            fig_donut.update_layout(
+                **{**PLOTLY_LAYOUT, "margin": dict(t=10, b=60, l=10, r=10)},
+                showlegend=True,
+                legend=dict(orientation="h", yanchor="top", y=-0.05, xanchor="center", x=0.5),
+                height=300,
+                title_text="Composición por estado",
+                title_font=dict(size=12, color=COLORS["primary"]),
+            )
+            st.plotly_chart(fig_donut, use_container_width=True, key=f"trk_donut_{sel_camp}")
+
+        # — Gráfica 2: Movimientos (Nuevas / De Anterior / Persistentes / Fugadas) ——
+        with gcol2:
+            mov_labels = ["Nuevas", "De Anterior", "Persistentes", "Fugadas"]
+            mov_keys   = ["nuevas", "de_anterior", "persistentes", "fugadas"]
+            mov_colors = [COLORS["success"], COLORS["accent"], COLORS["warning"], COLORS["danger"]]
+            mov_vals   = [int(r.get(k, 0)) for k in mov_keys]
+            fig_mov = go.Figure(go.Bar(
+                x=mov_vals, y=mov_labels,
+                orientation="h",
+                marker_color=mov_colors,
+                text=[f"{v:,}" for v in mov_vals],
+                textposition="inside",
+                textfont=dict(size=11, color="white"),
+                hovertemplate="<b>%{y}</b>: %{x:,}<extra></extra>",
+            ))
+            fig_mov.update_layout(
+                **{**PLOTLY_LAYOUT, "margin": dict(t=10, b=20, l=10, r=10)},
+                xaxis=dict(title="Damas", **_AXIS_DEFAULTS),
+                yaxis=dict(**_AXIS_DEFAULTS),
+                height=300,
+                title_text="Movimiento de cuentas",
+                title_font=dict(size=12, color=COLORS["primary"]),
+            )
+            st.plotly_chart(fig_mov, use_container_width=True, key=f"trk_mov_{sel_camp}")
 
     # ══════════════════════════════════════════
     # SUBTAB 3 — Por Mora
