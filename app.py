@@ -282,7 +282,7 @@ def render_column_mapper(df_cartera: pd.DataFrame, df_saldos: pd.DataFrame,
     s_dama  = cols_s[_best_guess(cols_s, ["dama", "num", "nro", "id"])]
     s_anio  = cols_s[_best_guess(cols_s, ["anio", "año", "campaña", "saldo"])]
     s_saldo = cols_s[_best_guess(cols_s, ["saldocampaña", "saldocampana", "saldo", "deuda", "valor", "monto", "pendiente"])]
-    _c_monto_idx = _best_guess(["(ninguna)"] + cols_c, ["saldocampaña", "saldocampana", "valor", "monto", "deuda", "total"])
+    _c_monto_idx = _best_guess(["(ninguna)"] + cols_c, ["saldocobro", "saldocampaña", "saldocampana", "valor", "monto", "deuda", "total"])
     c_monto_auto = (["(ninguna)"] + cols_c)[_c_monto_idx]
     c_fecha_inicio_auto = (["(ninguna)"] + cols_c)[_best_guess(["(ninguna)"] + cols_c, ["inicio", "fecha_i", "start", "vigencia", "fecha"])]
     c_fecha_fin_auto    = (["(ninguna)"] + cols_c)[_best_guess(["(ninguna)"] + cols_c, ["fin", "final", "venc", "end", "termino"])]
@@ -308,6 +308,7 @@ def render_column_mapper(df_cartera: pd.DataFrame, df_saldos: pd.DataFrame,
             f" Archivo Cartera</p>"
             f"<p style='margin:0;font-size:0.8rem;color:#374151'> N° Dama: <b>{c_dama}</b></p>"
             f"<p style='margin:0;font-size:0.8rem;color:#374151'> Campaña: <b>{c_anio}</b></p>"
+            f"<p style='margin:0;font-size:0.8rem;color:#374151'> Monto: <b>{c_monto_auto if c_monto_auto != '(ninguna)' else '— no detectado'}</b></p>"
             f"</div>",
             unsafe_allow_html=True,
         )
@@ -505,7 +506,7 @@ def load_and_clean_data(df_cartera: pd.DataFrame, df_saldos: pd.DataFrame,
 def calculate_metrics(data: dict) -> dict:
     df        = data["merged"]
     saldo_col = data["saldo_col"]
-    valor_col = data.get("valor_col") or _find_col(df, ["saldocampaña", "saldocampana", "valor", "monto", "deuda", "total"])
+    valor_col = data.get("valor_col") or _find_col(df, ["saldocobro", "saldocampaña", "saldocampana", "valor", "monto", "deuda", "total"])
 
     total_registros  = len(df)
     pagados          = (df["Estado_Pago"] == "Pagado").sum()
