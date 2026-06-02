@@ -2198,30 +2198,32 @@ def tab_tracking(df_moras: pd.DataFrame | None, metrics: dict | None = None):
             )
             st.plotly_chart(fig_donut, use_container_width=True, key=f"trk_donut_{sel_camp}")
 
-        # — Gráfica 2: Movimientos (Nuevas / De Anterior / Persistentes / Fugadas) ——
+        # — Gráfica 2: Movimientos como tarjetas de métricas ——————————————
         with gcol2:
-            mov_labels = ["Nuevas", "De Anterior", "Persistentes", "Fugadas"]
-            mov_keys   = ["nuevas", "de_anterior", "persistentes", "fugadas"]
-            mov_colors = [COLORS["success"], COLORS["accent"], COLORS["warning"], COLORS["danger"]]
-            mov_vals   = [int(r.get(k, 0)) for k in mov_keys]
-            fig_mov = go.Figure(go.Bar(
-                x=mov_vals, y=mov_labels,
-                orientation="h",
-                marker_color=mov_colors,
-                text=[f"{v:,}" for v in mov_vals],
-                textposition="inside",
-                textfont=dict(size=11, color="white"),
-                hovertemplate="<b>%{y}</b>: %{x:,}<extra></extra>",
-            ))
-            fig_mov.update_layout(
-                **{**PLOTLY_LAYOUT, "margin": dict(t=10, b=20, l=10, r=10)},
-                xaxis=dict(title="Damas", **_AXIS_DEFAULTS),
-                yaxis=dict(**_AXIS_DEFAULTS),
-                height=300,
-                title_text="Movimiento de cuentas",
-                title_font=dict(size=12, color=COLORS["primary"]),
+            st.markdown(
+                f"<p style='font-size:12px;color:{COLORS['primary']};font-weight:600;"
+                f"margin:0 0 0.5rem'>Movimiento de cuentas</p>",
+                unsafe_allow_html=True,
             )
-            st.plotly_chart(fig_mov, use_container_width=True, key=f"trk_mov_{sel_camp}")
+            mov_items = [
+                ("Nuevas",       int(r.get("nuevas", 0)),       COLORS["success"], "↑"),
+                ("De Anterior",  int(r.get("de_anterior", 0)),  COLORS["accent"],  "→"),
+                ("Persistentes", int(r.get("persistentes", 0)), COLORS["warning"], "⟳"),
+                ("Fugadas",      int(r.get("fugadas", 0)),      COLORS["danger"],  "↓"),
+            ]
+            m1, m2 = st.columns(2)
+            for i, (label, val, color, icon) in enumerate(mov_items):
+                with (m1 if i % 2 == 0 else m2):
+                    st.markdown(
+                        f"<div style='background:white;border-radius:10px;padding:0.7rem 1rem;"
+                        f"border-left:4px solid {color};margin-bottom:0.6rem;"
+                        f"box-shadow:0 1px 3px rgba(0,0,0,0.07)'>"
+                        f"<p style='margin:0;font-size:0.7rem;color:#6b7280;font-weight:600;"
+                        f"text-transform:uppercase;letter-spacing:.04em'>{label}</p>"
+                        f"<p style='margin:0;font-size:1.4rem;font-weight:700;color:{color}'>"
+                        f"{icon} {val:,}</p></div>",
+                        unsafe_allow_html=True,
+                    )
 
     # ══════════════════════════════════════════
     # SUBTAB 3 — Por Mora
