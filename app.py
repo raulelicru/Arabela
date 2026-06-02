@@ -2215,13 +2215,14 @@ def tab_tracking(df_moras: pd.DataFrame | None, metrics: dict | None = None):
             for i, (label, val, color, icon) in enumerate(mov_items):
                 with (m1 if i % 2 == 0 else m2):
                     st.markdown(
-                        f"<div style='background:white;border-radius:10px;padding:0.7rem 1rem;"
-                        f"border-left:4px solid {color};margin-bottom:0.6rem;"
-                        f"box-shadow:0 1px 3px rgba(0,0,0,0.07)'>"
-                        f"<p style='margin:0;font-size:0.7rem;color:#6b7280;font-weight:600;"
-                        f"text-transform:uppercase;letter-spacing:.04em'>{label}</p>"
-                        f"<p style='margin:0;font-size:1.4rem;font-weight:700;color:{color}'>"
-                        f"{icon} {val:,}</p></div>",
+                        f"<div style='background:{color};border-radius:14px;"
+                        f"padding:1rem 0.8rem;margin-bottom:0.6rem;text-align:center;"
+                        f"box-shadow:0 2px 6px rgba(0,0,0,0.12)'>"
+                        f"<p style='margin:0;font-size:1.8rem;font-weight:800;color:white;"
+                        f"line-height:1'>{val:,}</p>"
+                        f"<p style='margin:0.3rem 0 0;font-size:0.68rem;color:rgba(255,255,255,0.9);"
+                        f"font-weight:700;text-transform:uppercase;letter-spacing:.06em'>"
+                        f"{icon} {label}</p></div>",
                         unsafe_allow_html=True,
                     )
 
