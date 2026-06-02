@@ -271,7 +271,8 @@ def read_excel_safe(file) -> pd.DataFrame:
 #  MAPEO INTERACTIVO DE COLUMNAS
 # ─────────────────────────────────────────────
 
-def render_column_mapper(df_cartera: pd.DataFrame, df_saldos: pd.DataFrame) -> dict | None:
+def render_column_mapper(df_cartera: pd.DataFrame, df_saldos: pd.DataFrame,
+                         df_moras: pd.DataFrame | None = None) -> dict | None:
     cols_c = list(df_cartera.columns)
     cols_s = list(df_saldos.columns)
 
@@ -298,7 +299,7 @@ def render_column_mapper(df_cartera: pd.DataFrame, df_saldos: pd.DataFrame) -> d
         unsafe_allow_html=True,
     )
 
-    col_r1, col_r2 = st.columns(2)
+    col_r1, col_r2, col_r3 = st.columns(3)
     with col_r1:
         st.markdown(
             f"<div style='background:white;border-radius:10px;padding:0.8rem 1rem;"
@@ -322,6 +323,30 @@ def render_column_mapper(df_cartera: pd.DataFrame, df_saldos: pd.DataFrame) -> d
             f"</div>",
             unsafe_allow_html=True,
         )
+    with col_r3:
+        if df_moras is not None:
+            moras_nod = _get_nodama_col(df_moras) or "—"
+            st.markdown(
+                f"<div style='background:white;border-radius:10px;padding:0.8rem 1rem;"
+                f"border:1px solid #e5e7eb'>"
+                f"<p style='margin:0 0 0.4rem;font-weight:700;color:{COLORS['primary']};font-size:0.85rem'>"
+                f" Archivo Moras</p>"
+                f"<p style='margin:0;font-size:0.8rem;color:#374151'> N° Dama: <b>{moras_nod}</b></p>"
+                f"<p style='margin:0;font-size:0.8rem;color:#16a34a'> {len(df_moras):,} registros cargados</p>"
+                f"</div>",
+                unsafe_allow_html=True,
+            )
+        else:
+            st.markdown(
+                f"<div style='background:#fafafa;border-radius:10px;padding:0.8rem 1rem;"
+                f"border:1px dashed #d1d5db'>"
+                f"<p style='margin:0 0 0.4rem;font-weight:700;color:#9ca3af;font-size:0.85rem'>"
+                f" Archivo Moras</p>"
+                f"<p style='margin:0;font-size:0.8rem;color:#9ca3af'>Opcional — no cargado</p>"
+                f"<p style='margin:0;font-size:0.75rem;color:#9ca3af'>Activa el Tracking Completo</p>"
+                f"</div>",
+                unsafe_allow_html=True,
+            )
 
     st.markdown("<br>", unsafe_allow_html=True)
 
@@ -2802,6 +2827,7 @@ def main():
         mapping = render_column_mapper(
             st.session_state.df_cartera,
             st.session_state.df_saldos,
+            st.session_state.df_moras,
         )
         if mapping:
             with st.spinner("Cruzando Cartera × Saldos Actualizados…"):
