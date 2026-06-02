@@ -2009,11 +2009,10 @@ def tab_tracking(df_moras: pd.DataFrame | None, metrics: dict | None = None):
             hovertemplate="<b>%{x}</b><br>Entran: %{y:,}<extra></extra>",
         ))
         fig_cohort.add_trace(go.Bar(
-            x=sdf["camp_label"], y=-sdf["fugadas"],
+            x=sdf["camp_label"], y=sdf["fugadas"],
             name="Se van", marker_color=COLORS["danger"],
             text=sdf["fugadas"], textposition="outside", textfont=dict(size=9),
-            hovertemplate="<b>%{x}</b><br>Se van: %{customdata:,}<extra></extra>",
-            customdata=sdf["fugadas"],
+            hovertemplate="<b>%{x}</b><br>Se van: %{y:,}<extra></extra>",
         ))
         fig_cohort.add_trace(go.Scatter(
             x=sdf["camp_label"], y=net,
@@ -2023,13 +2022,15 @@ def tab_tracking(df_moras: pd.DataFrame | None, metrics: dict | None = None):
             text=net.apply(lambda v: f"+{v:,}" if v >= 0 else f"{v:,}"),
             textposition="top center", textfont=dict(size=9, color=COLORS["primary"]),
             hovertemplate="<b>%{x}</b><br>Neto: %{text}<extra></extra>",
+            yaxis="y2",
         ))
         fig_cohort.update_layout(
             **{**PLOTLY_LAYOUT, "margin": dict(t=20, b=80, l=10, r=10)},
-            barmode="overlay",
+            barmode="group",
             xaxis=dict(type="category", **_AXIS_DEFAULTS),
-            yaxis=dict(title="Damas", **{**_AXIS_DEFAULTS,
-                       "zeroline": True, "zerolinecolor": "#cbd5e1", "zerolinewidth": 1.5}),
+            yaxis=dict(title="Damas", **_AXIS_DEFAULTS),
+            yaxis2=dict(title="Neto", overlaying="y", side="right",
+                        showgrid=False, **_AXIS_DEFAULTS),
             legend=dict(orientation="h", yanchor="top", y=-0.2, xanchor="center", x=0.5),
         )
         with col_c2:
