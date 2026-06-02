@@ -2028,8 +2028,8 @@ def tab_tracking(df_moras: pd.DataFrame | None, metrics: dict | None = None):
             **{**PLOTLY_LAYOUT, "margin": dict(t=20, b=80, l=10, r=10)},
             barmode="overlay",
             xaxis=dict(type="category", **_AXIS_DEFAULTS),
-            yaxis=dict(title="Damas", **_AXIS_DEFAULTS,
-                       zeroline=True, zerolinecolor="#cbd5e1", zerolinewidth=1.5),
+            yaxis=dict(title="Damas", **{**_AXIS_DEFAULTS,
+                       "zeroline": True, "zerolinecolor": "#cbd5e1", "zerolinewidth": 1.5}),
             legend=dict(orientation="h", yanchor="top", y=-0.2, xanchor="center", x=0.5),
         )
         with col_c2:
