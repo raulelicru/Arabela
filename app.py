@@ -2175,9 +2175,10 @@ def tab_tracking(df_moras: pd.DataFrame | None, metrics: dict | None = None):
             ),
         ))
         _fig_sank.update_layout(
-            **{**PLOTLY_LAYOUT, "margin": dict(t=20, b=20, l=10, r=10)},
+            **{**PLOTLY_LAYOUT,
+               "margin": dict(t=20, b=20, l=10, r=10),
+               "font": dict(size=13, color=COLORS["primary"], family="Inter, sans-serif")},
             height=420,
-            font=dict(size=13, color=COLORS["primary"]),
         )
         st.plotly_chart(_fig_sank, use_container_width=True)
 
