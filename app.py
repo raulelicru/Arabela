@@ -1731,7 +1731,7 @@ def tab_flujo(metrics: dict):
                                                       lambda v: f"{v:.0f}%",
                                                       threshold=2.0, dark_color="#111111"),
                     )
-                    chart_card("Que porcentaje de cada campaña corresponde a cada ruta",
+                    chart_card("Porcentaje de cada campaña corresponde a cada ruta",
                                fig_heat_pct, key="heat_pct", height_normal=400)
 
                     # Selector: detalle de una campaña específica
