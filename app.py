@@ -2132,8 +2132,8 @@ def tab_tracking(df_moras: pd.DataFrame | None, metrics: dict | None = None):
         # Nodos:  0=Total  1=Pagaron  2=SinPago  3=SinMora  4=EnMora  5=M1  6=M2  7=M3
         _sank_nodes = [
             "Total Asignadas",   # 0
-            "✅ Pagaron",        # 1
-            "⏳ Sin Pago",       # 2
+            "Pagaron",           # 1
+            "Sin Pago",          # 2
             "Sin mora asignada", # 3
             "En mora",           # 4
             "Mora 1",            # 5
@@ -2195,7 +2195,7 @@ def tab_tracking(df_moras: pd.DataFrame | None, metrics: dict | None = None):
         _fig_sank.update_layout(
             **{**PLOTLY_LAYOUT,
                "margin": dict(t=30, b=30, l=20, r=20),
-               "font": dict(size=14, color="#1e3a5f", family="Inter, sans-serif"),
+               "font": dict(size=14, color="#000000", family="Inter, sans-serif"),
                "paper_bgcolor": "rgba(0,0,0,0)"},
             height=500,
         )
