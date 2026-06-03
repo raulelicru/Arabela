@@ -1018,7 +1018,8 @@ def plot_waterfall(df: pd.DataFrame, valor_col: str) -> go.Figure:
     cobrado_camp = (df[df["Estado_Pago"] == "Pagado"]
                     .groupby(camp_col)[valor_col].sum()
                     .sort_index().reset_index())
-    cobrado_camp[camp_col] = cobrado_camp[camp_col].astype(str)
+    cobrado_camp[camp_col] = cobrado_camp[camp_col].astype(str).apply(_fmt_camp)
+    cobrado_camp = cobrado_camp.iloc[cobrado_camp[camp_col].apply(_camp_sort_key).argsort()]
     total = df[valor_col].sum()
     pendiente_final = df[df["Estado_Pago"] == "Pendiente"][valor_col].sum()
     x_labels  = ["Cartera Total"] + cobrado_camp[camp_col].tolist() + ["Saldo Pendiente"]
