@@ -1214,7 +1214,7 @@ def plot_damas_por_temporalidad(df: pd.DataFrame) -> go.Figure:
     ))
     fig.update_layout(
         **PLOTLY_LAYOUT,
-        title_text=f"Damas pendientes por campaña ({dist.values.sum():,} en total)",
+        title_text=f"Damas pendientes de pago por campaña ({dist.values.sum():,} en total)",
         title_font=dict(size=14, color=COLORS["primary"]),
         xaxis=dict(type="category", tickangle=-45),
         xaxis_title="Temporalidad (Año Campaña Saldo)",
