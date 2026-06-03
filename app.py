@@ -2021,12 +2021,19 @@ def tab_tracking(df_moras: pd.DataFrame | None, metrics: dict | None = None):
             _pend_df  = metrics["df"][metrics["df"]["Estado_Pago"] == "Pendiente"]
             _nod_main = _find_col(_pend_df, ["nodama", "no dama", "númdama", "numdama", "número de dama", "num_dama"])
             if _nod_main:
-                pend_no_mora1 = _pend_df[~_pend_df[_nod_main].astype(str).isin(mora1_nodamas)][_nod_main].nunique()
+                _mask_no_m1   = ~_pend_df[_nod_main].astype(str).isin(mora1_nodamas)
+                pend_no_mora1 = _pend_df[_mask_no_m1][_nod_main].nunique()
+                _vcol = metrics.get("valor_col")
+                _saldo_no_m1  = _pend_df[_mask_no_m1][_vcol].sum() if _vcol and _vcol in _pend_df.columns else None
             else:
                 pend_no_mora1 = 0
+                _saldo_no_m1  = None
         else:
             pend_no_mora1 = 0
-        st.metric("Pendientes sin Mora 1", f"{pend_no_mora1:,}")
+            _saldo_no_m1  = None
+        st.metric("Pendientes sin Mora 1", f"{pend_no_mora1:,}",
+                  delta=fmt_currency(_saldo_no_m1) if _saldo_no_m1 is not None else None,
+                  delta_color="off")
 
     st.markdown("<br>", unsafe_allow_html=True)
 
