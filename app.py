@@ -2199,6 +2199,11 @@ def tab_tracking(df_moras: pd.DataFrame | None, metrics: dict | None = None):
                "paper_bgcolor": "rgba(0,0,0,0)"},
             height=500,
         )
+        st.markdown(
+            "<style>.js-plotly-plot .sankey text { text-shadow: none !important; "
+            "filter: none !important; }</style>",
+            unsafe_allow_html=True,
+        )
         st.plotly_chart(_fig_sank, use_container_width=True)
 
         st.divider()
