@@ -1611,7 +1611,7 @@ def tab_flujo(metrics: dict):
                     xaxis=dict(type="category", **_AXIS_DEFAULTS),
                     yaxis=dict(title="Numero de damas", **_AXIS_DEFAULTS),
                 )
-                chart_card("Cuantas damas en mora tiene cada ruta", fig_ruta, key="ruta_moras", height_normal=420)
+                chart_card("Damas por ruta enviadas a Mora", fig_ruta, key="ruta_moras", height_normal=420)
 
                 # Barras: monto por ruta
                 if valor_col and "Monto" in ruta_dist.columns:
