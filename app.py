@@ -1422,6 +1422,45 @@ def render_sidebar(data: dict | None) -> dict:
             st.session_state.bg_color = custom
             st.rerun()
 
+        # ── Modo Visual ───────────────────────────────────────────────────
+        st.divider()
+        st.markdown(
+            "<small style='color:#a8bbcf;font-weight:600;text-transform:uppercase;"
+            "letter-spacing:.05em'>Modo Visual</small>",
+            unsafe_allow_html=True,
+        )
+        if "visual_mode" not in st.session_state:
+            st.session_state.visual_mode = "Clásico"
+
+        mode_col1, mode_col2 = st.columns(2)
+        with mode_col1:
+            active1 = st.session_state.visual_mode == "Clásico"
+            if st.button(
+                "🖥️ Clásico" if not active1 else "✓ Clásico",
+                key="mode_clasico",
+                use_container_width=True,
+                help="Diseño limpio y profesional",
+            ):
+                st.session_state.visual_mode = "Clásico"
+                st.rerun()
+        with mode_col2:
+            active2 = st.session_state.visual_mode == "3D Animado"
+            if st.button(
+                "✨ 3D" if not active2 else "✓ 3D",
+                key="mode_3d",
+                use_container_width=True,
+                help="Cards flotantes, animaciones y efectos de profundidad",
+            ):
+                st.session_state.visual_mode = "3D Animado"
+                st.rerun()
+
+        if st.session_state.visual_mode == "3D Animado":
+            st.markdown(
+                "<p style='font-size:0.65rem;color:#a8bbcf;text-align:center;margin:2px 0 4px'>"
+                "✨ Animaciones activas</p>",
+                unsafe_allow_html=True,
+            )
+
         st.divider()
         st.markdown(
             f"<small style='color:{COLORS['muted']}'>Motor de Inteligencia de Recuperación</small>",
@@ -2977,16 +3016,139 @@ def main():
 
     # ── Aplicar color de fondo dinámico ───────────────────────────────
     _bg = st.session_state.get("bg_color", "#f0f2f6")
-    _is_dark = int(_bg.lstrip("#")[0:2], 16) < 80  # texto adaptado si fondo oscuro
+    _is_dark = int(_bg.lstrip("#")[0:2], 16) < 80
     _text_color = "#e8edf5" if _is_dark else "#1a3c6e"
-    st.markdown(
-        f"<style>"
+    _mode_3d = st.session_state.get("visual_mode", "Clásico") == "3D Animado"
+
+    _base_css = (
         f"[data-testid='stAppViewContainer'], [data-testid='stMain'], .main "
         f"{{ background-color: {_bg} !important; }}"
         f"h1, h2, h3, h4 {{ color: {_text_color} !important; }}"
-        f"</style>",
-        unsafe_allow_html=True,
     )
+
+    if _mode_3d:
+        # Derive accent colors from bg for animated gradient
+        _r = int(_bg.lstrip("#")[0:2], 16)
+        _g = int(_bg.lstrip("#")[2:4], 16)
+        _b = int(_bg.lstrip("#")[4:6], 16)
+        _bg2 = "#{:02x}{:02x}{:02x}".format(
+            min(255, _r + 18), min(255, _g + 22), min(255, _b + 38)
+        )
+        _bg3 = "#{:02x}{:02x}{:02x}".format(
+            max(0, _r - 14), max(0, _g - 10), min(255, _b + 28)
+        )
+        _bg4 = "#{:02x}{:02x}{:02x}".format(
+            min(255, _r + 8), max(0, _g - 6), max(0, _b - 12)
+        )
+        _3d_css = f"""
+@keyframes _ara_grad {{
+  0%   {{ background-position: 0% 50%; }}
+  50%  {{ background-position: 100% 50%; }}
+  100% {{ background-position: 0% 50%; }}
+}}
+@keyframes _ara_float {{
+  0%, 100% {{ transform: translateY(0px) scale(1); }}
+  50%       {{ transform: translateY(-5px) scale(1.01); }}
+}}
+@keyframes _ara_fadein {{
+  from {{ opacity:0; transform: translateY(14px); }}
+  to   {{ opacity:1; transform: translateY(0); }}
+}}
+@keyframes _ara_glow {{
+  0%, 100% {{ box-shadow: 0 8px 28px rgba(30,80,180,0.18), 0 2px 8px rgba(0,0,0,0.10); }}
+  50%       {{ box-shadow: 0 14px 40px rgba(30,80,180,0.30), 0 4px 16px rgba(0,0,0,0.14); }}
+}}
+
+[data-testid='stAppViewContainer'], [data-testid='stMain'], .main {{
+  background: linear-gradient(-45deg, {_bg}, {_bg2}, {_bg3}, {_bg4}) !important;
+  background-size: 400% 400% !important;
+  animation: _ara_grad 14s ease infinite !important;
+}}
+
+[data-testid='stMetricValue'], [data-testid='stMetricLabel'],
+[data-testid='stMetricDelta'] {{
+  transition: color 0.3s ease !important;
+}}
+
+[data-testid='metric-container'] {{
+  animation: _ara_float 5s ease-in-out infinite, _ara_fadein 0.6s ease both;
+  border-radius: 18px !important;
+  background: rgba(255,255,255,0.18) !important;
+  backdrop-filter: blur(12px) saturate(1.4) !important;
+  -webkit-backdrop-filter: blur(12px) saturate(1.4) !important;
+  border: 1px solid rgba(255,255,255,0.35) !important;
+  box-shadow: 0 8px 28px rgba(0,0,0,0.13), inset 0 1px 0 rgba(255,255,255,0.5) !important;
+  padding: 1rem 1.1rem !important;
+  transition: transform 0.35s cubic-bezier(0.34,1.56,0.64,1),
+              box-shadow 0.35s ease !important;
+}}
+[data-testid='metric-container']:hover {{
+  transform: translateY(-9px) rotateX(4deg) !important;
+  box-shadow: 0 22px 50px rgba(0,0,0,0.22), 0 4px 16px rgba(30,80,180,0.18),
+              inset 0 1px 0 rgba(255,255,255,0.5) !important;
+  animation-play-state: paused !important;
+}}
+
+[data-testid='stPlotlyChart'] > div {{
+  border-radius: 18px !important;
+  overflow: hidden !important;
+  box-shadow: 0 12px 38px rgba(0,0,0,0.15), 0 3px 10px rgba(0,0,0,0.08) !important;
+  transition: transform 0.35s cubic-bezier(0.34,1.56,0.64,1),
+              box-shadow 0.35s ease !important;
+  animation: _ara_fadein 0.7s ease both;
+}}
+[data-testid='stPlotlyChart'] > div:hover {{
+  transform: translateY(-5px) !important;
+  box-shadow: 0 24px 56px rgba(0,0,0,0.22), 0 6px 18px rgba(30,80,180,0.14) !important;
+}}
+
+.stButton > button {{
+  transition: transform 0.25s cubic-bezier(0.34,1.56,0.64,1),
+              box-shadow 0.25s ease !important;
+  box-shadow: 0 4px 14px rgba(0,0,0,0.15) !important;
+  border-radius: 10px !important;
+}}
+.stButton > button:hover {{
+  transform: translateY(-4px) scale(1.04) !important;
+  box-shadow: 0 10px 28px rgba(0,0,0,0.22) !important;
+}}
+
+[data-testid='stSidebar'] > div:first-child {{
+  background: linear-gradient(170deg,rgba(16,45,95,0.97),rgba(9,22,50,0.99)) !important;
+  backdrop-filter: blur(20px) !important;
+  box-shadow: 4px 0 36px rgba(0,0,0,0.35) !important;
+}}
+
+[data-testid='stTab'] {{
+  transition: transform 0.25s cubic-bezier(0.34,1.56,0.64,1),
+              box-shadow 0.25s ease !important;
+  border-radius: 8px 8px 0 0 !important;
+}}
+[data-testid='stTab']:hover {{
+  transform: translateY(-3px) !important;
+  box-shadow: 0 -4px 16px rgba(30,80,180,0.2) !important;
+}}
+
+[data-testid='stVerticalBlock'] > div > div > div {{
+  animation: _ara_fadein 0.5s ease both;
+}}
+
+[data-testid='stDataFrame'] {{
+  border-radius: 14px !important;
+  overflow: hidden !important;
+  box-shadow: 0 8px 28px rgba(0,0,0,0.12) !important;
+  animation: _ara_fadein 0.6s ease both;
+}}
+
+h1, h2, h3, h4 {{
+  color: {_text_color} !important;
+  letter-spacing: -0.02em !important;
+  animation: _ara_fadein 0.5s ease both;
+}}
+"""
+        st.markdown(f"<style>{_base_css}{_3d_css}</style>", unsafe_allow_html=True)
+    else:
+        st.markdown(f"<style>{_base_css}</style>", unsafe_allow_html=True)
 
     # ── Carga de los 2 archivos Excel ─────────────────────────────────
     with st.expander(
