@@ -1977,9 +1977,17 @@ def tab_tracking(df_moras: pd.DataFrame | None, metrics: dict | None = None):
     with k1: st.metric("Total campañas", f"{len(camps_n)}")
     with k2: st.metric("Retención promedio por campaña", f"{avg_ret:.1f}%")
     with k3:
-        fuga_camp = sdf.loc[sdf["fugadas"].idxmax(), "camp_label"] if not sdf.empty else "—"
-        fuga_val  = sdf["fugadas"].max() if not sdf.empty else 0
-        st.metric("Mayor fuga", f"{fuga_camp} ({fuga_val:,})")
+        mora1_nodamas = set(df[df["_mora"] == "Mora 1"][nodama_col].astype(str))
+        if metrics and "df" in metrics:
+            _pend_df  = metrics["df"][metrics["df"]["Estado_Pago"] == "Pendiente"]
+            _nod_main = _find_col(_pend_df, ["nodama", "no dama", "númdama", "numdama", "número de dama", "num_dama"])
+            if _nod_main:
+                pend_no_mora1 = _pend_df[~_pend_df[_nod_main].astype(str).isin(mora1_nodamas)][_nod_main].nunique()
+            else:
+                pend_no_mora1 = 0
+        else:
+            pend_no_mora1 = 0
+        st.metric("Pendientes sin Mora 1", f"{pend_no_mora1:,}")
 
     st.markdown("<br>", unsafe_allow_html=True)
 
