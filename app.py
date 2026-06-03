@@ -1639,10 +1639,15 @@ def tab_flujo(metrics: dict):
                     st.markdown("<br>", unsafe_allow_html=True)
                     st.markdown("#### Composicion de campañas dentro de cada ruta")
 
+                    _agg = {ruta_col: "count"}
+                    if valor_col and valor_col in df_cruce.columns:
+                        _agg[valor_col] = "sum"
                     ruta_camp = (
                         df_cruce.groupby([ruta_col, camp_col_ruta])
-                        .size()
-                        .reset_index(name="Damas")
+                        .agg(**{"Damas": pd.NamedAgg(column=ruta_col, aggfunc="count"),
+                                **( {"Saldo": pd.NamedAgg(column=valor_col, aggfunc="sum")}
+                                    if valor_col and valor_col in df_cruce.columns else {})})
+                        .reset_index()
                     )
                     ruta_camp["Campaña"] = ruta_camp[camp_col_ruta].astype(str).str.strip().apply(_fmt_camp)
                     total_por_camp = ruta_camp.groupby("Campaña")["Damas"].transform("sum")
@@ -1738,12 +1743,15 @@ def tab_flujo(metrics: dict):
                     st.markdown("<br>", unsafe_allow_html=True)
                     camp_sel = st.selectbox("Ver detalle de una campaña:",
                                             camps_sorted, key="sel_camp_ruta")
+                    _det_cols = [ruta_col, "Damas", "% en ruta"] + (["Saldo"] if "Saldo" in ruta_camp.columns else [])
                     detalle_camp = (
                         ruta_camp[ruta_camp["Campaña"] == camp_sel]
-                        [[ruta_col, "Damas", "% en ruta"]]
+                        [_det_cols]
                         .sort_values("Damas", ascending=False)
                         .rename(columns={ruta_col: "Ruta", "% en ruta": "% de la campaña"})
                     )
+                    if "Saldo" in detalle_camp.columns:
+                        detalle_camp["Saldo"] = detalle_camp["Saldo"].apply(fmt_currency)
                     total_camp_sel = int(detalle_camp["Damas"].sum())
                     st.caption(f"{camp_sel} — {total_camp_sel:,} damas en mora en total")
                     st.dataframe(detalle_camp, use_container_width=False, hide_index=True, height=320, width=480)
