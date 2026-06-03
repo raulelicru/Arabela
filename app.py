@@ -1951,9 +1951,7 @@ def tab_tracking(df_moras: pd.DataFrame | None, metrics: dict | None = None):
 
     st.markdown(
         f"<div class='kpi-banner' style='margin-bottom:0.5rem'>"
-        f"<h1 style='margin:0 0 0.25rem'>Tracking Completo de Cartera</h1>"
-        f"<p style='margin:0;opacity:.8'>Seguimiento de pendientes de pago a través de las 10 campañas operativas"
-        f" · Damas no pagadas e inactivas: <b>{base_inac:,}</b></p></div>",
+        f"<h1 style='margin:0'>Tracking Completo de Cartera</h1></div>",
         unsafe_allow_html=True,
     )
     k1, k2, k3, k4 = st.columns(4)
