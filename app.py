@@ -1991,7 +1991,41 @@ def tab_tracking(df_moras: pd.DataFrame | None, metrics: dict | None = None):
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    subtab1, subtab2, subtab3, subtab4, subtab5, subtab6 = st.tabs([
+    # ── Cómputos para Reporte Ejecutivo ──────────────────────────────────
+    _all_inac = set().union(*[mora_sets[(c, "Inactiva")] for c in camps_n]) if camps_n else set()
+    _total_inac = len(_all_inac)
+    _total_pagaron = metrics["pagados"] if metrics else 0
+    _total_sin_pago = metrics["pendientes"] if metrics else 0
+
+    _migrated_to_m1 = set()
+    for _i, _c in enumerate(camps_n[:-1]):
+        _next_c = camps_n[_i + 1]
+        _inac_c = mora_sets[(_c, "Inactiva")]
+        _m1_next = mora_sets[(_next_c, "Mora 1")]
+        _migrated_to_m1 |= (_inac_c & _m1_next)
+    _total_migrated = len(_migrated_to_m1)
+
+    _total_fuga = max(0, _total_sin_pago - _total_migrated)
+    _pct_migr = round(_total_migrated / _total_sin_pago * 100, 1) if _total_sin_pago else 0.0
+    _pct_fuga = round(_total_fuga / _total_sin_pago * 100, 1) if _total_sin_pago else 0.0
+
+    _all_m1 = set().union(*[mora_sets[(c, "Mora 1")] for c in camps_n]) if camps_n else set()
+    _all_m2 = set().union(*[mora_sets[(c, "Mora 2")] for c in camps_n]) if camps_n else set()
+    _all_m3 = set().union(*[mora_sets[(c, "Mora 3")] for c in camps_n]) if camps_n else set()
+    _direct_m2 = len(_all_m2 - _all_m1)
+    _direct_m3 = len(_all_m3 - _all_m1 - _all_m2)
+    _direct_entries = _direct_m2 + _direct_m3
+
+    _m1_to_m2_to_m3 = len(_all_m1 & _all_m2 & _all_m3)
+    _m1_to_m2_only  = len((_all_m1 & _all_m2) - _all_m3)
+    _m1_only        = len(_all_m1 - _all_m2 - _all_m3)
+    _m1_to_m2_total = len(_all_m1 & _all_m2)
+    _m2_to_m3_total = len(_all_m2 & _all_m3)
+    _m1_exits       = len(_all_m1) - _m1_to_m2_total
+    _m2_exits       = len(_all_m2) - _m2_to_m3_total
+
+    subtab0, subtab1, subtab2, subtab3, subtab4, subtab5, subtab6 = st.tabs([
+        "Reporte Ejecutivo",
         "Resumen Ejecutivo",
         "Por Campaña",
         "Por Mora",
@@ -1999,6 +2033,173 @@ def tab_tracking(df_moras: pd.DataFrame | None, metrics: dict | None = None):
         "Transiciones",
         "Flujo Inactivas",
     ])
+
+    # ══════════════════════════════════════════
+    # SUBTAB 0 — Reporte Ejecutivo
+    # ══════════════════════════════════════════
+    with subtab0:
+        st.markdown(
+            "<div class='kpi-banner'>"
+            "<h1 style='margin:0'>Reporte Ejecutivo · Análisis de Migración y Fuga</h1>"
+            "</div>",
+            unsafe_allow_html=True,
+        )
+        st.markdown("<br>", unsafe_allow_html=True)
+
+        # ── Fila 1 de KPIs ──────────────────────────────────────────────
+        _re_k1, _re_k2, _re_k3, _re_k4 = st.columns(4)
+        with _re_k1:
+            st.metric("Total Cuentas Inactivas", f"{_total_inac:,}")
+        with _re_k2:
+            st.metric("Total que Pagaron", f"{_total_pagaron:,}")
+        with _re_k3:
+            st.metric("Total Sin Pago", f"{_total_sin_pago:,}")
+        with _re_k4:
+            st.metric("Migraron a Mora 1", f"{_total_migrated:,}")
+
+        st.markdown("<br>", unsafe_allow_html=True)
+
+        # ── Fila 2 de KPIs ──────────────────────────────────────────────
+        _re_k5, _re_k6, _re_k7, _re_k8 = st.columns(4)
+        with _re_k5:
+            st.metric("Sin Pago Sin Asignar", f"{_total_fuga:,}")
+        with _re_k6:
+            st.metric("% Migración a Mora 1", f"{_pct_migr:.1f}%")
+        with _re_k7:
+            st.metric("% Fuga", f"{_pct_fuga:.1f}%")
+        with _re_k8:
+            st.metric("Entradas Directas M2/M3", f"{_direct_entries:,}")
+
+        st.divider()
+
+        # ── Diagrama Sankey ─────────────────────────────────────────────
+        st.markdown("#### Flujo de Migración (Sankey)")
+        _sank_nodes = [
+            "Inactivas",    # 0
+            "Pagaron",      # 1
+            "Sin Pago",     # 2
+            "Mora 1",       # 3
+            "No migró",     # 4
+            "Mora 2",       # 5
+            "Sale M1",      # 6
+            "Mora 3",       # 7
+            "Sale M2",      # 8
+        ]
+        _sank_colors_node = [
+            MORA_COLORS["Inactiva"],
+            COLORS["success"],
+            COLORS["warning"],
+            COLORS["warning"],
+            COLORS["danger"],
+            COLORS["orange"],
+            "#94A3B8",
+            COLORS["danger"],
+            "#94A3B8",
+        ]
+        _sank_src    = [0, 0, 2, 2, 3, 3, 5, 5]
+        _sank_tgt    = [1, 2, 3, 4, 5, 6, 7, 8]
+        _sank_val    = [
+            max(1, _total_pagaron),
+            max(1, _total_sin_pago),
+            max(1, _total_migrated),
+            max(1, _total_fuga),
+            max(1, _m1_to_m2_total),
+            max(1, _m1_exits),
+            max(1, _m2_to_m3_total),
+            max(1, _m2_exits),
+        ]
+        _sank_link_colors = [
+            "rgba(34,197,94,0.35)",
+            "rgba(245,158,11,0.35)",
+            "rgba(245,158,11,0.35)",
+            "rgba(239,68,68,0.35)",
+            "rgba(249,115,22,0.35)",
+            "rgba(148,163,184,0.35)",
+            "rgba(239,68,68,0.35)",
+            "rgba(148,163,184,0.35)",
+        ]
+        _fig_sank = go.Figure(go.Sankey(
+            arrangement="snap",
+            node=dict(
+                pad=18, thickness=22,
+                line=dict(color="white", width=0.5),
+                label=_sank_nodes,
+                color=_sank_colors_node,
+                hovertemplate="%{label}: %{value:,}<extra></extra>",
+            ),
+            link=dict(
+                source=_sank_src,
+                target=_sank_tgt,
+                value=_sank_val,
+                color=_sank_link_colors,
+                hovertemplate="%{source.label} → %{target.label}: %{value:,}<extra></extra>",
+            ),
+        ))
+        _fig_sank.update_layout(
+            **{**PLOTLY_LAYOUT, "margin": dict(t=20, b=20, l=10, r=10)},
+            height=420,
+            font=dict(size=13, color=COLORS["primary"]),
+        )
+        st.plotly_chart(_fig_sank, use_container_width=True)
+
+        st.divider()
+
+        # ── Trayectorias ─────────────────────────────────────────────────
+        st.markdown("#### Trayectorias de Cuentas")
+        _traj_labels = [
+            "Mora 1 → Sale",
+            "Mora 1 → Mora 2 → Sale",
+            "Mora 1 → Mora 2 → Mora 3",
+            "Directo a Mora 2",
+            "Directo a Mora 3",
+        ]
+        _traj_values = [
+            _m1_only,
+            _m1_to_m2_only,
+            _m1_to_m2_to_m3,
+            _direct_m2,
+            _direct_m3,
+        ]
+        _traj_bar_colors = [
+            COLORS["warning"],
+            COLORS["orange"],
+            COLORS["danger"],
+            "#A78BFA",
+            "#6D28D9",
+        ]
+        _fig_traj = go.Figure(go.Bar(
+            x=_traj_values,
+            y=_traj_labels,
+            orientation="h",
+            marker_color=_traj_bar_colors,
+            text=[f"{v:,}" for v in _traj_values],
+            textposition="outside",
+            textfont=dict(size=11),
+            hovertemplate="%{y}: %{x:,}<extra></extra>",
+        ))
+        _fig_traj.update_layout(
+            **{**PLOTLY_LAYOUT, "margin": dict(t=20, b=20, l=180, r=80)},
+            height=300,
+            xaxis=dict(title="Cuentas", **_AXIS_DEFAULTS),
+            yaxis=dict(**_AXIS_DEFAULTS),
+        )
+        st.plotly_chart(_fig_traj, use_container_width=True)
+
+        st.divider()
+
+        # ── Tabla resumen ─────────────────────────────────────────────────
+        st.markdown("#### Tabla Resumen Ejecutivo")
+        _re_table_rows = [
+            {"#": 1, "Métrica": "Total Inactivas",         "Cantidad": _total_inac,     "%": "100%"},
+            {"#": 2, "Métrica": "Pagaron",                 "Cantidad": _total_pagaron,  "%": f"{round(_total_pagaron/_total_inac*100,1) if _total_inac else 0:.1f}%"},
+            {"#": 3, "Métrica": "Sin Pago",                "Cantidad": _total_sin_pago, "%": f"{round(_total_sin_pago/_total_inac*100,1) if _total_inac else 0:.1f}%"},
+            {"#": 4, "Métrica": "Migraron a Mora 1",       "Cantidad": _total_migrated, "%": f"{_pct_migr:.1f}% de sin pago"},
+            {"#": 5, "Métrica": "Sin Pago sin asignar",    "Cantidad": _total_fuga,     "%": f"{_pct_fuga:.1f}% de sin pago"},
+            {"#": 6, "Métrica": "% Migración",             "Cantidad": "—",             "%": f"{_pct_migr:.1f}%"},
+            {"#": 7, "Métrica": "% Fuga",                  "Cantidad": "—",             "%": f"{_pct_fuga:.1f}%"},
+            {"#": 8, "Métrica": "Entradas directas M2/M3", "Cantidad": _direct_entries, "%": "—"},
+        ]
+        st.dataframe(pd.DataFrame(_re_table_rows), use_container_width=True, hide_index=True)
 
     # ══════════════════════════════════════════
     # SUBTAB 1 — Resumen Ejecutivo
