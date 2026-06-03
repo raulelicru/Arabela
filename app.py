@@ -2031,10 +2031,9 @@ def tab_tracking(df_moras: pd.DataFrame | None, metrics: dict | None = None):
     st.markdown("<br>", unsafe_allow_html=True)
 
     # ── Cómputos para Reporte Ejecutivo ──────────────────────────────────
-    _all_inac = set().union(*[mora_sets[(c, "Inactiva")] for c in camps_n]) if camps_n else set()
-    _total_inac = len(_all_inac)
-    _total_pagaron = metrics["pagados"] if metrics else 0
+    _total_pagaron  = metrics["pagados"]    if metrics else 0
     _total_sin_pago = metrics["pendientes"] if metrics else 0
+    _total_inac     = _total_pagaron + _total_sin_pago   # pool completo asignado
 
     _migrated_to_m1 = set()
     for _i, _c in enumerate(camps_n[:-1]):
@@ -2088,7 +2087,7 @@ def tab_tracking(df_moras: pd.DataFrame | None, metrics: dict | None = None):
         # ── Fila 1 de KPIs ──────────────────────────────────────────────
         _re_k1, _re_k2, _re_k3, _re_k4 = st.columns(4)
         with _re_k1:
-            st.metric("Total Cuentas Inactivas", f"{_total_inac:,}")
+            st.metric("Total Damas Asignadas", f"{_total_inac:,}")
         with _re_k2:
             st.metric("Total que Pagaron", f"{_total_pagaron:,}")
         with _re_k3:
@@ -2114,9 +2113,9 @@ def tab_tracking(df_moras: pd.DataFrame | None, metrics: dict | None = None):
         # ── Diagrama Sankey ─────────────────────────────────────────────
         st.markdown("#### Flujo de Migración (Sankey)")
         _sank_nodes = [
-            "Inactivas",    # 0
-            "Pagaron",      # 1
-            "Sin Pago",     # 2
+            "Total Asignadas",  # 0
+            "Pagaron",          # 1
+            "Sin Pago",         # 2
             "Mora 1",       # 3
             "No migró",     # 4
             "Mora 2",       # 5
@@ -2230,7 +2229,7 @@ def tab_tracking(df_moras: pd.DataFrame | None, metrics: dict | None = None):
         # ── Tabla resumen ─────────────────────────────────────────────────
         st.markdown("#### Tabla Resumen Ejecutivo")
         _re_table_rows = [
-            {"#": 1, "Métrica": "Total Inactivas",         "Cantidad": _total_inac,     "%": "100%"},
+            {"#": 1, "Métrica": "Total Damas Asignadas",    "Cantidad": _total_inac,     "%": "100%"},
             {"#": 2, "Métrica": "Pagaron",                 "Cantidad": _total_pagaron,  "%": f"{round(_total_pagaron/_total_inac*100,1) if _total_inac else 0:.1f}%"},
             {"#": 3, "Métrica": "Sin Pago",                "Cantidad": _total_sin_pago, "%": f"{round(_total_sin_pago/_total_inac*100,1) if _total_inac else 0:.1f}%"},
             {"#": 4, "Métrica": "Migraron a Mora 1",       "Cantidad": _total_migrated, "%": f"{_pct_migr:.1f}% de sin pago"},
