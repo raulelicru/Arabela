@@ -2119,72 +2119,85 @@ def tab_tracking(df_moras: pd.DataFrame | None, metrics: dict | None = None):
 
         # ── Diagrama Sankey ─────────────────────────────────────────────
         st.markdown("#### Flujo de Migración (Sankey)")
+
+        # Nivel 2: en mora vs sin mora dentro del pool Sin Pago
+        _en_mora_tot = len(_all_m1 | _all_m2 | _all_m3)
+        _sin_mora_sp = max(0, _total_sin_pago - _en_mora_tot)
+
+        # Nivel 3: distribución de moras
+        _solo_m1  = len(_all_m1 - _all_m2 - _all_m3)
+        _solo_m2  = len(_all_m2 - _all_m3)
+        _solo_m3  = len(_all_m3)
+
+        # Nodos:  0=Total  1=Pagaron  2=SinPago  3=SinMora  4=EnMora  5=M1  6=M2  7=M3
         _sank_nodes = [
-            "Total Asignadas",  # 0
-            "Pagaron",          # 1
-            "Sin Pago",         # 2
-            "Mora 1",       # 3
-            "No migró",     # 4
-            "Mora 2",       # 5
-            "Sale M1",      # 6
-            "Mora 3",       # 7
-            "Sale M2",      # 8
+            "Total Asignadas",   # 0
+            "✅ Pagaron",        # 1
+            "⏳ Sin Pago",       # 2
+            "Sin mora asignada", # 3
+            "En mora",           # 4
+            "Mora 1",            # 5
+            "Mora 2",            # 6
+            "Mora 3",            # 7
         ]
+        _sank_x = [0.01, 0.99, 0.40, 0.99, 0.70, 0.99, 0.99, 0.99]
+        _sank_y = [0.50, 0.18, 0.72, 0.55, 0.80, 0.68, 0.82, 0.95]
         _sank_colors_node = [
-            MORA_COLORS["Inactiva"],
-            COLORS["success"],
-            COLORS["warning"],
-            COLORS["warning"],
-            COLORS["danger"],
-            COLORS["orange"],
-            "#94A3B8",
-            COLORS["danger"],
-            "#94A3B8",
+            "#64748B",           # Total — gris azulado
+            "#22C55E",           # Pagaron — verde
+            "#F59E0B",           # Sin Pago — ámbar
+            "#94A3B8",           # Sin mora — gris claro
+            "#FB923C",           # En mora — naranja
+            "#FBBF24",           # Mora 1 — amarillo
+            "#F97316",           # Mora 2 — naranja fuerte
+            "#EF4444",           # Mora 3 — rojo
         ]
-        _sank_src    = [0, 0, 2, 2, 3, 3, 5, 5]
-        _sank_tgt    = [1, 2, 3, 4, 5, 6, 7, 8]
-        _sank_val    = [
+        _sank_src = [0, 0, 2, 2, 4,       4,       4      ]
+        _sank_tgt = [1, 2, 3, 4, 5,       6,       7      ]
+        _sank_val = [
             max(1, _total_pagaron),
             max(1, _total_sin_pago),
-            max(1, _total_migrated),
-            max(1, _total_fuga),
-            max(1, _m1_to_m2_total),
-            max(1, _m1_exits),
-            max(1, _m2_to_m3_total),
-            max(1, _m2_exits),
+            max(1, _sin_mora_sp),
+            max(1, _en_mora_tot),
+            max(1, _solo_m1),
+            max(1, _solo_m2),
+            max(1, _solo_m3),
         ]
         _sank_link_colors = [
-            "rgba(34,197,94,0.35)",
-            "rgba(245,158,11,0.35)",
-            "rgba(245,158,11,0.35)",
-            "rgba(239,68,68,0.35)",
-            "rgba(249,115,22,0.35)",
-            "rgba(148,163,184,0.35)",
-            "rgba(239,68,68,0.35)",
-            "rgba(148,163,184,0.35)",
+            "rgba(34,197,94,0.30)",    # → Pagaron
+            "rgba(245,158,11,0.30)",   # → Sin Pago
+            "rgba(148,163,184,0.30)",  # → Sin mora
+            "rgba(251,146,60,0.30)",   # → En mora
+            "rgba(251,191,36,0.30)",   # → M1
+            "rgba(249,115,22,0.30)",   # → M2
+            "rgba(239,68,68,0.30)",    # → M3
         ]
         _fig_sank = go.Figure(go.Sankey(
-            arrangement="snap",
+            arrangement="fixed",
             node=dict(
-                pad=18, thickness=22,
-                line=dict(color="white", width=0.5),
+                pad=28,
+                thickness=28,
+                line=dict(color="rgba(255,255,255,0.6)", width=1),
                 label=_sank_nodes,
                 color=_sank_colors_node,
-                hovertemplate="%{label}: %{value:,}<extra></extra>",
+                x=_sank_x,
+                y=_sank_y,
+                hovertemplate="<b>%{label}</b><br>%{value:,} damas<extra></extra>",
             ),
             link=dict(
                 source=_sank_src,
                 target=_sank_tgt,
                 value=_sank_val,
                 color=_sank_link_colors,
-                hovertemplate="%{source.label} → %{target.label}: %{value:,}<extra></extra>",
+                hovertemplate="%{source.label} → %{target.label}<br><b>%{value:,}</b> damas<extra></extra>",
             ),
         ))
         _fig_sank.update_layout(
             **{**PLOTLY_LAYOUT,
-               "margin": dict(t=20, b=20, l=10, r=10),
-               "font": dict(size=13, color=COLORS["primary"], family="Inter, sans-serif")},
-            height=420,
+               "margin": dict(t=30, b=30, l=20, r=20),
+               "font": dict(size=14, color="#1e3a5f", family="Inter, sans-serif"),
+               "paper_bgcolor": "rgba(0,0,0,0)"},
+            height=500,
         )
         st.plotly_chart(_fig_sank, use_container_width=True)
 
