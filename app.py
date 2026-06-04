@@ -3052,6 +3052,13 @@ def main():
         f"{{ background-color: {_bg} !important; }}"
         f"h1, h2, h3, h4 {{ color: {_text_color} !important; }}"
     )
+    # Empuja el tab "Interno" (último botón en el primer stTabBar) a la derecha
+    _TAB_RIGHT_CSS = (
+        "[data-testid='stTabBar']:first-of-type "
+        "{ display:flex !important; width:100% !important; }"
+        "[data-testid='stTabBar']:first-of-type > div:last-child "
+        "{ margin-left:auto !important; }"
+    )
 
     if _mode_3d:
         # Derive accent colors from bg for animated gradient
@@ -3173,9 +3180,9 @@ h1, h2, h3, h4 {{
   animation: _ara_fadein 0.5s ease both;
 }}
 """
-        st.markdown(f"<style>{_base_css}{_3d_css}</style>", unsafe_allow_html=True)
+        st.markdown(f"<style>{_base_css}{_3d_css}{_TAB_RIGHT_CSS}</style>", unsafe_allow_html=True)
     else:
-        st.markdown(f"<style>{_base_css}</style>", unsafe_allow_html=True)
+        st.markdown(f"<style>{_base_css}{_TAB_RIGHT_CSS}</style>", unsafe_allow_html=True)
 
     # ── Carga de los 2 archivos Excel ─────────────────────────────────
     with st.expander(
