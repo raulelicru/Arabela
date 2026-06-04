@@ -3523,15 +3523,19 @@ def _render_interno_tab():
                     _tiene_efectivo=("_es_efectivo", "any"),
                 ).reset_index()
 
-                if promesa_t:
-                    prom_group = df_t.groupby(grp_cols)[promesa_t].apply(
-                        lambda s: s.dropna().astype(str).str.strip().str.lower()
-                        .replace({"nan": "", "none": "", "no": "", "n/a": ""})
-                        .pipe(lambda x: (x != "").any())
-                    ).reset_index()
-                    prom_group.columns = grp_cols + ["_tiene_promesa"]
-                    por_nodama = por_nodama.merge(prom_group, on=grp_cols, how="left")
-                    por_nodama["_tiene_promesa"] = por_nodama["_tiene_promesa"].fillna(False)
+                if promesa_t and promesa_t in df_t.columns:
+                    try:
+                        _prom_s = (
+                            df_t[promesa_t].fillna("").astype(str).str.strip().str.lower()
+                            .replace({"nan": "", "none": "", "no": "", "n/a": ""})
+                        )
+                        df_t["_tiene_promesa_row"] = _prom_s != ""
+                        prom_group = df_t.groupby(grp_cols)["_tiene_promesa_row"].any().reset_index()
+                        prom_group.columns = grp_cols + ["_tiene_promesa"]
+                        por_nodama = por_nodama.merge(prom_group, on=grp_cols, how="left")
+                        por_nodama["_tiene_promesa"] = por_nodama["_tiene_promesa"].fillna(False)
+                    except Exception:
+                        por_nodama["_tiene_promesa"] = False
                 else:
                     por_nodama["_tiene_promesa"] = False
 
@@ -4206,7 +4210,12 @@ h1, h2, h3, h4 {{
             tab_tracking(st.session_state.df_moras, metrics)
 
     with interno_tab:
-        _render_interno_tab()
+        try:
+            _render_interno_tab()
+        except Exception as _e:
+            st.error(f"Error en Interno: {_e}")
+            import traceback
+            st.code(traceback.format_exc())
 
 
 if __name__ == "__main__":
