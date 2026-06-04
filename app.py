@@ -3283,7 +3283,7 @@ h1, h2, h3, h4 {{
         st.info(" Filtros activos — " + " · ".join(partes))
 
     # ── Tabs ──────────────────────────────────────────────────────────
-    arabela_tab, interno_tab = st.tabs(["🌸 Arabela", "🔒 Interno"])
+    arabela_tab, interno_tab = st.tabs(["🌸 Arabela", "🏢 Interno"])
     with arabela_tab:
         sub1, sub2, sub3, sub4 = st.tabs([
             " Resumen General",
