@@ -3276,20 +3276,22 @@ h1, h2, h3, h4 {{
         st.info(" Filtros activos — " + " · ".join(partes))
 
     # ── Tabs ──────────────────────────────────────────────────────────
-    tab1, tab2, tab3, tab4 = st.tabs([
-        " Resumen General",
-        " Temporalidad",
-        "Operaciones y Territorio",
-        " Tracking Completo",
-    ])
-    with tab1:
-        tab_resumen(metrics)
-    with tab2:
-        tab_temporalidad(metrics)
-    with tab3:
-        tab_flujo(metrics)
-    with tab4:
-        tab_tracking(st.session_state.df_moras, metrics)
+    arabela_tab, = st.tabs(["🌸 Arabela"])
+    with arabela_tab:
+        sub1, sub2, sub3, sub4 = st.tabs([
+            " Resumen General",
+            " Temporalidad",
+            "Operaciones y Territorio",
+            " Tracking Completo",
+        ])
+        with sub1:
+            tab_resumen(metrics)
+        with sub2:
+            tab_temporalidad(metrics)
+        with sub3:
+            tab_flujo(metrics)
+        with sub4:
+            tab_tracking(st.session_state.df_moras, metrics)
 
 
 if __name__ == "__main__":
