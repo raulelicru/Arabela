@@ -3378,36 +3378,40 @@ def _render_interno_tab():
                 unsafe_allow_html=True,
             )
 
-            # Conjuntos de (NoDama, Campaña) — cruce por ambas llaves
-            def _make_keys(df, nodama_col, camp_col):
-                """Crea set de tuplas (nodama_str, camp_str). Si no hay camp_col usa solo nodama."""
-                if df is None or not nodama_col:
+            # Cruce vectorizado por (NoDama, Campaña) usando llave compuesta "nd|camp"
+            def _make_key_set(df, nodama_col, camp_col):
+                if df is None or not nodama_col or nodama_col not in df.columns:
                     return set()
                 _nd = df[nodama_col].dropna().astype(str).str.strip()
                 if camp_col and camp_col in df.columns:
                     _cp = df[camp_col].astype(str).str.strip()
-                    return set(zip(_nd, _cp))
-                return set(zip(_nd, ["*"] * len(_nd)))
+                    return set(_nd + "|" + _cp)
+                return set(_nd + "|*")
 
-            base_keys  = _make_keys(df_moras_fil,  mora_nodama_col, mora_camp_col)
-            tel_keys   = _make_keys(df_tel_fil,    tel_cols.get("nodama"),   tel_cols.get("camp"))
-            campo_keys = _make_keys(df_campo_fil,  campo_cols.get("nodama"), campo_cols.get("camp"))
+            base_keys  = _make_key_set(df_moras_fil, mora_nodama_col, mora_camp_col)
+            tel_raw    = _make_key_set(df_tel_fil,   tel_cols.get("nodama"),   tel_cols.get("camp"))
+            campo_raw  = _make_key_set(df_campo_fil, campo_cols.get("nodama"), campo_cols.get("camp"))
 
-            # Si algún archivo no tiene campaña, comparar solo por NoDama
+            # Si el archivo de gestión no tiene campaña, expande base por NoDama
             _tel_has_camp   = bool(tel_cols.get("camp"))
             _campo_has_camp = bool(campo_cols.get("camp"))
-            if not _tel_has_camp:
-                _base_nd = {k[0] for k in base_keys}
-                tel_keys  = {(nd, c) for (nd, c) in base_keys if nd in {k[0] for k in tel_keys}}
-            if not _campo_has_camp:
-                campo_keys = {(nd, c) for (nd, c) in base_keys if nd in {k[0] for k in campo_keys}}
 
-            tel_base    = tel_keys   & base_keys
-            campo_base  = campo_keys & base_keys
-            solo_tel    = tel_base   - campo_base
-            solo_campo  = campo_base - tel_base
-            mixta       = tel_base   & campo_base
-            sin_gestion = base_keys  - tel_base - campo_base
+            if not _tel_has_camp and tel_raw:
+                _tel_nd = {k.split("|")[0] for k in tel_raw}
+                tel_keys = {k for k in base_keys if k.split("|")[0] in _tel_nd}
+            else:
+                tel_keys = tel_raw & base_keys
+
+            if not _campo_has_camp and campo_raw:
+                _campo_nd = {k.split("|")[0] for k in campo_raw}
+                campo_keys = {k for k in base_keys if k.split("|")[0] in _campo_nd}
+            else:
+                campo_keys = campo_raw & base_keys
+
+            solo_tel    = tel_keys   - campo_keys
+            solo_campo  = campo_keys - tel_keys
+            mixta       = tel_keys   & campo_keys
+            sin_gestion = base_keys  - tel_keys - campo_keys
             con_gestion = base_keys  - sin_gestion
 
             total_base = len(base_keys) or 1
@@ -3539,13 +3543,13 @@ def _render_interno_tab():
                 if df_moras_fil is not None and mora_nodama_col:
                     if camp_t and camp_t in df_t.columns and mora_camp_col:
                         df_t["_camp_str"] = df_t[camp_t].astype(str).str.strip()
-                        _base_keys_set = set(zip(
-                            df_moras_fil[mora_nodama_col].astype(str).str.strip(),
+                        # Vectorizado: crear llave compuesta y usar isin()
+                        _base_key_strs = set(
+                            df_moras_fil[mora_nodama_col].astype(str).str.strip() + "|" +
                             df_moras_fil[mora_camp_col].astype(str).str.strip()
-                        ))
-                        df_t = df_t[df_t.apply(
-                            lambda r: (r[nodama_t], r["_camp_str"]) in _base_keys_set, axis=1
-                        )]
+                        )
+                        df_t["_join_key"] = df_t[nodama_t] + "|" + df_t["_camp_str"]
+                        df_t = df_t[df_t["_join_key"].isin(_base_key_strs)]
                     else:
                         _base_nd_set = set(df_moras_fil[mora_nodama_col].astype(str).str.strip())
                         df_t = df_t[df_t[nodama_t].isin(_base_nd_set)]
@@ -4242,7 +4246,12 @@ h1, h2, h3, h4 {{
             tab_tracking(st.session_state.df_moras, metrics)
 
     with interno_tab:
-        _render_interno_tab()
+        try:
+            _render_interno_tab()
+        except Exception as _e:
+            st.error(f"Error en Interno: {_e}")
+            import traceback
+            st.code(traceback.format_exc())
 
 
 if __name__ == "__main__":
