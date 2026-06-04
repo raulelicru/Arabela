@@ -981,12 +981,13 @@ def plot_heatmap(df: pd.DataFrame, valor_col: str, fecha_col: str | None = None)
         total_grp   = df.groupby(["_anio", "_per"])[valor_col].sum()
         pct_grp     = (cobrado_grp / total_grp.replace(0, np.nan) * 100).fillna(0)
         pivot    = pct_grp.unstack(fill_value=0)
-        anios    = sorted(pivot.index.tolist())
-        x_labels = sorted(pivot.columns.tolist())
-        z        = [[pivot.loc[a, p] if p in pivot.columns else 0 for p in x_labels] for a in anios]
-        hover    = "Año: %{y} · Período: %{x}<br>% Cobrado: %{z:.1f}%<extra></extra>"
-        title    = "Mapa de Calor · % Cobrado por Año y Período de Campaña"
-        ylab, xlab = "Año", "Período"
+        anios    = [str(a) for a in sorted(pivot.index.tolist())]   # strings → categorical
+        raw_pers = sorted(pivot.columns.tolist())
+        x_labels = [f"Camp. {int(p)}" for p in raw_pers]           # "01" → "Camp. 1"
+        z        = [[pivot.loc[a, p] if p in pivot.columns else 0 for p in raw_pers] for a in pivot.index.sort_values()]
+        hover    = "Año: %{y} · %{x}<br>% Cobrado: %{z:.1f}%<extra></extra>"
+        title    = "Mapa de Calor · % Cobrado por Campaña y Año"
+        ylab, xlab = "Año", "Campaña"
 
     text_z = [[f"{v:.1f}%" for v in row] for row in z]
     fig = go.Figure(go.Heatmap(
@@ -1002,7 +1003,8 @@ def plot_heatmap(df: pd.DataFrame, valor_col: str, fecha_col: str | None = None)
         **PLOTLY_LAYOUT,
         title_text=title,
         title_font=dict(size=14, color=COLORS["primary"]),
-        xaxis_title=xlab, yaxis_title=ylab,
+        xaxis=dict(title=xlab, type="category", **_AXIS_DEFAULTS),
+        yaxis=dict(title=ylab, type="category", **_AXIS_DEFAULTS),
         height=max(280, len(anios) * 60 + 120),
     )
     return fig
