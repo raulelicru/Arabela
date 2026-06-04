@@ -3093,25 +3093,34 @@ def _render_interno_tab():
 
         with up_c1:
             st.markdown("**Gestión Telefónica**")
-            st.caption("Columnas esperadas: NoDama, Fecha gestión, Tipificación (código), Promesa de pago")
-            tel_file = st.file_uploader(
+            st.caption("Hasta 6 archivos (uno por mes) — Columnas: NoDama, Fecha gestión, Tipificación (código), Promesa de pago")
+            tel_files = st.file_uploader(
                 "Gestión Telefónica", type=["xlsx", "xls"],
-                label_visibility="collapsed", key="up_int_tel"
+                label_visibility="collapsed", key="up_int_tel",
+                accept_multiple_files=True,
             )
-            if tel_file:
-                names = [tel_file.name]
+            if tel_files:
+                names = sorted([f.name for f in tel_files])
                 if names != st.session_state.int_tel_names:
                     try:
-                        st.session_state.df_tel = read_excel_safe(tel_file)
-                        st.session_state.int_tel_names = names
+                        _dfs = []
+                        for _f in tel_files:
+                            _df = read_excel_safe(_f)
+                            if _df is not None and not _df.empty:
+                                _df["_mes_origen"] = _f.name
+                                _dfs.append(_df)
+                        if _dfs:
+                            st.session_state.df_tel = pd.concat(_dfs, ignore_index=True)
+                            st.session_state.int_tel_names = names
                     except Exception as e:
                         st.error(f"Error al leer Gestión Telefónica: {e}")
             if st.session_state.df_tel is not None:
                 df_tel_info = st.session_state.df_tel
+                n_archivos = len(st.session_state.int_tel_names)
                 st.markdown(
                     f"<span style='background:#dcfce7;color:#16a34a;padding:2px 10px;"
                     f"border-radius:99px;font-size:0.78rem;font-weight:600'>"
-                    f"✓ Cargado — {len(df_tel_info):,} registros</span>",
+                    f"✓ {n_archivos} archivo{'s' if n_archivos != 1 else ''} — {len(df_tel_info):,} registros</span>",
                     unsafe_allow_html=True,
                 )
 
