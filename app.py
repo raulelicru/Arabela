@@ -3445,7 +3445,7 @@ def _render_interno_tab():
                 # Tabla resumen
                 resumen_data = {
                     "Segmento": ["Base asignada", "Con gestión", "Solo telefónica", "Solo campo", "Mixta", "Sin gestión"],
-                    "Damas": [len(base_nodamas), len(con_gestion), len(solo_tel), len(solo_campo), len(mixta), len(sin_gestion)],
+                    "Damas": [len(base_keys), len(con_gestion), len(solo_tel), len(solo_campo), len(mixta), len(sin_gestion)],
                     "% Base": [100.0, _pct(len(con_gestion)), _pct(len(solo_tel)),
                                _pct(len(solo_campo)), _pct(len(mixta)), _pct(len(sin_gestion))],
                 }
