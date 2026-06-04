@@ -230,6 +230,39 @@ PLOTLY_LAYOUT = dict(
 _AXIS_DEFAULTS = dict(gridcolor=COLORS["grid"], zeroline=False, showline=False)
 
 # ─────────────────────────────────────────────
+#  INTERNO — CATÁLOGOS DE TIPIFICACIÓN
+# ─────────────────────────────────────────────
+TIPIF_CATALOG = {
+    2:  "Negativa de Pago",
+    3:  "Cobrada GDC/consejera",
+    6:  "Reclamación Premio",
+    7:  "Promesa de Pago",
+    8:  "Caja Devuelta GDC",
+    9:  "Pago a Porteador",
+    10: "Producto devuelto GDC",
+    11: "Contratación Menor Edad",
+    14: "Pedido no solicitado",
+    15: "No recibió producto",
+    16: "Ajuste Pendiente",
+    20: "Notifica saldo a terceros",
+    22: "Tel no corresponde",
+    23: "Pago a Cobrador",
+    24: "Defunción",
+    25: "Tel GDC/consejera",
+    27: "Cuelgan llamada",
+    28: "No contestan",
+    29: "Fuera de servicio",
+    30: "Directo a Buzón",
+    31: "Ya pagó",
+    32: "Promesa Incumplida",
+    33: "Seguimiento Promesa",
+    34: "No existe teléfono",
+    35: "Teléfono incompleto",
+    36: "Ya pagó",
+}
+CONTACTO_EFECTIVO = {2, 3, 6, 7, 8, 9, 10, 11, 14, 15, 16, 20, 23, 24, 25, 31, 32, 33, 36}
+
+# ─────────────────────────────────────────────
 #  HELPERS BÁSICOS
 # ─────────────────────────────────────────────
 
@@ -3027,6 +3060,863 @@ def render_welcome():
 
 
 # ─────────────────────────────────────────────
+#  INTERNO — DASHBOARD DE COBRANZA
+# ─────────────────────────────────────────────
+
+def _render_interno_tab():
+    """Renderiza el contenido completo de la pestaña 🏢 Interno."""
+
+    # ── Inicializar session state ─────────────────────────────────────
+    for key, default in [
+        ("df_tel", None),
+        ("df_campo", None),
+        ("int_tel_names", []),
+        ("int_campo_names", []),
+    ]:
+        if key not in st.session_state:
+            st.session_state[key] = default
+
+    # ── Banner ───────────────────────────────────────────────────────
+    st.markdown(
+        "<div class='kpi-banner'>"
+        "<h1>🏢 Dashboard de Cobranza — Interno</h1>"
+        "<p>Gestión telefónica, visitas de campo y evolución de mora por temporalidad</p>"
+        "</div>",
+        unsafe_allow_html=True,
+    )
+
+    # ── Carga de archivos ────────────────────────────────────────────
+    with st.expander("📂 Cargar archivos de gestión", expanded=(
+        st.session_state.df_tel is None and st.session_state.df_campo is None
+    )):
+        up_c1, up_c2 = st.columns(2)
+
+        with up_c1:
+            st.markdown("**Gestión Telefónica**")
+            st.caption("Columnas esperadas: NoDama, Fecha gestión, Tipificación (código), Promesa de pago")
+            tel_file = st.file_uploader(
+                "Gestión Telefónica", type=["xlsx", "xls"],
+                label_visibility="collapsed", key="up_int_tel"
+            )
+            if tel_file:
+                names = [tel_file.name]
+                if names != st.session_state.int_tel_names:
+                    try:
+                        st.session_state.df_tel = read_excel_safe(tel_file)
+                        st.session_state.int_tel_names = names
+                    except Exception as e:
+                        st.error(f"Error al leer Gestión Telefónica: {e}")
+            if st.session_state.df_tel is not None:
+                df_tel_info = st.session_state.df_tel
+                st.markdown(
+                    f"<span style='background:#dcfce7;color:#16a34a;padding:2px 10px;"
+                    f"border-radius:99px;font-size:0.78rem;font-weight:600'>"
+                    f"✓ Cargado — {len(df_tel_info):,} registros</span>",
+                    unsafe_allow_html=True,
+                )
+
+        with up_c2:
+            st.markdown("**Visitas de Campo**")
+            st.caption("Columnas esperadas: NoDama, Fecha dispositivo, Estatus visita, Gestor")
+            campo_file = st.file_uploader(
+                "Visitas de Campo", type=["xlsx", "xls"],
+                label_visibility="collapsed", key="up_int_campo"
+            )
+            if campo_file:
+                names = [campo_file.name]
+                if names != st.session_state.int_campo_names:
+                    try:
+                        st.session_state.df_campo = read_excel_safe(campo_file)
+                        st.session_state.int_campo_names = names
+                    except Exception as e:
+                        st.error(f"Error al leer Visitas de Campo: {e}")
+            if st.session_state.df_campo is not None:
+                df_campo_info = st.session_state.df_campo
+                st.markdown(
+                    f"<span style='background:#dcfce7;color:#16a34a;padding:2px 10px;"
+                    f"border-radius:99px;font-size:0.78rem;font-weight:600'>"
+                    f"✓ Cargado — {len(df_campo_info):,} registros</span>",
+                    unsafe_allow_html=True,
+                )
+
+        if st.session_state.get("df_moras") is not None:
+            st.markdown(
+                f"<span style='background:#dbeafe;color:#1d4ed8;padding:2px 10px;"
+                f"border-radius:99px;font-size:0.78rem;font-weight:600'>"
+                f"✓ Base de moras — {len(st.session_state.df_moras):,} registros (desde sección Arabela)</span>",
+                unsafe_allow_html=True,
+            )
+        else:
+            st.info("ℹ️ Carga el archivo de Moras en la sección Arabela para habilitar todos los análisis.")
+
+    df_tel   = st.session_state.df_tel
+    df_campo = st.session_state.df_campo
+    df_moras = st.session_state.get("df_moras")
+
+    # ── Detección de columnas ────────────────────────────────────────
+    tel_cols   = {}
+    campo_cols = {}
+
+    if df_tel is not None:
+        tel_cols = {
+            "nodama": _find_col(df_tel, ["nodama", "no dama", "numdama", "número de dama", "num_dama", "dama"]),
+            "fecha":  _find_col(df_tel, ["fecha", "date", "fechagestión", "fecha_gestion", "fecha gestion"]),
+            "tipif":  _find_col(df_tel, ["tipif", "tipificacion", "estatus", "status", "layout", "codigo"]),
+            "promesa": _find_col(df_tel, ["promesa", "promise", "compromiso"]),
+        }
+        with st.expander("⚙️ Ajustar columnas — Gestión Telefónica"):
+            all_tel_cols = list(df_tel.columns)
+            c1, c2, c3, c4 = st.columns(4)
+            with c1:
+                tel_cols["nodama"] = st.selectbox(
+                    "N° Dama", all_tel_cols,
+                    index=all_tel_cols.index(tel_cols["nodama"]) if tel_cols["nodama"] in all_tel_cols else 0,
+                    key="tel_nodama"
+                )
+            with c2:
+                tel_cols["fecha"] = st.selectbox(
+                    "Fecha gestión", all_tel_cols,
+                    index=all_tel_cols.index(tel_cols["fecha"]) if tel_cols["fecha"] in all_tel_cols else 0,
+                    key="tel_fecha"
+                )
+            with c3:
+                tel_cols["tipif"] = st.selectbox(
+                    "Tipificación", all_tel_cols,
+                    index=all_tel_cols.index(tel_cols["tipif"]) if tel_cols["tipif"] in all_tel_cols else 0,
+                    key="tel_tipif"
+                )
+            with c4:
+                promesa_options = ["(ninguna)"] + all_tel_cols
+                _promesa_idx = promesa_options.index(tel_cols["promesa"]) if tel_cols["promesa"] in promesa_options else 0
+                _promesa_sel = st.selectbox("Promesa de pago", promesa_options, index=_promesa_idx, key="tel_promesa")
+                tel_cols["promesa"] = None if _promesa_sel == "(ninguna)" else _promesa_sel
+
+    if df_campo is not None:
+        campo_cols = {
+            "nodama": _find_col(df_campo, ["nodama", "no dama", "numdama", "número de dama", "num_dama", "dama"]),
+            "fecha":  _find_col(df_campo, ["fecha", "dispositivo", "fecha_dispositivo", "fecha dispositivo", "date"]),
+            "estatus": _find_col(df_campo, ["estatus", "status", "resultado", "estado", "visita"]),
+            "gestor":  _find_col(df_campo, ["gestor", "asesor", "cobrador", "agente", "agent"]),
+        }
+        with st.expander("⚙️ Ajustar columnas — Visitas de Campo"):
+            all_campo_cols = list(df_campo.columns)
+            c1, c2, c3, c4 = st.columns(4)
+            with c1:
+                campo_cols["nodama"] = st.selectbox(
+                    "N° Dama", all_campo_cols,
+                    index=all_campo_cols.index(campo_cols["nodama"]) if campo_cols["nodama"] in all_campo_cols else 0,
+                    key="campo_nodama"
+                )
+            with c2:
+                campo_cols["fecha"] = st.selectbox(
+                    "Fecha dispositivo", all_campo_cols,
+                    index=all_campo_cols.index(campo_cols["fecha"]) if campo_cols["fecha"] in all_campo_cols else 0,
+                    key="campo_fecha"
+                )
+            with c3:
+                campo_cols["estatus"] = st.selectbox(
+                    "Estatus visita", all_campo_cols,
+                    index=all_campo_cols.index(campo_cols["estatus"]) if campo_cols["estatus"] in all_campo_cols else 0,
+                    key="campo_estatus"
+                )
+            with c4:
+                campo_cols["gestor"] = st.selectbox(
+                    "Gestor", all_campo_cols,
+                    index=all_campo_cols.index(campo_cols["gestor"]) if campo_cols["gestor"] in all_campo_cols else 0,
+                    key="campo_gestor"
+                )
+
+    # Columnas de moras
+    mora_nodama_col = None
+    mora_camp_col   = None
+    mora_temp_col   = None
+    mora_saldo_col  = None
+    if df_moras is not None:
+        mora_nodama_col = _find_col(df_moras, ["nodama", "no dama", "numdama", "dama"])
+        mora_camp_col   = _find_col(df_moras, ["campaña", "campana", "camp", "periodo", "anio", "año"])
+        mora_temp_col   = _find_col(df_moras, ["temporalidad", "mora", "nivel", "estado"])
+        mora_saldo_col  = _find_col(df_moras, ["saldo", "deuda", "monto", "valor"])
+
+    # ── Filtros ──────────────────────────────────────────────────────
+    with st.expander("🔍 Filtros"):
+        f_c1, f_c2, f_c3, f_c4 = st.columns(4)
+
+        # Campaña
+        camp_options = []
+        if df_moras is not None and mora_camp_col:
+            raw_camps = sorted(df_moras[mora_camp_col].dropna().astype(str).unique())
+            camp_options = [_fmt_camp(c) for c in raw_camps]
+        with f_c1:
+            sel_campañas = st.multiselect("Campaña", camp_options, key="int_fil_camp")
+
+        # Temporalidad
+        with f_c2:
+            sel_temporal = st.multiselect(
+                "Temporalidad de mora",
+                ["Mora 1", "Mora 2", "Mora 3"],
+                key="int_fil_temp"
+            )
+
+        # Fechas
+        fecha_min = pd.Timestamp("2020-01-01").date()
+        fecha_max = pd.Timestamp.today().date()
+        if df_tel is not None and tel_cols.get("fecha"):
+            try:
+                _dates = pd.to_datetime(df_tel[tel_cols["fecha"]], errors="coerce").dropna()
+                if not _dates.empty:
+                    fecha_min = _dates.min().date()
+                    fecha_max = _dates.max().date()
+            except Exception:
+                pass
+        with f_c3:
+            sel_fecha_desde = st.date_input("Fecha desde", value=fecha_min, key="int_fil_desde")
+        with f_c4:
+            sel_fecha_hasta = st.date_input("Fecha hasta", value=fecha_max, key="int_fil_hasta")
+
+        # Gestor
+        gestor_options = []
+        if df_campo is not None and campo_cols.get("gestor"):
+            gestor_options = sorted(df_campo[campo_cols["gestor"]].dropna().astype(str).unique())
+        sel_gestores = st.multiselect("Gestor", gestor_options, key="int_fil_gestor")
+
+    # ── Aplicar filtros a df_moras ────────────────────────────────────
+    df_moras_fil = None
+    if df_moras is not None:
+        df_moras_fil = df_moras.copy()
+        if mora_nodama_col:
+            df_moras_fil[mora_nodama_col] = df_moras_fil[mora_nodama_col].astype(str).str.strip()
+        if mora_camp_col and sel_campañas:
+            raw_sel = {c for c in df_moras_fil[mora_camp_col].astype(str).unique()
+                       if _fmt_camp(c) in sel_campañas}
+            df_moras_fil = df_moras_fil[df_moras_fil[mora_camp_col].astype(str).isin(raw_sel)]
+        if mora_temp_col and sel_temporal:
+            _mora_map = {"mora 1": "Mora 1", "mora 2": "Mora 2", "mora 3": "Mora 3",
+                         "1": "Mora 1", "2": "Mora 2", "3": "Mora 3"}
+            df_moras_fil["_mora_norm"] = (
+                df_moras_fil[mora_temp_col].astype(str).str.strip().str.lower()
+                .map(_mora_map).fillna(df_moras_fil[mora_temp_col].astype(str).str.strip())
+            )
+            df_moras_fil = df_moras_fil[df_moras_fil["_mora_norm"].isin(sel_temporal)]
+
+    # Aplicar filtros a df_tel
+    df_tel_fil = None
+    if df_tel is not None:
+        df_tel_fil = df_tel.copy()
+        if tel_cols.get("nodama"):
+            df_tel_fil[tel_cols["nodama"]] = df_tel_fil[tel_cols["nodama"]].astype(str).str.strip()
+        if tel_cols.get("fecha"):
+            try:
+                df_tel_fil["_fecha_dt"] = pd.to_datetime(df_tel_fil[tel_cols["fecha"]], errors="coerce")
+                df_tel_fil = df_tel_fil[
+                    (df_tel_fil["_fecha_dt"].dt.date >= sel_fecha_desde) &
+                    (df_tel_fil["_fecha_dt"].dt.date <= sel_fecha_hasta)
+                ]
+            except Exception:
+                pass
+
+    # Aplicar filtros a df_campo
+    df_campo_fil = None
+    if df_campo is not None:
+        df_campo_fil = df_campo.copy()
+        if campo_cols.get("nodama"):
+            df_campo_fil[campo_cols["nodama"]] = df_campo_fil[campo_cols["nodama"]].astype(str).str.strip()
+        if campo_cols.get("fecha"):
+            try:
+                df_campo_fil["_fecha_dt"] = pd.to_datetime(df_campo_fil[campo_cols["fecha"]], errors="coerce")
+                df_campo_fil = df_campo_fil[
+                    (df_campo_fil["_fecha_dt"].dt.date >= sel_fecha_desde) &
+                    (df_campo_fil["_fecha_dt"].dt.date <= sel_fecha_hasta)
+                ]
+            except Exception:
+                pass
+        if campo_cols.get("gestor") and sel_gestores:
+            df_campo_fil = df_campo_fil[df_campo_fil[campo_cols["gestor"]].astype(str).isin(sel_gestores)]
+
+    # ── Sub-tabs ──────────────────────────────────────────────────────
+    int0, int1, int2, int3 = st.tabs([
+        "📋 Cobertura",
+        "✅ Efectividad",
+        "📈 Evolución de Mora",
+        "🔍 Por Temporalidad",
+    ])
+
+    # ═══════════════════════════════════════════
+    #  int0 — COBERTURA
+    # ═══════════════════════════════════════════
+    with int0:
+        if df_moras_fil is None:
+            st.warning("Carga el archivo de Moras (sección Arabela) para ver la cobertura.")
+        elif df_tel_fil is None and df_campo_fil is None:
+            st.warning("Carga al menos uno de los archivos de gestión (Telefónica o Campo) para ver la cobertura.")
+        else:
+            st.markdown(
+                "<div class='kpi-banner' style='margin-bottom:1rem'>"
+                "<h1 style='font-size:1.1rem'>📋 Cobertura de Gestión</h1>"
+                "<p>Comparativo entre damas asignadas y damas contactadas</p>"
+                "</div>",
+                unsafe_allow_html=True,
+            )
+
+            # Conjuntos de NoDamas
+            base_nodamas   = set()
+            tel_nodamas    = set()
+            campo_nodamas  = set()
+
+            if mora_nodama_col and df_moras_fil is not None:
+                base_nodamas = set(df_moras_fil[mora_nodama_col].dropna().astype(str).str.strip())
+
+            if df_tel_fil is not None and tel_cols.get("nodama"):
+                tel_nodamas = set(df_tel_fil[tel_cols["nodama"]].dropna().astype(str).str.strip())
+
+            if df_campo_fil is not None and campo_cols.get("nodama"):
+                campo_nodamas = set(df_campo_fil[campo_cols["nodama"]].dropna().astype(str).str.strip())
+
+            tel_base    = tel_nodamas & base_nodamas
+            campo_base  = campo_nodamas & base_nodamas
+            solo_tel    = tel_base - campo_nodamas
+            solo_campo  = campo_base - tel_nodamas
+            mixta       = tel_nodamas & campo_nodamas & base_nodamas
+            sin_gestion = base_nodamas - tel_nodamas - campo_nodamas
+            con_gestion = base_nodamas - sin_gestion
+
+            total_base = len(base_nodamas) or 1
+
+            def _pct(n):
+                return n / total_base * 100
+
+            # KPI cards
+            kpi_c1, kpi_c2, kpi_c3, kpi_c4 = st.columns(4)
+            with kpi_c1:
+                n = len(solo_tel | mixta)
+                st.metric("📞 Gestión Telefónica", f"{n:,}", delta=f"{_pct(n):.1f}% de base")
+            with kpi_c2:
+                n = len(solo_campo | mixta)
+                st.metric("🚗 Gestión Campo", f"{n:,}", delta=f"{_pct(n):.1f}% de base")
+            with kpi_c3:
+                n = len(mixta)
+                st.metric("🔀 Gestión Mixta", f"{n:,}", delta=f"{_pct(n):.1f}% de base")
+            with kpi_c4:
+                n = len(sin_gestion)
+                st.metric("⚠️ Sin Gestión", f"{n:,}", delta=f"{_pct(n):.1f}% de base", delta_color="inverse")
+
+            st.markdown("<br>", unsafe_allow_html=True)
+
+            chart_col, table_col = st.columns([1, 1])
+
+            with chart_col:
+                # Donut chart
+                donut_labels = ["Solo Tel.", "Solo Campo", "Mixta", "Sin gestión"]
+                donut_values = [len(solo_tel), len(solo_campo), len(mixta), len(sin_gestion)]
+                donut_colors = [COLORS["accent"], COLORS["success"], COLORS["purple"], COLORS["muted"]]
+
+                fig_donut = go.Figure(go.Pie(
+                    labels=donut_labels,
+                    values=donut_values,
+                    hole=0.55,
+                    marker_colors=donut_colors,
+                    textinfo="percent+label",
+                    hovertemplate="%{label}<br>%{value:,} damas<br>%{percent}<extra></extra>",
+                ))
+                fig_donut.update_layout(
+                    **{**PLOTLY_LAYOUT, "title": "Distribución de cobertura",
+                       "height": 360, "showlegend": False,
+                       "annotations": [dict(
+                           text=f"<b>{len(con_gestion):,}</b><br>gestionadas",
+                           x=0.5, y=0.5, showarrow=False, font_size=14, align="center"
+                       )]}
+                )
+                st.markdown("<div class='chart-card'>", unsafe_allow_html=True)
+                st.plotly_chart(fig_donut, use_container_width=True,
+                                config={"displayModeBar": False}, key="int_donut_cob")
+                st.markdown("</div>", unsafe_allow_html=True)
+
+            with table_col:
+                # Tabla resumen
+                resumen_data = {
+                    "Segmento": ["Base asignada", "Con gestión", "Solo telefónica", "Solo campo", "Mixta", "Sin gestión"],
+                    "Damas": [len(base_nodamas), len(con_gestion), len(solo_tel), len(solo_campo), len(mixta), len(sin_gestion)],
+                    "% Base": [100.0, _pct(len(con_gestion)), _pct(len(solo_tel)),
+                               _pct(len(solo_campo)), _pct(len(mixta)), _pct(len(sin_gestion))],
+                }
+                df_resumen = pd.DataFrame(resumen_data)
+                df_resumen["% Base"] = df_resumen["% Base"].map(lambda x: f"{x:.1f}%")
+                st.markdown("**Resumen de cobertura**")
+                st.dataframe(df_resumen, use_container_width=True, hide_index=True)
+
+            # Gráfico por gestor (si hay campo)
+            if df_campo_fil is not None and campo_cols.get("gestor") and campo_cols.get("nodama"):
+                st.markdown("---")
+                st.markdown("**Top 10 gestores por cuentas visitadas**")
+                gestor_counts = (
+                    df_campo_fil.dropna(subset=[campo_cols["gestor"]])
+                    .groupby(campo_cols["gestor"])[campo_cols["nodama"]]
+                    .nunique()
+                    .sort_values(ascending=True)
+                    .tail(10)
+                )
+                if not gestor_counts.empty:
+                    fig_gestor = go.Figure(go.Bar(
+                        y=gestor_counts.index.tolist(),
+                        x=gestor_counts.values.tolist(),
+                        orientation="h",
+                        marker_color=COLORS["accent"],
+                        text=gestor_counts.values.tolist(),
+                        textposition="outside",
+                        hovertemplate="%{y}<br>%{x:,} cuentas<extra></extra>",
+                    ))
+                    fig_gestor.update_layout(
+                        **{**PLOTLY_LAYOUT, "title": "Cuentas visitadas por gestor (top 10)",
+                           "height": 360, "xaxis_title": "Cuentas únicas",
+                           "yaxis": dict(**_AXIS_DEFAULTS, automargin=True),
+                           "xaxis": _AXIS_DEFAULTS}
+                    )
+                    st.markdown("<div class='chart-card'>", unsafe_allow_html=True)
+                    st.plotly_chart(fig_gestor, use_container_width=True,
+                                    config={"displayModeBar": False}, key="int_bar_gestor")
+                    st.markdown("</div>", unsafe_allow_html=True)
+
+    # ═══════════════════════════════════════════
+    #  int1 — EFECTIVIDAD
+    # ═══════════════════════════════════════════
+    with int1:
+        if df_tel_fil is None:
+            st.warning("Carga el archivo de Gestión Telefónica para ver la efectividad.")
+        else:
+            st.markdown(
+                "<div class='kpi-banner' style='margin-bottom:1rem'>"
+                "<h1 style='font-size:1.1rem'>✅ Efectividad de Gestión Telefónica</h1>"
+                "<p>Contacto efectivo y promesas de pago</p>"
+                "</div>",
+                unsafe_allow_html=True,
+            )
+
+            nodama_t = tel_cols.get("nodama")
+            fecha_t  = tel_cols.get("fecha")
+            tipif_t  = tel_cols.get("tipif")
+            promesa_t = tel_cols.get("promesa")
+
+            if not nodama_t or not tipif_t:
+                st.warning("No se detectaron las columnas necesarias (NoDama, Tipificación). Ajusta las columnas arriba.")
+            else:
+                df_t = df_tel_fil.copy()
+                df_t[nodama_t] = df_t[nodama_t].astype(str).str.strip()
+                df_t["_tipif_num"] = pd.to_numeric(df_t[tipif_t], errors="coerce")
+                df_t["_es_efectivo"] = df_t["_tipif_num"].isin(CONTACTO_EFECTIVO)
+
+                # Por NoDama: al menos 1 contacto efectivo
+                por_nodama = df_t.groupby(nodama_t).agg(
+                    _tiene_efectivo=("_es_efectivo", "any"),
+                ).reset_index()
+
+                if promesa_t:
+                    def _tiene_promesa(series):
+                        return series.dropna().astype(str).str.strip().str.lower()
+                    prom_group = df_t.groupby(nodama_t)[promesa_t].apply(
+                        lambda s: s.dropna().astype(str).str.strip().str.lower()
+                        .replace({"nan": "", "none": "", "no": "", "n/a": ""})
+                        .pipe(lambda x: (x != "").any())
+                    ).reset_index()
+                    prom_group.columns = [nodama_t, "_tiene_promesa"]
+                    por_nodama = por_nodama.merge(prom_group, on=nodama_t, how="left")
+                    por_nodama["_tiene_promesa"] = por_nodama["_tiene_promesa"].fillna(False)
+                else:
+                    por_nodama["_tiene_promesa"] = False
+
+                total_nod       = len(por_nodama)
+                efectivo_n      = int(por_nodama["_tiene_efectivo"].sum())
+                sin_contacto_n  = total_nod - efectivo_n
+                promesa_n       = int(por_nodama["_tiene_promesa"].sum())
+
+                pct_ef  = efectivo_n / total_nod * 100 if total_nod else 0
+                pct_pr  = promesa_n  / total_nod * 100 if total_nod else 0
+                pct_sin = sin_contacto_n / total_nod * 100 if total_nod else 0
+
+                k1, k2, k3, k4 = st.columns(4)
+                with k1:
+                    st.metric("📋 Total gestionadas", f"{total_nod:,}")
+                with k2:
+                    st.metric("✅ Contacto efectivo", f"{efectivo_n:,}", delta=f"{pct_ef:.1f}%")
+                with k3:
+                    st.metric("💬 Con promesa de pago", f"{promesa_n:,}", delta=f"{pct_pr:.1f}%")
+                with k4:
+                    st.metric("❌ Sin contacto", f"{sin_contacto_n:,}", delta=f"{pct_sin:.1f}%", delta_color="inverse")
+
+                st.markdown("<br>", unsafe_allow_html=True)
+
+                # Barras: top 10 tipificaciones
+                tipif_counts = (
+                    df_t["_tipif_num"].dropna()
+                    .astype(int)
+                    .value_counts()
+                    .head(10)
+                    .reset_index()
+                )
+                tipif_counts.columns = ["codigo", "conteo"]
+                tipif_counts["etiqueta"] = tipif_counts["codigo"].map(
+                    lambda x: TIPIF_CATALOG.get(x, str(x))
+                )
+                tipif_counts["es_efectivo"] = tipif_counts["codigo"].isin(CONTACTO_EFECTIVO)
+                tipif_counts["color"] = tipif_counts["es_efectivo"].map(
+                    {True: COLORS["success"], False: COLORS["danger"]}
+                )
+                tipif_counts = tipif_counts.sort_values("conteo", ascending=True)
+
+                bar_c1, bar_c2 = st.columns([3, 2])
+                with bar_c1:
+                    fig_tipif = go.Figure(go.Bar(
+                        y=tipif_counts["etiqueta"],
+                        x=tipif_counts["conteo"],
+                        orientation="h",
+                        marker_color=tipif_counts["color"].tolist(),
+                        text=tipif_counts["conteo"],
+                        textposition="outside",
+                        hovertemplate="%{y}<br>%{x:,} gestiones<extra></extra>",
+                    ))
+                    fig_tipif.update_layout(
+                        **{**PLOTLY_LAYOUT, "title": "Top 10 tipificaciones",
+                           "height": 380,
+                           "yaxis": dict(**_AXIS_DEFAULTS, automargin=True),
+                           "xaxis": _AXIS_DEFAULTS}
+                    )
+                    st.markdown("<div class='chart-card'>", unsafe_allow_html=True)
+                    st.plotly_chart(fig_tipif, use_container_width=True,
+                                    config={"displayModeBar": False}, key="int_bar_tipif")
+                    st.markdown("</div>", unsafe_allow_html=True)
+
+                with bar_c2:
+                    # Donut efectividad
+                    fig_ef = go.Figure(go.Pie(
+                        labels=["Contacto efectivo", "Sin contacto"],
+                        values=[efectivo_n, sin_contacto_n],
+                        hole=0.55,
+                        marker_colors=[COLORS["success"], COLORS["danger"]],
+                        textinfo="percent+label",
+                        hovertemplate="%{label}<br>%{value:,}<br>%{percent}<extra></extra>",
+                    ))
+                    fig_ef.update_layout(
+                        **{**PLOTLY_LAYOUT, "title": "Contacto efectivo vs sin contacto",
+                           "height": 380, "showlegend": False,
+                           "annotations": [dict(
+                               text=f"<b>{pct_ef:.0f}%</b><br>efectivo",
+                               x=0.5, y=0.5, showarrow=False, font_size=13, align="center"
+                           )]}
+                    )
+                    st.markdown("<div class='chart-card'>", unsafe_allow_html=True)
+                    st.plotly_chart(fig_ef, use_container_width=True,
+                                    config={"displayModeBar": False}, key="int_donut_ef")
+                    st.markdown("</div>", unsafe_allow_html=True)
+
+    # ═══════════════════════════════════════════
+    #  int2 — EVOLUCIÓN DE MORA
+    # ═══════════════════════════════════════════
+    with int2:
+        if df_moras is None:
+            st.warning("Carga el archivo de Moras (sección Arabela) para ver la evolución.")
+        elif mora_nodama_col is None or mora_camp_col is None:
+            st.warning("No se detectaron las columnas NoDama y Campaña en el archivo de Moras.")
+        else:
+            st.markdown(
+                "<div class='kpi-banner' style='margin-bottom:1rem'>"
+                "<h1 style='font-size:1.1rem'>📈 Evolución de Mora</h1>"
+                "<p>Distribución y transiciones de mora por campaña</p>"
+                "</div>",
+                unsafe_allow_html=True,
+            )
+
+            _mora_map_ev = {
+                "mora 1": "Mora 1", "mora 2": "Mora 2", "mora 3": "Mora 3",
+                "1": "Mora 1", "2": "Mora 2", "3": "Mora 3",
+                "inactiva": "Inactiva",
+            }
+            MORA_COLORS_INT = {
+                "Inactiva": "#94A3B8",
+                "Mora 1":   COLORS["warning"],
+                "Mora 2":   COLORS["orange"],
+                "Mora 3":   COLORS["danger"],
+            }
+            df_ev = df_moras.copy()
+            df_ev[mora_nodama_col] = df_ev[mora_nodama_col].astype(str).str.strip()
+            df_ev[mora_camp_col]   = df_ev[mora_camp_col].astype(str).str.strip()
+            df_ev["_camp_fmt"] = df_ev[mora_camp_col].apply(_fmt_camp)
+
+            if mora_temp_col:
+                df_ev["_mora_norm"] = (
+                    df_ev[mora_temp_col].astype(str).str.strip().str.lower()
+                    .map(_mora_map_ev)
+                    .fillna("Mora 1")
+                )
+            else:
+                df_ev["_mora_norm"] = "Mora 1"
+
+            camps_ev = sorted(df_ev["_camp_fmt"].unique(), key=_camp_sort_key)
+
+            # Línea: conteo por mora y campaña
+            line_data = []
+            for mora in ["Mora 1", "Mora 2", "Mora 3"]:
+                for camp in camps_ev:
+                    cnt = ((df_ev["_mora_norm"] == mora) & (df_ev["_camp_fmt"] == camp)).sum()
+                    line_data.append({"Mora": mora, "Campaña": camp, "Cuentas": int(cnt)})
+            df_line = pd.DataFrame(line_data)
+
+            fig_line = go.Figure()
+            for mora in ["Mora 1", "Mora 2", "Mora 3"]:
+                sub = df_line[df_line["Mora"] == mora]
+                fig_line.add_trace(go.Scatter(
+                    x=sub["Campaña"], y=sub["Cuentas"],
+                    mode="lines+markers",
+                    name=mora,
+                    line=dict(color=MORA_COLORS_INT[mora], width=2),
+                    marker=dict(size=7),
+                    hovertemplate=f"{mora}<br>Campaña: %{{x}}<br>Cuentas: %{{y:,}}<extra></extra>",
+                ))
+            fig_line.update_layout(
+                **{**PLOTLY_LAYOUT, "title": "Cuentas por nivel de mora y campaña",
+                   "height": 360, "xaxis_title": "Campaña", "yaxis_title": "Cuentas",
+                   "xaxis": _AXIS_DEFAULTS, "yaxis": _AXIS_DEFAULTS, "legend_title": "Nivel"}
+            )
+            st.markdown("<div class='chart-card'>", unsafe_allow_html=True)
+            st.plotly_chart(fig_line, use_container_width=True,
+                            config={"displayModeBar": False}, key="int_line_mora")
+            st.markdown("</div>", unsafe_allow_html=True)
+
+            # Matriz de transición (entre campañas consecutivas)
+            if len(camps_ev) >= 2:
+                st.markdown("**Matriz de transición entre campañas consecutivas**")
+                # Para la última par de campañas
+                camp_A = camps_ev[-2]
+                camp_B = camps_ev[-1]
+
+                damas_A = df_ev[df_ev["_camp_fmt"] == camp_A][[mora_nodama_col, "_mora_norm"]].copy()
+                damas_A.columns = [mora_nodama_col, "mora_origen"]
+                damas_B = df_ev[df_ev["_camp_fmt"] == camp_B][[mora_nodama_col, "_mora_norm"]].copy()
+                damas_B.columns = [mora_nodama_col, "mora_destino"]
+
+                trans = damas_A.merge(damas_B, on=mora_nodama_col, how="left")
+                trans["mora_destino"] = trans["mora_destino"].fillna("Salió de cartera")
+
+                matrix = trans.groupby(["mora_origen", "mora_destino"]).size().unstack(fill_value=0)
+                all_destinos = ["Mora 1", "Mora 2", "Mora 3", "Inactiva", "Salió de cartera"]
+                for d in all_destinos:
+                    if d not in matrix.columns:
+                        matrix[d] = 0
+                matrix = matrix[[d for d in all_destinos if d in matrix.columns]]
+
+                # Heatmap
+                matrix_pct = matrix.div(matrix.sum(axis=1), axis=0) * 100
+                fig_hm = go.Figure(go.Heatmap(
+                    z=matrix_pct.values,
+                    x=matrix_pct.columns.tolist(),
+                    y=matrix_pct.index.tolist(),
+                    colorscale="Blues",
+                    text=[[f"{v:.1f}%" for v in row] for row in matrix_pct.values],
+                    texttemplate="%{text}",
+                    hovertemplate="De: %{y}<br>A: %{x}<br>%{z:.1f}%<extra></extra>",
+                    colorbar=dict(title="% transición"),
+                ))
+                fig_hm.update_layout(
+                    **{**PLOTLY_LAYOUT, "title": f"Transición de mora: {camp_A} → {camp_B}",
+                       "height": 340, "xaxis_title": "Mora destino", "yaxis_title": "Mora origen"}
+                )
+                st.markdown("<div class='chart-card'>", unsafe_allow_html=True)
+                st.plotly_chart(fig_hm, use_container_width=True,
+                                config={"displayModeBar": False}, key="int_heatmap_trans")
+                st.markdown("</div>", unsafe_allow_html=True)
+
+                # KPIs transición
+                t_total = len(trans)
+                t_mismo = int((trans["mora_origen"] == trans["mora_destino"]).sum()) if t_total else 0
+                t_avanza = int(trans[
+                    trans.apply(lambda r: (
+                        r["mora_origen"] == "Mora 1" and r["mora_destino"] == "Mora 2"
+                    ) or (
+                        r["mora_origen"] == "Mora 2" and r["mora_destino"] == "Mora 3"
+                    ), axis=1)
+                ].shape[0])
+                t_sale = int((trans["mora_destino"] == "Salió de cartera").sum())
+                t_rec  = int((trans["mora_destino"] == "Inactiva").sum())
+
+                tc1, tc2, tc3, tc4 = st.columns(4)
+                with tc1:
+                    st.metric("↔ Permanecen en mora", f"{t_mismo:,}",
+                              delta=f"{t_mismo/t_total*100:.1f}%" if t_total else "—")
+                with tc2:
+                    st.metric("⬆ Avanzan a mora superior", f"{t_avanza:,}",
+                              delta=f"{t_avanza/t_total*100:.1f}%" if t_total else "—",
+                              delta_color="inverse")
+                with tc3:
+                    st.metric("✅ Se recuperaron", f"{t_rec:,}",
+                              delta=f"{t_rec/t_total*100:.1f}%" if t_total else "—")
+                with tc4:
+                    st.metric("🚪 Salieron de cartera", f"{t_sale:,}",
+                              delta=f"{t_sale/t_total*100:.1f}%" if t_total else "—")
+
+    # ═══════════════════════════════════════════
+    #  int3 — POR TEMPORALIDAD
+    # ═══════════════════════════════════════════
+    with int3:
+        if df_moras is None:
+            st.warning("Carga el archivo de Moras (sección Arabela) para ver el análisis por temporalidad.")
+        else:
+            st.markdown(
+                "<div class='kpi-banner' style='margin-bottom:1rem'>"
+                "<h1 style='font-size:1.1rem'>🔍 Análisis por Temporalidad de Mora</h1>"
+                "<p>Cobertura y efectividad desglosada por nivel de mora</p>"
+                "</div>",
+                unsafe_allow_html=True,
+            )
+
+            _mora_map_t3 = {
+                "mora 1": "Mora 1", "mora 2": "Mora 2", "mora 3": "Mora 3",
+                "1": "Mora 1", "2": "Mora 2", "3": "Mora 3",
+            }
+            MORA_COLORS_T3 = {
+                "Mora 1": COLORS["warning"],
+                "Mora 2": COLORS["orange"],
+                "Mora 3": COLORS["danger"],
+            }
+
+            df_t3_moras = (df_moras_fil if df_moras_fil is not None else df_moras).copy()
+            if mora_nodama_col:
+                df_t3_moras[mora_nodama_col] = df_t3_moras[mora_nodama_col].astype(str).str.strip()
+            if mora_temp_col:
+                df_t3_moras["_mora_norm"] = (
+                    df_t3_moras[mora_temp_col].astype(str).str.strip().str.lower()
+                    .map(_mora_map_t3).fillna("Mora 1")
+                )
+            else:
+                df_t3_moras["_mora_norm"] = "Mora 1"
+
+            has_tel   = df_tel_fil is not None and tel_cols.get("nodama") and tel_cols.get("tipif")
+            has_campo = df_campo_fil is not None and campo_cols.get("nodama")
+
+            # Prepara conjuntos de NoDamas gestionadas y efectivas por mora
+            rows_summary = []
+            for mora in ["Mora 1", "Mora 2", "Mora 3"]:
+                df_mora = df_t3_moras[df_t3_moras["_mora_norm"] == mora]
+                asignadas_set = set(df_mora[mora_nodama_col].dropna().astype(str)) if mora_nodama_col else set()
+                n_asignadas = len(asignadas_set)
+
+                tel_mora_set    = set()
+                campo_mora_set  = set()
+                ef_mora_set     = set()
+                promesa_mora_set = set()
+
+                if has_tel:
+                    df_tel_m = df_tel_fil[
+                        df_tel_fil[tel_cols["nodama"]].isin(asignadas_set)
+                    ].copy()
+                    tel_mora_set = set(df_tel_m[tel_cols["nodama"]].astype(str))
+                    df_tel_m["_tipif_num"] = pd.to_numeric(df_tel_m[tel_cols["tipif"]], errors="coerce")
+                    df_tel_m["_es_ef"] = df_tel_m["_tipif_num"].isin(CONTACTO_EFECTIVO)
+                    ef_mora_set = set(
+                        df_tel_m[df_tel_m["_es_ef"]][tel_cols["nodama"]].astype(str)
+                    )
+                    if tel_cols.get("promesa"):
+                        _pr = df_tel_m[tel_cols["promesa"]].dropna().astype(str).str.strip().str.lower()
+                        _pr_mask = ~_pr.isin(["", "nan", "none", "no", "n/a"])
+                        promesa_mora_set = set(
+                            df_tel_m[_pr_mask.values][tel_cols["nodama"]].astype(str)
+                        )
+
+                if has_campo:
+                    df_campo_m = df_campo_fil[
+                        df_campo_fil[campo_cols["nodama"]].isin(asignadas_set)
+                    ]
+                    campo_mora_set = set(df_campo_m[campo_cols["nodama"]].astype(str))
+
+                gestionadas_set = tel_mora_set | campo_mora_set
+                n_gest = len(gestionadas_set)
+                n_ef   = len(ef_mora_set)
+                n_pr   = len(promesa_mora_set)
+
+                pct_gest = n_gest / n_asignadas * 100 if n_asignadas else 0
+                pct_ef   = n_ef   / n_gest * 100      if n_gest else 0
+                pct_pr   = n_pr   / n_gest * 100      if n_gest else 0
+
+                rows_summary.append({
+                    "mora": mora,
+                    "asignadas": n_asignadas,
+                    "gestionadas": n_gest,
+                    "efectivo": n_ef,
+                    "promesa": n_pr,
+                    "pct_gest": pct_gest,
+                    "pct_ef": pct_ef,
+                    "pct_pr": pct_pr,
+                    "color": MORA_COLORS_T3[mora],
+                })
+
+            # Render por mora
+            for row in rows_summary:
+                mora     = row["mora"]
+                color    = row["color"]
+                st.markdown(
+                    f"<div style='background:{color}33;border-left:5px solid {color};"
+                    f"border-radius:8px;padding:0.6rem 1rem;margin:0.8rem 0 0.4rem'>"
+                    f"<span style='font-weight:700;color:{COLORS['primary']};font-size:1rem'>{mora}</span>"
+                    f"</div>",
+                    unsafe_allow_html=True,
+                )
+                mc1, mc2, mc3, mc4, mc5 = st.columns(5)
+                with mc1:
+                    st.metric("📋 Asignadas", f"{row['asignadas']:,}")
+                with mc2:
+                    st.metric("📲 Gestionadas", f"{row['gestionadas']:,}",
+                              delta=f"{row['pct_gest']:.1f}% de asignadas")
+                with mc3:
+                    st.metric("✅ Contacto efectivo", f"{row['efectivo']:,}",
+                              delta=f"{row['pct_ef']:.1f}% de gestionadas")
+                with mc4:
+                    st.metric("💬 Con promesa", f"{row['promesa']:,}",
+                              delta=f"{row['pct_pr']:.1f}% de gestionadas")
+                with mc5:
+                    pct_sin = 100 - row["pct_gest"]
+                    st.metric("⚠️ Sin gestión", f"{row['asignadas'] - row['gestionadas']:,}",
+                              delta=f"{pct_sin:.1f}%", delta_color="inverse")
+
+            # Stacked bar chart
+            st.markdown("<br>", unsafe_allow_html=True)
+            if rows_summary:
+                moras_labels = [r["mora"] for r in rows_summary]
+                bar_colors = [COLORS["muted"], COLORS["accent"], COLORS["success"], COLORS["warning"]]
+
+                fig_stacked = go.Figure()
+                fig_stacked.add_trace(go.Bar(
+                    name="Asignadas (sin gestión)",
+                    x=moras_labels,
+                    y=[r["asignadas"] - r["gestionadas"] for r in rows_summary],
+                    marker_color=COLORS["muted"],
+                    hovertemplate="%{x}<br>Sin gestión: %{y:,}<extra></extra>",
+                ))
+                fig_stacked.add_trace(go.Bar(
+                    name="Gestionadas",
+                    x=moras_labels,
+                    y=[r["gestionadas"] - r["efectivo"] for r in rows_summary],
+                    marker_color=COLORS["accent"],
+                    hovertemplate="%{x}<br>Gestionadas (sin efectivo): %{y:,}<extra></extra>",
+                ))
+                fig_stacked.add_trace(go.Bar(
+                    name="Contacto efectivo",
+                    x=moras_labels,
+                    y=[r["efectivo"] for r in rows_summary],
+                    marker_color=COLORS["success"],
+                    hovertemplate="%{x}<br>Contacto efectivo: %{y:,}<extra></extra>",
+                ))
+                fig_stacked.update_layout(
+                    **{**PLOTLY_LAYOUT,
+                       "barmode": "stack",
+                       "title": "Asignadas vs Gestionadas vs Contacto efectivo por temporalidad",
+                       "height": 380,
+                       "xaxis": _AXIS_DEFAULTS,
+                       "yaxis": dict(**_AXIS_DEFAULTS, title="Cuentas"),
+                       "legend": dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)}
+                )
+                st.markdown("<div class='chart-card'>", unsafe_allow_html=True)
+                st.plotly_chart(fig_stacked, use_container_width=True,
+                                config={"displayModeBar": False}, key="int_stacked_temp")
+                st.markdown("</div>", unsafe_allow_html=True)
+
+
+# ─────────────────────────────────────────────
 #  MAIN
 # ─────────────────────────────────────────────
 
@@ -3035,6 +3925,8 @@ def main():
     for key, default in [
         ("data", None), ("df_cartera", None), ("df_saldos", None),
         ("mapping", None), ("file_names", (None, None)), ("df_moras", None),
+        ("df_tel", None), ("df_campo", None),
+        ("int_tel_names", []), ("int_campo_names", []),
     ]:
         if key not in st.session_state:
             st.session_state[key] = default
@@ -3301,14 +4193,7 @@ h1, h2, h3, h4 {{
             tab_tracking(st.session_state.df_moras, metrics)
 
     with interno_tab:
-        st.markdown(
-            "<div style='padding:2rem 1rem 1rem'>"
-            "<h2 style='margin:0 0 0.4rem'>🔒 Interno — Fase 2</h2>"
-            "<p style='color:#64748b;margin:0'>Aquí irán las nuevas funcionalidades de la segunda fase del proyecto.</p>"
-            "</div>",
-            unsafe_allow_html=True,
-        )
-        st.info("Próximamente — en construcción.")
+        _render_interno_tab()
 
 
 if __name__ == "__main__":
