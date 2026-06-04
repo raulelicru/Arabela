@@ -3169,13 +3169,14 @@ def _render_interno_tab():
     if df_tel is not None:
         tel_cols = {
             "nodama": _find_col(df_tel, ["nodama", "no dama", "numdama", "número de dama", "num_dama", "dama"]),
+            "camp":   _find_col(df_tel, ["campaña", "campana", "camp", "periodo", "anio", "año", "aniocampaña"]),
             "fecha":  _find_col(df_tel, ["fecha", "date", "fechagestión", "fecha_gestion", "fecha gestion"]),
             "tipif":  _find_col(df_tel, ["tipif", "tipificacion", "estatus", "status", "layout", "codigo"]),
             "promesa": _find_col(df_tel, ["promesa", "promise", "compromiso"]),
         }
         with st.expander("⚙️ Ajustar columnas — Gestión Telefónica"):
             all_tel_cols = list(df_tel.columns)
-            c1, c2, c3, c4 = st.columns(4)
+            c1, c2, c3, c4, c5 = st.columns(5)
             with c1:
                 tel_cols["nodama"] = st.selectbox(
                     "N° Dama", all_tel_cols,
@@ -3183,18 +3184,23 @@ def _render_interno_tab():
                     key="tel_nodama"
                 )
             with c2:
+                camp_opts_tel = ["(ninguna)"] + all_tel_cols
+                _ci = camp_opts_tel.index(tel_cols["camp"]) if tel_cols["camp"] in camp_opts_tel else 0
+                _cs = st.selectbox("Campaña", camp_opts_tel, index=_ci, key="tel_camp")
+                tel_cols["camp"] = None if _cs == "(ninguna)" else _cs
+            with c3:
                 tel_cols["fecha"] = st.selectbox(
                     "Fecha gestión", all_tel_cols,
                     index=all_tel_cols.index(tel_cols["fecha"]) if tel_cols["fecha"] in all_tel_cols else 0,
                     key="tel_fecha"
                 )
-            with c3:
+            with c4:
                 tel_cols["tipif"] = st.selectbox(
                     "Tipificación", all_tel_cols,
                     index=all_tel_cols.index(tel_cols["tipif"]) if tel_cols["tipif"] in all_tel_cols else 0,
                     key="tel_tipif"
                 )
-            with c4:
+            with c5:
                 promesa_options = ["(ninguna)"] + all_tel_cols
                 _promesa_idx = promesa_options.index(tel_cols["promesa"]) if tel_cols["promesa"] in promesa_options else 0
                 _promesa_sel = st.selectbox("Promesa de pago", promesa_options, index=_promesa_idx, key="tel_promesa")
@@ -3203,13 +3209,14 @@ def _render_interno_tab():
     if df_campo is not None:
         campo_cols = {
             "nodama": _find_col(df_campo, ["nodama", "no dama", "numdama", "número de dama", "num_dama", "dama"]),
+            "camp":   _find_col(df_campo, ["campaña", "campana", "camp", "periodo", "anio", "año", "aniocampaña"]),
             "fecha":  _find_col(df_campo, ["fecha", "dispositivo", "fecha_dispositivo", "fecha dispositivo", "date"]),
             "estatus": _find_col(df_campo, ["estatus", "status", "resultado", "estado", "visita"]),
             "gestor":  _find_col(df_campo, ["gestor", "asesor", "cobrador", "agente", "agent"]),
         }
         with st.expander("⚙️ Ajustar columnas — Visitas de Campo"):
             all_campo_cols = list(df_campo.columns)
-            c1, c2, c3, c4 = st.columns(4)
+            c1, c2, c3, c4, c5 = st.columns(5)
             with c1:
                 campo_cols["nodama"] = st.selectbox(
                     "N° Dama", all_campo_cols,
@@ -3217,18 +3224,23 @@ def _render_interno_tab():
                     key="campo_nodama"
                 )
             with c2:
+                camp_opts_campo = ["(ninguna)"] + all_campo_cols
+                _ci2 = camp_opts_campo.index(campo_cols["camp"]) if campo_cols["camp"] in camp_opts_campo else 0
+                _cs2 = st.selectbox("Campaña", camp_opts_campo, index=_ci2, key="campo_camp")
+                campo_cols["camp"] = None if _cs2 == "(ninguna)" else _cs2
+            with c3:
                 campo_cols["fecha"] = st.selectbox(
                     "Fecha dispositivo", all_campo_cols,
                     index=all_campo_cols.index(campo_cols["fecha"]) if campo_cols["fecha"] in all_campo_cols else 0,
                     key="campo_fecha"
                 )
-            with c3:
+            with c4:
                 campo_cols["estatus"] = st.selectbox(
                     "Estatus visita", all_campo_cols,
                     index=all_campo_cols.index(campo_cols["estatus"]) if campo_cols["estatus"] in all_campo_cols else 0,
                     key="campo_estatus"
                 )
-            with c4:
+            with c5:
                 campo_cols["gestor"] = st.selectbox(
                     "Gestor", all_campo_cols,
                     index=all_campo_cols.index(campo_cols["gestor"]) if campo_cols["gestor"] in all_campo_cols else 0,
@@ -3366,29 +3378,39 @@ def _render_interno_tab():
                 unsafe_allow_html=True,
             )
 
-            # Conjuntos de NoDamas
-            base_nodamas   = set()
-            tel_nodamas    = set()
-            campo_nodamas  = set()
+            # Conjuntos de (NoDama, Campaña) — cruce por ambas llaves
+            def _make_keys(df, nodama_col, camp_col):
+                """Crea set de tuplas (nodama_str, camp_str). Si no hay camp_col usa solo nodama."""
+                if df is None or not nodama_col:
+                    return set()
+                _nd = df[nodama_col].dropna().astype(str).str.strip()
+                if camp_col and camp_col in df.columns:
+                    _cp = df[camp_col].astype(str).str.strip()
+                    return set(zip(_nd, _cp))
+                return set(zip(_nd, ["*"] * len(_nd)))
 
-            if mora_nodama_col and df_moras_fil is not None:
-                base_nodamas = set(df_moras_fil[mora_nodama_col].dropna().astype(str).str.strip())
+            base_keys  = _make_keys(df_moras_fil,  mora_nodama_col, mora_camp_col)
+            tel_keys   = _make_keys(df_tel_fil,    tel_cols.get("nodama"),   tel_cols.get("camp"))
+            campo_keys = _make_keys(df_campo_fil,  campo_cols.get("nodama"), campo_cols.get("camp"))
 
-            if df_tel_fil is not None and tel_cols.get("nodama"):
-                tel_nodamas = set(df_tel_fil[tel_cols["nodama"]].dropna().astype(str).str.strip())
+            # Si algún archivo no tiene campaña, comparar solo por NoDama
+            _tel_has_camp   = bool(tel_cols.get("camp"))
+            _campo_has_camp = bool(campo_cols.get("camp"))
+            if not _tel_has_camp:
+                _base_nd = {k[0] for k in base_keys}
+                tel_keys  = {(nd, c) for (nd, c) in base_keys if nd in {k[0] for k in tel_keys}}
+            if not _campo_has_camp:
+                campo_keys = {(nd, c) for (nd, c) in base_keys if nd in {k[0] for k in campo_keys}}
 
-            if df_campo_fil is not None and campo_cols.get("nodama"):
-                campo_nodamas = set(df_campo_fil[campo_cols["nodama"]].dropna().astype(str).str.strip())
+            tel_base    = tel_keys   & base_keys
+            campo_base  = campo_keys & base_keys
+            solo_tel    = tel_base   - campo_base
+            solo_campo  = campo_base - tel_base
+            mixta       = tel_base   & campo_base
+            sin_gestion = base_keys  - tel_base - campo_base
+            con_gestion = base_keys  - sin_gestion
 
-            tel_base    = tel_nodamas & base_nodamas
-            campo_base  = campo_nodamas & base_nodamas
-            solo_tel    = tel_base - campo_nodamas
-            solo_campo  = campo_base - tel_nodamas
-            mixta       = tel_nodamas & campo_nodamas & base_nodamas
-            sin_gestion = base_nodamas - tel_nodamas - campo_nodamas
-            con_gestion = base_nodamas - sin_gestion
-
-            total_base = len(base_nodamas) or 1
+            total_base = len(base_keys) or 1
 
             def _pct(n):
                 return n / total_base * 100
@@ -3512,21 +3534,39 @@ def _render_interno_tab():
                 df_t["_tipif_num"] = pd.to_numeric(df_t[tipif_t], errors="coerce")
                 df_t["_es_efectivo"] = df_t["_tipif_num"].isin(CONTACTO_EFECTIVO)
 
-                # Por NoDama: al menos 1 contacto efectivo
-                por_nodama = df_t.groupby(nodama_t).agg(
+                # Filtrar solo damas que están en la base de moras (cruce NoDama + Campaña)
+                camp_t = tel_cols.get("camp")
+                if df_moras_fil is not None and mora_nodama_col:
+                    if camp_t and camp_t in df_t.columns and mora_camp_col:
+                        df_t["_camp_str"] = df_t[camp_t].astype(str).str.strip()
+                        _base_keys_set = set(zip(
+                            df_moras_fil[mora_nodama_col].astype(str).str.strip(),
+                            df_moras_fil[mora_camp_col].astype(str).str.strip()
+                        ))
+                        df_t = df_t[df_t.apply(
+                            lambda r: (r[nodama_t], r["_camp_str"]) in _base_keys_set, axis=1
+                        )]
+                    else:
+                        _base_nd_set = set(df_moras_fil[mora_nodama_col].astype(str).str.strip())
+                        df_t = df_t[df_t[nodama_t].isin(_base_nd_set)]
+
+                # Agrupar por NoDama + Campaña si aplica
+                grp_cols = [nodama_t]
+                if camp_t and "_camp_str" in df_t.columns:
+                    grp_cols = [nodama_t, "_camp_str"]
+
+                por_nodama = df_t.groupby(grp_cols).agg(
                     _tiene_efectivo=("_es_efectivo", "any"),
                 ).reset_index()
 
                 if promesa_t:
-                    def _tiene_promesa(series):
-                        return series.dropna().astype(str).str.strip().str.lower()
-                    prom_group = df_t.groupby(nodama_t)[promesa_t].apply(
+                    prom_group = df_t.groupby(grp_cols)[promesa_t].apply(
                         lambda s: s.dropna().astype(str).str.strip().str.lower()
                         .replace({"nan": "", "none": "", "no": "", "n/a": ""})
                         .pipe(lambda x: (x != "").any())
                     ).reset_index()
-                    prom_group.columns = [nodama_t, "_tiene_promesa"]
-                    por_nodama = por_nodama.merge(prom_group, on=nodama_t, how="left")
+                    prom_group.columns = grp_cols + ["_tiene_promesa"]
+                    por_nodama = por_nodama.merge(prom_group, on=grp_cols, how="left")
                     por_nodama["_tiene_promesa"] = por_nodama["_tiene_promesa"].fillna(False)
                 else:
                     por_nodama["_tiene_promesa"] = False
