@@ -3176,7 +3176,7 @@ def _render_interno_tab():
         }
         with st.expander("⚙️ Ajustar columnas — Gestión Telefónica"):
             all_tel_cols = list(df_tel.columns)
-            c1, c2, c3, c4, c5 = st.columns(5)
+            c1, c2, c3, c4 = st.columns(4)
             with c1:
                 tel_cols["nodama"] = st.selectbox(
                     "N° Dama", all_tel_cols,
@@ -3184,23 +3184,18 @@ def _render_interno_tab():
                     key="tel_nodama"
                 )
             with c2:
-                camp_opts_tel = ["(ninguna)"] + all_tel_cols
-                _ci = camp_opts_tel.index(tel_cols["camp"]) if tel_cols["camp"] in camp_opts_tel else 0
-                _cs = st.selectbox("Campaña", camp_opts_tel, index=_ci, key="tel_camp")
-                tel_cols["camp"] = None if _cs == "(ninguna)" else _cs
-            with c3:
                 tel_cols["fecha"] = st.selectbox(
                     "Fecha gestión", all_tel_cols,
                     index=all_tel_cols.index(tel_cols["fecha"]) if tel_cols["fecha"] in all_tel_cols else 0,
                     key="tel_fecha"
                 )
-            with c4:
+            with c3:
                 tel_cols["tipif"] = st.selectbox(
                     "Tipificación", all_tel_cols,
                     index=all_tel_cols.index(tel_cols["tipif"]) if tel_cols["tipif"] in all_tel_cols else 0,
                     key="tel_tipif"
                 )
-            with c5:
+            with c4:
                 promesa_options = ["(ninguna)"] + all_tel_cols
                 _promesa_idx = promesa_options.index(tel_cols["promesa"]) if tel_cols["promesa"] in promesa_options else 0
                 _promesa_sel = st.selectbox("Promesa de pago", promesa_options, index=_promesa_idx, key="tel_promesa")
@@ -3216,7 +3211,7 @@ def _render_interno_tab():
         }
         with st.expander("⚙️ Ajustar columnas — Visitas de Campo"):
             all_campo_cols = list(df_campo.columns)
-            c1, c2, c3, c4, c5 = st.columns(5)
+            c1, c2, c3, c4 = st.columns(4)
             with c1:
                 campo_cols["nodama"] = st.selectbox(
                     "N° Dama", all_campo_cols,
@@ -3224,23 +3219,18 @@ def _render_interno_tab():
                     key="campo_nodama"
                 )
             with c2:
-                camp_opts_campo = ["(ninguna)"] + all_campo_cols
-                _ci2 = camp_opts_campo.index(campo_cols["camp"]) if campo_cols["camp"] in camp_opts_campo else 0
-                _cs2 = st.selectbox("Campaña", camp_opts_campo, index=_ci2, key="campo_camp")
-                campo_cols["camp"] = None if _cs2 == "(ninguna)" else _cs2
-            with c3:
                 campo_cols["fecha"] = st.selectbox(
                     "Fecha dispositivo", all_campo_cols,
                     index=all_campo_cols.index(campo_cols["fecha"]) if campo_cols["fecha"] in all_campo_cols else 0,
                     key="campo_fecha"
                 )
-            with c4:
+            with c3:
                 campo_cols["estatus"] = st.selectbox(
                     "Estatus visita", all_campo_cols,
                     index=all_campo_cols.index(campo_cols["estatus"]) if campo_cols["estatus"] in all_campo_cols else 0,
                     key="campo_estatus"
                 )
-            with c5:
+            with c4:
                 campo_cols["gestor"] = st.selectbox(
                     "Gestor", all_campo_cols,
                     index=all_campo_cols.index(campo_cols["gestor"]) if campo_cols["gestor"] in all_campo_cols else 0,
@@ -3378,41 +3368,27 @@ def _render_interno_tab():
                 unsafe_allow_html=True,
             )
 
-            # Cruce vectorizado por (NoDama, Campaña) usando llave compuesta "nd|camp"
-            def _make_key_set(df, nodama_col, camp_col):
-                if df is None or not nodama_col or nodama_col not in df.columns:
+            # Conjuntos compuestos NoDama|Campaña
+            def _cov_keys(df, nd_col, cp_col):
+                if df is None or not nd_col or nd_col not in df.columns:
                     return set()
-                _nd = df[nodama_col].dropna().astype(str).str.strip()
-                if camp_col and camp_col in df.columns:
-                    _cp = df[camp_col].astype(str).str.strip()
-                    return set(_nd + "|" + _cp)
-                return set(_nd + "|*")
+                _nd = df[nd_col].fillna("").astype(str).str.strip()
+                if cp_col and cp_col in df.columns:
+                    _cp = df[cp_col].fillna("").astype(str).str.strip()
+                    return set((_nd + "|" + _cp).tolist())
+                return set((_nd + "|*").tolist())
 
-            base_keys  = _make_key_set(df_moras_fil, mora_nodama_col, mora_camp_col)
-            tel_raw    = _make_key_set(df_tel_fil,   tel_cols.get("nodama"),   tel_cols.get("camp"))
-            campo_raw  = _make_key_set(df_campo_fil, campo_cols.get("nodama"), campo_cols.get("camp"))
+            base_keys   = _cov_keys(df_moras_fil,  mora_nodama_col,       mora_camp_col)
+            tel_keys    = _cov_keys(df_tel_fil,     tel_cols.get("nodama"), tel_cols.get("camp"))
+            campo_keys  = _cov_keys(df_campo_fil,   campo_cols.get("nodama"), campo_cols.get("camp"))
 
-            # Si el archivo de gestión no tiene campaña, expande base por NoDama
-            _tel_has_camp   = bool(tel_cols.get("camp"))
-            _campo_has_camp = bool(campo_cols.get("camp"))
-
-            if not _tel_has_camp and tel_raw:
-                _tel_nd = {k.split("|")[0] for k in tel_raw}
-                tel_keys = {k for k in base_keys if k.split("|")[0] in _tel_nd}
-            else:
-                tel_keys = tel_raw & base_keys
-
-            if not _campo_has_camp and campo_raw:
-                _campo_nd = {k.split("|")[0] for k in campo_raw}
-                campo_keys = {k for k in base_keys if k.split("|")[0] in _campo_nd}
-            else:
-                campo_keys = campo_raw & base_keys
-
-            solo_tel    = tel_keys   - campo_keys
-            solo_campo  = campo_keys - tel_keys
-            mixta       = tel_keys   & campo_keys
-            sin_gestion = base_keys  - tel_keys - campo_keys
-            con_gestion = base_keys  - sin_gestion
+            tel_base    = tel_keys & base_keys
+            campo_base  = campo_keys & base_keys
+            solo_tel    = tel_base - campo_keys
+            solo_campo  = campo_base - tel_keys
+            mixta       = tel_keys & campo_keys & base_keys
+            sin_gestion = base_keys - tel_keys - campo_keys
+            con_gestion = base_keys - sin_gestion
 
             total_base = len(base_keys) or 1
 
@@ -3525,9 +3501,10 @@ def _render_interno_tab():
                 unsafe_allow_html=True,
             )
 
-            nodama_t = tel_cols.get("nodama")
-            fecha_t  = tel_cols.get("fecha")
-            tipif_t  = tel_cols.get("tipif")
+            nodama_t  = tel_cols.get("nodama")
+            camp_t    = tel_cols.get("camp")
+            fecha_t   = tel_cols.get("fecha")
+            tipif_t   = tel_cols.get("tipif")
             promesa_t = tel_cols.get("promesa")
 
             if not nodama_t or not tipif_t:
@@ -3535,30 +3512,13 @@ def _render_interno_tab():
             else:
                 df_t = df_tel_fil.copy()
                 df_t[nodama_t] = df_t[nodama_t].astype(str).str.strip()
+                if camp_t and camp_t in df_t.columns:
+                    df_t[camp_t] = df_t[camp_t].astype(str).str.strip()
                 df_t["_tipif_num"] = pd.to_numeric(df_t[tipif_t], errors="coerce")
                 df_t["_es_efectivo"] = df_t["_tipif_num"].isin(CONTACTO_EFECTIVO)
 
-                # Filtrar solo damas que están en la base de moras (cruce NoDama + Campaña)
-                camp_t = tel_cols.get("camp")
-                if df_moras_fil is not None and mora_nodama_col:
-                    if camp_t and camp_t in df_t.columns and mora_camp_col:
-                        df_t["_camp_str"] = df_t[camp_t].astype(str).str.strip()
-                        # Vectorizado: crear llave compuesta y usar isin()
-                        _base_key_strs = set(
-                            df_moras_fil[mora_nodama_col].astype(str).str.strip() + "|" +
-                            df_moras_fil[mora_camp_col].astype(str).str.strip()
-                        )
-                        df_t["_join_key"] = df_t[nodama_t] + "|" + df_t["_camp_str"]
-                        df_t = df_t[df_t["_join_key"].isin(_base_key_strs)]
-                    else:
-                        _base_nd_set = set(df_moras_fil[mora_nodama_col].astype(str).str.strip())
-                        df_t = df_t[df_t[nodama_t].isin(_base_nd_set)]
-
-                # Agrupar por NoDama + Campaña si aplica
-                grp_cols = [nodama_t]
-                if camp_t and "_camp_str" in df_t.columns:
-                    grp_cols = [nodama_t, "_camp_str"]
-
+                # Agrupar por NoDama+Campaña
+                grp_cols = [nodama_t] + ([camp_t] if camp_t and camp_t in df_t.columns else [])
                 por_nodama = df_t.groupby(grp_cols).agg(
                     _tiene_efectivo=("_es_efectivo", "any"),
                 ).reset_index()
@@ -4246,12 +4206,7 @@ h1, h2, h3, h4 {{
             tab_tracking(st.session_state.df_moras, metrics)
 
     with interno_tab:
-        try:
-            _render_interno_tab()
-        except Exception as _e:
-            st.error(f"Error en Interno: {_e}")
-            import traceback
-            st.code(traceback.format_exc())
+        _render_interno_tab()
 
 
 if __name__ == "__main__":
