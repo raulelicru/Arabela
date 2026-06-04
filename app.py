@@ -3276,7 +3276,7 @@ h1, h2, h3, h4 {{
         st.info(" Filtros activos — " + " · ".join(partes))
 
     # ── Tabs ──────────────────────────────────────────────────────────
-    arabela_tab, = st.tabs(["🌸 Arabela"])
+    arabela_tab, interno_tab = st.tabs(["🌸 Arabela", "🔒 Interno"])
     with arabela_tab:
         sub1, sub2, sub3, sub4 = st.tabs([
             " Resumen General",
@@ -3292,6 +3292,16 @@ h1, h2, h3, h4 {{
             tab_flujo(metrics)
         with sub4:
             tab_tracking(st.session_state.df_moras, metrics)
+
+    with interno_tab:
+        st.markdown(
+            "<div style='padding:2rem 1rem 1rem'>"
+            "<h2 style='margin:0 0 0.4rem'>🔒 Interno — Fase 2</h2>"
+            "<p style='color:#64748b;margin:0'>Aquí irán las nuevas funcionalidades de la segunda fase del proyecto.</p>"
+            "</div>",
+            unsafe_allow_html=True,
+        )
+        st.info("Próximamente — en construcción.")
 
 
 if __name__ == "__main__":
