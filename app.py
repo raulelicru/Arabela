@@ -4531,6 +4531,503 @@ def _render_interno_tab():
 
 
 # ─────────────────────────────────────────────
+#  INDICADORES DE RECUPERACIÓN — TAB STANDALONE
+# ─────────────────────────────────────────────
+
+def tab_indicadores(df):
+    """Dashboard de indicadores de recuperación de cartera basado en un archivo único."""
+    _cc = {
+        "camp":     _find_col(df, ["anio", "aniocampania", "campaña de trabajo", "campaña"]),
+        "division": _find_col(df, ["division", "división"]),
+        "ruta":     _find_col(df, ["ruta"]),
+        "zona":     _find_col(df, ["zona"]),
+        "region":   _find_col(df, ["region", "región"]),
+        "nodama":   _find_col(df, ["nodama", "dama"]),
+        "segmento": _find_col(df, ["morosidad", "mora", "segmento"]),
+        "saldo":    _find_col(df, ["saldodama", "saldo"]),
+        "pago":     _find_col(df, ["pago"]),
+        "visita":   _find_col(df, ["visitas gestor", "visita"]),
+        "dictam":   _find_col(df, ["dictaminacion", "dictam"]),
+        "situacion": _find_col(df, ["descsituacion", "situacion", "estatus"]),
+    }
+
+    with st.expander("⚙️ Ajustar columnas — Cartera General"):
+        _all = list(df.columns)
+        _i1, _i2, _i3, _i4 = st.columns(4)
+        def _sel(label, key, k, col):
+            opts = ["(ninguna)"] + _all
+            idx = opts.index(_cc[k]) if _cc[k] and _cc[k] in opts else 0
+            val = col.selectbox(label, opts, index=idx, key=key)
+            _cc[k] = None if val == "(ninguna)" else val
+        with _i1:
+            _sel("Campaña",        "ind_c_camp", "camp",     _i1)
+            _sel("División",       "ind_c_div",  "division", _i1)
+            _sel("Ruta",           "ind_c_ruta", "ruta",     _i1)
+        with _i2:
+            _sel("Zona",           "ind_c_zona", "zona",     _i2)
+            _sel("Región",         "ind_c_reg",  "region",   _i2)
+            _sel("Número de Dama", "ind_c_nd",   "nodama",   _i2)
+        with _i3:
+            _sel("Segmento Mora",  "ind_c_seg",  "segmento", _i3)
+            _sel("Saldo Asignado", "ind_c_sal",  "saldo",    _i3)
+            _sel("Pago Aplicado",  "ind_c_pago", "pago",     _i3)
+        with _i4:
+            _sel("Visita/Resultado","ind_c_vis",  "visita",   _i4)
+            _sel("Dictaminación",  "ind_c_dic",  "dictam",   _i4)
+            _sel("Situación",      "ind_c_sit",  "situacion",_i4)
+
+    def _safe(k): return bool(_cc.get(k) and _cc[k] in df.columns)
+    def _col(k):  return _cc[k]
+
+    _d = df.copy()
+    for _k in ["saldo", "pago"]:
+        if _safe(_k):
+            _d[_col(_k)] = pd.to_numeric(_d[_col(_k)], errors="coerce").fillna(0)
+
+    n_total    = len(_d)
+    saldo_tot  = _d[_col("saldo")].sum() if _safe("saldo") else 0
+    pago_tot   = _d[_col("pago")].sum()  if _safe("pago")  else 0
+    pct_rec    = pago_tot / saldo_tot * 100 if saldo_tot else 0
+    n_pagadas  = int((_d[_col("pago")] > 0).sum()) if _safe("pago") else 0
+    pct_pagadas = n_pagadas / n_total * 100 if n_total else 0
+    n_visitas  = int(_d[_col("visita")].notna().sum()) if _safe("visita") else 0
+    pct_vis    = n_visitas / n_total * 100 if n_total else 0
+
+    # Promesas de pago (visita o dictaminación)
+    _prom_mask = pd.Series(False, index=_d.index)
+    if _safe("visita"):
+        _prom_mask |= _d[_col("visita")].astype(str).str.upper().str.contains("PROMESA", na=False)
+    if _safe("dictam"):
+        _prom_mask |= _d[_col("dictam")].astype(str).str.upper().str.contains("PROMESA", na=False)
+    n_promesas  = int(_prom_mask.sum())
+    pct_promesas = n_promesas / n_total * 100 if n_total else 0
+
+    # Estatus derivado (vectorizado)
+    if _safe("pago"):
+        _pago_s = _d[_col("pago")].fillna(0)
+        _vis_s  = _d[_col("visita")].fillna("").astype(str).str.upper() if _safe("visita") else pd.Series("", index=_d.index)
+        _dic_s  = _d[_col("dictam")].fillna("").astype(str).str.upper() if _safe("dictam") else pd.Series("", index=_d.index)
+        _conds   = [
+            _pago_s > 0,
+            _vis_s.str.contains("PROMESA", na=False),
+            _vis_s.str.contains("PAGO", na=False),
+            _vis_s.str.strip().ne(""),
+            _dic_s.str.strip().ne(""),
+        ]
+        _choices = ["Recuperada", "Promesa de Pago", "Pago Cobrador/Porteador",
+                    "Gestionada - Visita", "Gestionada - Llamada"]
+        _d["_estatus"] = np.select(_conds, _choices, default="Sin Gestión")
+        estatus_col = "_estatus"
+    elif _safe("situacion"):
+        estatus_col = _col("situacion")
+    else:
+        estatus_col = None
+
+    # Groupby helper
+    def _grp(col_key, top_n=None):
+        if not _safe(col_key) or not _safe("saldo"):
+            return pd.DataFrame()
+        _gcol = _d[_col(col_key)].astype(str).str.strip()
+        g = _d.groupby(_gcol).agg(
+            Cuentas=(_col("saldo"), "count"),
+            Asignado=(_col("saldo"), "sum"),
+            **( {"Pagado": (_col("pago"), "sum")} if _safe("pago") else {} ),
+        ).reset_index()
+        g.columns = [col_key] + list(g.columns[1:])
+        if "Pagado" in g.columns:
+            g["PctRec"] = (g["Pagado"] / g["Asignado"].replace(0, 1) * 100).round(1)
+        if top_n:
+            g = g.nlargest(top_n, "Cuentas")
+        return g
+
+    def _color_pct(v):
+        return COLORS["success"] if v >= 70 else COLORS["warning"] if v >= 40 else COLORS["danger"]
+
+    # Sub-tabs
+    cob0, cob1, cob2, cob3, cob4 = st.tabs([
+        "📋 Ejecutivo", "📊 Por Segmento", "🗺️ Geográfico", "🚗 Gestión", "⚠️ Alertas"
+    ])
+
+    # ── EJECUTIVO ──────────────────────────────────────────────────────
+    with cob0:
+        st.markdown(
+            "<div class='kpi-banner' style='margin-bottom:1rem'>"
+            "<h1 style='font-size:1.1rem'>📋 Indicadores Ejecutivos de Recuperación</h1>"
+            "<p>Resumen gerencial de desempeño de cobranza</p></div>",
+            unsafe_allow_html=True,
+        )
+        _r1a, _r1b, _r1c, _r1d = st.columns(4)
+        with _r1a: st.metric("📂 Cuentas Asignadas",  f"{n_total:,}")
+        with _r1b: st.metric("💰 Saldo Asignado",     fmt_currency(saldo_tot))
+        with _r1c: st.metric("✅ Saldo Recuperado",   fmt_currency(pago_tot),  delta=f"{pct_rec:.1f}%")
+        with _r1d: st.metric("📈 % Recuperación",     f"{pct_rec:.1f}%")
+
+        st.markdown("<br>", unsafe_allow_html=True)
+        _r2a, _r2b, _r2c, _r2d = st.columns(4)
+        with _r2a: st.metric("🔢 Cuentas Recuperadas", f"{n_pagadas:,}",   delta=f"{pct_pagadas:.1f}% de cuentas")
+        with _r2b: st.metric("🚗 Visitas Realizadas",  f"{n_visitas:,}",   delta=f"{pct_vis:.1f}%")
+        with _r2c: st.metric("💬 Promesas de Pago",    f"{n_promesas:,}",  delta=f"{pct_promesas:.1f}%")
+        with _r2d:
+            _contacto = int((_d[_col("visita")].notna()).sum()) if _safe("visita") else 0
+            st.metric("🤝 Contacto Efectivo", f"{_contacto:,}", delta=f"{_contacto/n_total*100:.1f}%" if n_total else None)
+
+        st.markdown("<br>", unsafe_allow_html=True)
+        _ej1, _ej2 = st.columns(2)
+        with _ej1:
+            _gd = _grp("division")
+            if not _gd.empty and "PctRec" in _gd.columns:
+                _gd = _gd.sort_values("PctRec", ascending=True)
+                _fig = go.Figure(go.Bar(
+                    y=_gd["division"].astype(str), x=_gd["PctRec"], orientation="h",
+                    marker_color=[_color_pct(v) for v in _gd["PctRec"]],
+                    text=[f"{v:.1f}%" for v in _gd["PctRec"]], textposition="outside",
+                    hovertemplate="%{y}<br>%{x:.1f}%<extra></extra>",
+                ))
+                _fig.update_layout(**{**PLOTLY_LAYOUT, "title": "% Recuperación por División",
+                    "height": 340, "xaxis": dict(**_AXIS_DEFAULTS, title="% Recuperado"),
+                    "yaxis": dict(**_AXIS_DEFAULTS, automargin=True)})
+                st.markdown("<div class='chart-card'>", unsafe_allow_html=True)
+                st.plotly_chart(_fig, use_container_width=True, config={"displayModeBar": False}, key="ind_ej_div")
+                st.markdown("</div>", unsafe_allow_html=True)
+            else:
+                st.info("Configura División para ver este gráfico.")
+
+        with _ej2:
+            _gc = _grp("camp")
+            if not _gc.empty and "PctRec" in _gc.columns:
+                try: _gc["_s"] = _gc["camp"].apply(_camp_sort_key)
+                except Exception: _gc["_s"] = _gc["camp"].astype(str)
+                _gc = _gc.sort_values("_s")
+                _fig2 = go.Figure(go.Scatter(
+                    x=_gc["camp"].astype(str), y=_gc["PctRec"],
+                    mode="lines+markers+text",
+                    line=dict(color=COLORS["accent"], width=2),
+                    marker=dict(size=8, color=COLORS["accent"]),
+                    text=[f"{v:.1f}%" for v in _gc["PctRec"]],
+                    textposition="top center",
+                    hovertemplate="Campaña %{x}<br>%{y:.1f}%<extra></extra>",
+                ))
+                _fig2.update_layout(**{**PLOTLY_LAYOUT, "title": "Tendencia Recuperación por Campaña",
+                    "height": 340, "xaxis": dict(**_AXIS_DEFAULTS, title="Campaña", type="category"),
+                    "yaxis": dict(**_AXIS_DEFAULTS, title="% Recuperado")})
+                st.markdown("<div class='chart-card'>", unsafe_allow_html=True)
+                st.plotly_chart(_fig2, use_container_width=True, config={"displayModeBar": False}, key="ind_ej_camp")
+                st.markdown("</div>", unsafe_allow_html=True)
+            else:
+                st.info("Configura Campaña para ver la tendencia.")
+
+    # ── POR SEGMENTO ───────────────────────────────────────────────────
+    with cob1:
+        st.markdown(
+            "<div class='kpi-banner' style='margin-bottom:1rem'>"
+            "<h1 style='font-size:1.1rem'>📊 Recuperación por Segmento de Mora</h1>"
+            "<p>Inactivas, Mora 1, Mora 2, Mora 3</p></div>",
+            unsafe_allow_html=True,
+        )
+        if not _safe("segmento") or not _safe("saldo"):
+            st.warning("Configura las columnas Segmento Mora y Saldo Asignado.")
+        else:
+            _seg_col_name = _col("segmento")
+            _gs = _d.groupby(_d[_seg_col_name].astype(str).str.strip()).agg(
+                Cuentas=(_col("saldo"), "count"),
+                Asignado=(_col("saldo"), "sum"),
+                **( {"Pagado": (_col("pago"), "sum")} if _safe("pago") else {} ),
+            ).reset_index()
+            _gs.columns = ["Segmento"] + list(_gs.columns[1:])
+            if "Pagado" in _gs.columns:
+                _gs["PctRec"] = (_gs["Pagado"] / _gs["Asignado"].replace(0, 1) * 100).round(1)
+
+            _seg_colors_map = {"Inactiva": COLORS["muted"], "Inactivas": COLORS["muted"],
+                               "Mora 1": COLORS["warning"], "Mora 2": COLORS.get("orange", "#f97316"),
+                               "Mora 3": COLORS["danger"]}
+
+            _scols = st.columns(len(_gs))
+            for _sc, _row in zip(_scols, _gs.itertuples()):
+                with _sc:
+                    _pr = getattr(_row, "PctRec", 0)
+                    st.metric(str(_row.Segmento), f"{int(_row.Cuentas):,} ctas",
+                              delta=f"{_pr:.1f}% rec." if "Pagado" in _gs.columns else fmt_currency(_row.Asignado))
+
+            st.markdown("<br>", unsafe_allow_html=True)
+            _sc1, _sc2 = st.columns(2)
+            with _sc1:
+                _y = _gs["PctRec"].tolist() if "PctRec" in _gs.columns else [0]*len(_gs)
+                _colors_seg = [_seg_colors_map.get(str(s), COLORS["accent"]) for s in _gs["Segmento"]]
+                _fig_s = go.Figure(go.Bar(
+                    x=_gs["Segmento"].astype(str), y=_y,
+                    marker_color=_colors_seg,
+                    text=[f"{v:.1f}%" for v in _y], textposition="outside",
+                    hovertemplate="%{x}<br>%{y:.1f}%<extra></extra>",
+                ))
+                _fig_s.update_layout(**{**PLOTLY_LAYOUT, "title": "% Recuperación por Segmento",
+                    "height": 340, "xaxis": dict(**_AXIS_DEFAULTS, type="category"),
+                    "yaxis": dict(**_AXIS_DEFAULTS, title="% Recuperado")})
+                st.markdown("<div class='chart-card'>", unsafe_allow_html=True)
+                st.plotly_chart(_fig_s, use_container_width=True, config={"displayModeBar": False}, key="ind_bar_seg_pct")
+                st.markdown("</div>", unsafe_allow_html=True)
+
+            with _sc2:
+                _fig_s2 = go.Figure()
+                _fig_s2.add_trace(go.Bar(name="Asignado", x=_gs["Segmento"].astype(str), y=_gs["Asignado"],
+                    marker_color=COLORS["muted"], hovertemplate="%{x}<br>Asignado: $%{y:,.0f}<extra></extra>"))
+                if "Pagado" in _gs.columns:
+                    _fig_s2.add_trace(go.Bar(name="Recuperado", x=_gs["Segmento"].astype(str), y=_gs["Pagado"],
+                        marker_color=COLORS["success"], hovertemplate="%{x}<br>Recuperado: $%{y:,.0f}<extra></extra>"))
+                _fig_s2.update_layout(**{**PLOTLY_LAYOUT, "title": "Saldo Asignado vs Recuperado",
+                    "height": 340, "barmode": "group",
+                    "xaxis": dict(**_AXIS_DEFAULTS, type="category"),
+                    "yaxis": dict(**_AXIS_DEFAULTS, title="Monto $")})
+                st.markdown("<div class='chart-card'>", unsafe_allow_html=True)
+                st.plotly_chart(_fig_s2, use_container_width=True, config={"displayModeBar": False}, key="ind_bar_seg_saldo")
+                st.markdown("</div>", unsafe_allow_html=True)
+
+            _gs_disp = _gs.copy()
+            _gs_disp["Asignado"] = _gs_disp["Asignado"].map(fmt_currency)
+            if "Pagado" in _gs_disp.columns:
+                _gs_disp["Pagado"]  = _gs_disp["Pagado"].map(fmt_currency)
+                _gs_disp["PctRec"] = _gs_disp["PctRec"].map(lambda x: f"{x:.1f}%")
+            st.dataframe(_gs_disp, use_container_width=True, hide_index=True)
+
+    # ── GEOGRÁFICO ─────────────────────────────────────────────────────
+    with cob2:
+        st.markdown(
+            "<div class='kpi-banner' style='margin-bottom:1rem'>"
+            "<h1 style='font-size:1.1rem'>🗺️ Recuperación Geográfica</h1>"
+            "<p>Por Ruta, División y Top/Bottom 10 Zonas</p></div>",
+            unsafe_allow_html=True,
+        )
+        _geo1, _geo2 = st.columns(2)
+        with _geo1:
+            _gr = _grp("ruta")
+            if not _gr.empty and "PctRec" in _gr.columns:
+                _gr = _gr.sort_values("PctRec", ascending=True).tail(15)
+                _fg = go.Figure(go.Bar(
+                    y=_gr["ruta"].astype(str), x=_gr["PctRec"], orientation="h",
+                    marker_color=[_color_pct(v) for v in _gr["PctRec"]],
+                    text=[f"{v:.1f}%" for v in _gr["PctRec"]], textposition="outside",
+                    hovertemplate="Ruta %{y}<br>%{x:.1f}%<extra></extra>",
+                ))
+                _fg.update_layout(**{**PLOTLY_LAYOUT, "title": "% Recuperación por Ruta (Top 15)",
+                    "height": 420, "xaxis": dict(**_AXIS_DEFAULTS, title="% Recuperado"),
+                    "yaxis": dict(**_AXIS_DEFAULTS, automargin=True)})
+                st.markdown("<div class='chart-card'>", unsafe_allow_html=True)
+                st.plotly_chart(_fg, use_container_width=True, config={"displayModeBar": False}, key="ind_bar_ruta")
+                st.markdown("</div>", unsafe_allow_html=True)
+            else:
+                st.info("Configura la columna Ruta.")
+
+        with _geo2:
+            _gd3 = _grp("division")
+            if not _gd3.empty and "PctRec" in _gd3.columns:
+                _gd3 = _gd3.sort_values("PctRec", ascending=False)
+                _fg2 = go.Figure(go.Bar(
+                    x=_gd3["division"].astype(str), y=_gd3["PctRec"],
+                    marker_color=[_color_pct(v) for v in _gd3["PctRec"]],
+                    text=[f"{v:.1f}%" for v in _gd3["PctRec"]], textposition="outside",
+                    hovertemplate="División %{x}<br>%{y:.1f}%<extra></extra>",
+                ))
+                _fg2.update_layout(**{**PLOTLY_LAYOUT, "title": "% Recuperación por División",
+                    "height": 420, "xaxis": dict(**_AXIS_DEFAULTS, type="category", automargin=True),
+                    "yaxis": dict(**_AXIS_DEFAULTS, title="% Recuperado")})
+                st.markdown("<div class='chart-card'>", unsafe_allow_html=True)
+                st.plotly_chart(_fg2, use_container_width=True, config={"displayModeBar": False}, key="ind_bar_div_geo")
+                st.markdown("</div>", unsafe_allow_html=True)
+            else:
+                st.info("Configura la columna División.")
+
+        st.markdown("---")
+        st.markdown("**🏆 Top 10 y Bottom 10 Zonas**")
+        _gz = _grp("zona")
+        if not _gz.empty and "PctRec" in _gz.columns and len(_gz) >= 2:
+            _top10 = _gz.nlargest(10, "PctRec")
+            _bot10 = _gz.nsmallest(10, "PctRec")
+            _tc, _bc = st.columns(2)
+            with _tc:
+                _ft = go.Figure(go.Bar(
+                    y=_top10["zona"].astype(str), x=_top10["PctRec"], orientation="h",
+                    marker_color=COLORS["success"],
+                    text=[f"{v:.1f}%" for v in _top10["PctRec"]], textposition="outside",
+                    hovertemplate="Zona %{y}<br>%{x:.1f}%<extra></extra>",
+                ))
+                _ft.update_layout(**{**PLOTLY_LAYOUT, "title": "🏆 Top 10 Zonas", "height": 360,
+                    "xaxis": dict(**_AXIS_DEFAULTS, title="% Recuperado"),
+                    "yaxis": dict(**_AXIS_DEFAULTS, automargin=True)})
+                st.markdown("<div class='chart-card'>", unsafe_allow_html=True)
+                st.plotly_chart(_ft, use_container_width=True, config={"displayModeBar": False}, key="ind_top10")
+                st.markdown("</div>", unsafe_allow_html=True)
+            with _bc:
+                _fb = go.Figure(go.Bar(
+                    y=_bot10["zona"].astype(str), x=_bot10["PctRec"], orientation="h",
+                    marker_color=COLORS["danger"],
+                    text=[f"{v:.1f}%" for v in _bot10["PctRec"]], textposition="outside",
+                    hovertemplate="Zona %{y}<br>%{x:.1f}%<extra></extra>",
+                ))
+                _fb.update_layout(**{**PLOTLY_LAYOUT, "title": "⚠️ Bottom 10 Zonas", "height": 360,
+                    "xaxis": dict(**_AXIS_DEFAULTS, title="% Recuperado"),
+                    "yaxis": dict(**_AXIS_DEFAULTS, automargin=True)})
+                st.markdown("<div class='chart-card'>", unsafe_allow_html=True)
+                st.plotly_chart(_fb, use_container_width=True, config={"displayModeBar": False}, key="ind_bot10")
+                st.markdown("</div>", unsafe_allow_html=True)
+        else:
+            st.info("Configura la columna Zona para ver el ranking.")
+
+    # ── GESTIÓN ────────────────────────────────────────────────────────
+    with cob3:
+        st.markdown(
+            "<div class='kpi-banner' style='margin-bottom:1rem'>"
+            "<h1 style='font-size:1.1rem'>🚗 Indicadores de Gestión</h1>"
+            "<p>Estatus de cuentas, dictaminación y resultado de visitas</p></div>",
+            unsafe_allow_html=True,
+        )
+        _gst1, _gst2 = st.columns(2)
+        with _gst1:
+            if estatus_col:
+                _est = _d[estatus_col].astype(str).str.strip().value_counts().reset_index()
+                _est.columns = ["Estatus", "Cuentas"]
+                _fpe = go.Figure(go.Pie(
+                    labels=_est["Estatus"], values=_est["Cuentas"], hole=0.45,
+                    textinfo="percent+label",
+                    hovertemplate="%{label}<br>%{value:,} cuentas (%{percent})<extra></extra>",
+                ))
+                _fpe.update_layout(**{**PLOTLY_LAYOUT, "title": "Distribución de Estatus", "height": 380, "showlegend": False})
+                st.markdown("<div class='chart-card'>", unsafe_allow_html=True)
+                st.plotly_chart(_fpe, use_container_width=True, config={"displayModeBar": False}, key="ind_pie_estatus")
+                st.markdown("</div>", unsafe_allow_html=True)
+            else:
+                st.info("Configura columna Situación o Pago para derivar el estatus.")
+
+        with _gst2:
+            if _safe("dictam"):
+                _dic = (_d[_col("dictam")].astype(str).str.strip()
+                        .value_counts().head(10).reset_index())
+                _dic.columns = ["Dictaminación", "Cuentas"]
+                _fpd = go.Figure(go.Pie(
+                    labels=_dic["Dictaminación"], values=_dic["Cuentas"], hole=0.45,
+                    textinfo="percent+label",
+                    hovertemplate="%{label}<br>%{value:,} cuentas (%{percent})<extra></extra>",
+                ))
+                _fpd.update_layout(**{**PLOTLY_LAYOUT, "title": "Contacto por Dictaminación (Top 10)", "height": 380, "showlegend": False})
+                st.markdown("<div class='chart-card'>", unsafe_allow_html=True)
+                st.plotly_chart(_fpd, use_container_width=True, config={"displayModeBar": False}, key="ind_pie_dictam")
+                st.markdown("</div>", unsafe_allow_html=True)
+            else:
+                st.info("Configura la columna Dictaminación.")
+
+        st.markdown("<br>", unsafe_allow_html=True)
+        _gst3, _gst4 = st.columns(2)
+        with _gst3:
+            if _safe("visita"):
+                _vis = (_d[_col("visita")].dropna().astype(str).str.strip()
+                        .value_counts().head(10).reset_index())
+                _vis.columns = ["Resultado", "Cuentas"]
+                _fvr = go.Figure(go.Bar(
+                    y=_vis["Resultado"], x=_vis["Cuentas"], orientation="h",
+                    marker_color=COLORS["accent"],
+                    text=_vis["Cuentas"], textposition="outside",
+                    hovertemplate="%{y}<br>%{x:,} cuentas<extra></extra>",
+                ))
+                _fvr.update_layout(**{**PLOTLY_LAYOUT, "title": "Resultado de Visitas (Top 10)", "height": 380,
+                    "xaxis": _AXIS_DEFAULTS, "yaxis": dict(**_AXIS_DEFAULTS, automargin=True)})
+                st.markdown("<div class='chart-card'>", unsafe_allow_html=True)
+                st.plotly_chart(_fvr, use_container_width=True, config={"displayModeBar": False}, key="ind_bar_vis_res")
+                st.markdown("</div>", unsafe_allow_html=True)
+            else:
+                st.info("Configura la columna Visita/Resultado.")
+
+        with _gst4:
+            _gz2 = _grp("zona")
+            if not _gz2.empty and "PctRec" in _gz2.columns:
+                _gz2_s = _gz2.sort_values("PctRec", ascending=True)
+                _fzr = go.Figure(go.Bar(
+                    y=_gz2_s["zona"].astype(str), x=_gz2_s["PctRec"], orientation="h",
+                    marker_color=[_color_pct(v) for v in _gz2_s["PctRec"]],
+                    text=[f"{v:.1f}%" for v in _gz2_s["PctRec"]], textposition="outside",
+                    hovertemplate="Zona %{y}<br>%{x:.1f}%<extra></extra>",
+                ))
+                _fzr.update_layout(**{**PLOTLY_LAYOUT, "title": "% Recuperación por Zona", "height": 380,
+                    "xaxis": dict(**_AXIS_DEFAULTS, title="% Recuperado"),
+                    "yaxis": dict(**_AXIS_DEFAULTS, automargin=True)})
+                st.markdown("<div class='chart-card'>", unsafe_allow_html=True)
+                st.plotly_chart(_fzr, use_container_width=True, config={"displayModeBar": False}, key="ind_bar_zona_rec")
+                st.markdown("</div>", unsafe_allow_html=True)
+            else:
+                st.info("Configura la columna Zona.")
+
+    # ── ALERTAS ────────────────────────────────────────────────────────
+    with cob4:
+        st.markdown(
+            "<div class='kpi-banner' style='margin-bottom:1rem'>"
+            "<h1 style='font-size:1.1rem'>⚠️ Alertas de Bajo Desempeño</h1>"
+            "<p>Unidades con recuperación por debajo del umbral definido</p></div>",
+            unsafe_allow_html=True,
+        )
+        _thr = st.slider("Umbral de alerta (% recuperación)", 0, 100, 30, 5, key="ind_alert_thr")
+        _hay_alertas = False
+        for _ak, _alabel in [("zona", "Zona"), ("ruta", "Ruta"), ("division", "División")]:
+            _ag = _grp(_ak)
+            if not _ag.empty and "PctRec" in _ag.columns:
+                _bad = _ag[_ag["PctRec"] < _thr].sort_values("PctRec")
+                if not _bad.empty:
+                    _hay_alertas = True
+                    _badge_fn = st.error if _ak == "zona" else st.warning
+                    _badge_fn(f"**{len(_bad)} {_alabel}{'s' if len(_bad)!=1 else ''}** con recuperación < {_thr}%")
+                    _bd = _bad.copy()
+                    _bd["Asignado"] = _bd["Asignado"].map(fmt_currency)
+                    if "Pagado" in _bd.columns:
+                        _bd["Pagado"]  = _bd["Pagado"].map(fmt_currency)
+                        _bd["PctRec"] = _bd["PctRec"].map(lambda x: f"{x:.1f}%")
+                    st.dataframe(_bd.rename(columns={_ak: _alabel}), use_container_width=True, hide_index=True)
+
+        if not _hay_alertas:
+            st.success(f"✅ Sin alertas — todas las unidades tienen recuperación ≥ {_thr}%")
+
+
+def _render_indicadores_standalone():
+    """Tab independiente de Indicadores de Recuperación."""
+    st.markdown(
+        "<div class='kpi-banner'>"
+        "<h1>📊 Indicadores de Recuperación de Cartera</h1>"
+        "<p>Dashboard de cobranza — carga tu archivo de Cartera General para ver los indicadores</p>"
+        "</div>",
+        unsafe_allow_html=True,
+    )
+
+    with st.expander("📂 Cargar archivo de Cartera General",
+                     expanded=st.session_state.get("df_cartera_gral") is None):
+        _f = st.file_uploader(
+            "Cartera General", type=["xlsx", "xls"],
+            label_visibility="collapsed", key="up_cartera_gral"
+        )
+        if _f:
+            if [_f.name] != st.session_state.get("int_cartera_gral_name", []):
+                try:
+                    st.session_state.df_cartera_gral = read_excel_safe(_f)
+                    st.session_state.int_cartera_gral_name = [_f.name]
+                except Exception as e:
+                    st.error(f"Error al leer archivo: {e}")
+        if st.session_state.get("df_cartera_gral") is not None:
+            _nm = st.session_state.int_cartera_gral_name
+            _nr = len(st.session_state.df_cartera_gral)
+            st.markdown(
+                f"<span style='background:#dcfce7;color:#16a34a;padding:2px 10px;"
+                f"border-radius:99px;font-size:0.78rem;font-weight:600'>"
+                f"✓ {_nm[0] if _nm else 'Cargado'} — {_nr:,} registros</span>",
+                unsafe_allow_html=True,
+            )
+
+    if st.session_state.get("df_cartera_gral") is None:
+        st.info("⬆️ Sube el archivo de Cartera General para ver los indicadores de recuperación.")
+        return
+
+    try:
+        tab_indicadores(st.session_state.df_cartera_gral)
+    except Exception as _e:
+        st.error(f"Error en Indicadores: {_e}")
+        import traceback
+        st.code(traceback.format_exc())
+
+
+# ─────────────────────────────────────────────
 #  MAIN
 # ─────────────────────────────────────────────
 
@@ -4540,6 +5037,7 @@ def main():
         ("data", None), ("df_cartera", None), ("df_saldos", None),
         ("mapping", None), ("file_names", (None, None)), ("df_moras", None),
         ("df_tel", None), ("df_campo", None), ("df_cobranza", None),
+        ("df_cartera_gral", None), ("int_cartera_gral_name", []),
         ("int_tel_names", []), ("int_campo_names", []), ("int_cob_names", []),
     ]:
         if key not in st.session_state:
@@ -4765,46 +5263,56 @@ h1, h2, h3, h4 {{
                     st.rerun()
                 except Exception as e:
                     st.error(f" Error al cruzar datos: {e}")
-        return  # esperar confirmación del mapeo antes de mostrar dashboard
+        # no return — fall through to tabs so Indicadores stays accessible
 
-    # ── Sin datos ─────────────────────────────────────────────────────
-    if st.session_state.data is None:
-        render_welcome()
-        return
+    # ── Tabs principales (siempre visibles) ───────────────────────────
+    arabela_tab, indicadores_tab, interno_tab = st.tabs([
+        "🌸 Arabela", "📊 Indicadores", "🏢 Interno"
+    ])
 
-    # ── Filtros ───────────────────────────────────────────────────────
-    filtered_merged = apply_filters(st.session_state.data["merged"], filters)
-    filtered_data   = {**st.session_state.data, "merged": filtered_merged}
-    metrics         = calculate_metrics(filtered_data)
-
-    # Banner de filtros activos
-    campañas_sel = filters.get("campañas", [])
-    estado_sel   = filters.get("estado", "Todos")
-    partes = []
-    if campañas_sel:
-        partes.append(f"Campaña: **{', '.join(campañas_sel)}**")
-    if estado_sel != "Todos":
-        partes.append(f"Estado: **{estado_sel}**")
-    if partes:
-        st.info(" Filtros activos — " + " · ".join(partes))
-
-    # ── Tabs ──────────────────────────────────────────────────────────
-    arabela_tab, interno_tab = st.tabs(["🌸 Arabela", "🏢 Interno"])
     with arabela_tab:
-        sub1, sub2, sub3, sub4 = st.tabs([
-            " Resumen General",
-            " Temporalidad",
-            "Operaciones y Territorio",
-            " Tracking Completo",
-        ])
-        with sub1:
-            tab_resumen(metrics)
-        with sub2:
-            tab_temporalidad(metrics)
-        with sub3:
-            tab_flujo(metrics)
-        with sub4:
-            tab_tracking(st.session_state.df_moras, metrics)
+        # Mapeo pendiente
+        if (st.session_state.df_cartera is not None
+                and st.session_state.df_saldos is not None
+                and st.session_state.data is None):
+            st.info("Completa el mapeo de columnas para ver el dashboard.")
+
+        elif st.session_state.data is None:
+            render_welcome()
+
+        else:
+            # ── Filtros ───────────────────────────────────────────────
+            filtered_merged = apply_filters(st.session_state.data["merged"], filters)
+            filtered_data   = {**st.session_state.data, "merged": filtered_merged}
+            metrics         = calculate_metrics(filtered_data)
+
+            campañas_sel = filters.get("campañas", [])
+            estado_sel   = filters.get("estado", "Todos")
+            partes = []
+            if campañas_sel:
+                partes.append(f"Campaña: **{', '.join(campañas_sel)}**")
+            if estado_sel != "Todos":
+                partes.append(f"Estado: **{estado_sel}**")
+            if partes:
+                st.info(" Filtros activos — " + " · ".join(partes))
+
+            sub1, sub2, sub3, sub4 = st.tabs([
+                " Resumen General",
+                " Temporalidad",
+                "Operaciones y Territorio",
+                " Tracking Completo",
+            ])
+            with sub1:
+                tab_resumen(metrics)
+            with sub2:
+                tab_temporalidad(metrics)
+            with sub3:
+                tab_flujo(metrics)
+            with sub4:
+                tab_tracking(st.session_state.df_moras, metrics)
+
+    with indicadores_tab:
+        _render_indicadores_standalone()
 
     with interno_tab:
         try:
