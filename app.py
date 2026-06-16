@@ -3088,8 +3088,9 @@ def _render_interno_tab():
     # ── Carga de archivos ────────────────────────────────────────────
     with st.expander("📂 Cargar archivos de gestión", expanded=(
         st.session_state.df_tel is None and st.session_state.df_campo is None
+        and st.session_state.get("df_cobranza") is None
     )):
-        up_c1, up_c2 = st.columns(2)
+        up_c1, up_c2, up_c3 = st.columns(3)
 
         with up_c1:
             st.markdown("**Gestión Telefónica**")
@@ -3145,6 +3146,30 @@ def _render_interno_tab():
                     f"<span style='background:#dcfce7;color:#16a34a;padding:2px 10px;"
                     f"border-radius:99px;font-size:0.78rem;font-weight:600'>"
                     f"✓ Cargado — {len(df_campo_info):,} registros</span>",
+                    unsafe_allow_html=True,
+                )
+
+        with up_c3:
+            st.markdown("**Base de Cobranza**")
+            st.caption("Campos: Campaña, División, Ruta, Zona, NoDama, Segmento Mora, Saldo Asignado, Pago Aplicado, Visita, Resultado, Dictaminación, Estatus")
+            cob_file = st.file_uploader(
+                "Base de Cobranza", type=["xlsx", "xls"],
+                label_visibility="collapsed", key="up_int_cob"
+            )
+            if cob_file:
+                names = [cob_file.name]
+                if names != st.session_state.get("int_cob_names", []):
+                    try:
+                        st.session_state.df_cobranza = read_excel_safe(cob_file)
+                        st.session_state.int_cob_names = names
+                    except Exception as e:
+                        st.error(f"Error al leer Base de Cobranza: {e}")
+            if st.session_state.get("df_cobranza") is not None:
+                _cob_info = st.session_state.df_cobranza
+                st.markdown(
+                    f"<span style='background:#dcfce7;color:#16a34a;padding:2px 10px;"
+                    f"border-radius:99px;font-size:0.78rem;font-weight:600'>"
+                    f"✓ Cargado — {len(_cob_info):,} registros</span>",
                     unsafe_allow_html=True,
                 )
 
@@ -3343,12 +3368,15 @@ def _render_interno_tab():
         if campo_cols.get("gestor") and sel_gestores:
             df_campo_fil = df_campo_fil[df_campo_fil[campo_cols["gestor"]].astype(str).isin(sel_gestores)]
 
+    df_cobranza = st.session_state.get("df_cobranza")
+
     # ── Sub-tabs ──────────────────────────────────────────────────────
-    int0, int1, int2, int3 = st.tabs([
+    int0, int1, int2, int3, int4 = st.tabs([
         "📋 Cobertura",
         "✅ Efectividad",
         "📈 Evolución de Mora",
         "🔍 Por Temporalidad",
+        "📊 Indicadores",
     ])
 
     # ═══════════════════════════════════════════
@@ -3932,6 +3960,575 @@ def _render_interno_tab():
                                 config={"displayModeBar": False}, key="int_stacked_temp")
                 st.markdown("</div>", unsafe_allow_html=True)
 
+    # ═══════════════════════════════════════════
+    #  int4 — INDICADORES DE COBRANZA
+    # ═══════════════════════════════════════════
+    with int4:
+        if df_cobranza is None:
+            st.info("📂 Carga la **Base de Cobranza** en el panel de archivos de arriba para ver los indicadores.")
+        else:
+            # ── Detección de columnas ────────────────────────────────────
+            _cob = df_cobranza.copy()
+            _cc = {
+                "camp":     _find_col(_cob, ["campaña", "campana", "camp", "periodo", "anio", "año"]),
+                "division": _find_col(_cob, ["division", "división", "div"]),
+                "ruta":     _find_col(_cob, ["ruta", "route"]),
+                "zona":     _find_col(_cob, ["zona", "zone", "area", "área"]),
+                "nodama":   _find_col(_cob, ["nodama", "no dama", "numdama", "dama", "número de dama"]),
+                "segmento": _find_col(_cob, ["segmento", "mora", "temporalidad", "nivel", "estatus mora"]),
+                "saldo_asig": _find_col(_cob, ["saldo asignado", "saldo_asignado", "asignado", "saldo"]),
+                "pago":     _find_col(_cob, ["pago aplicado", "pago_aplicado", "pagado", "pago", "recuperado", "cobrado"]),
+                "visita":   _find_col(_cob, ["visita realizada", "visita_realizada", "visita", "visitado", "visit"]),
+                "res_visita": _find_col(_cob, ["resultado visita", "resultado_visita", "resultado", "estatus visita"]),
+                "dictam":   _find_col(_cob, ["dictaminacion", "dictaminación", "dictamen", "dictam"]),
+                "estatus":  _find_col(_cob, ["estatus cuenta", "estatus_cuenta", "estatus", "status", "estado"]),
+            }
+
+            with st.expander("⚙️ Ajustar columnas — Base de Cobranza"):
+                _all_cob = list(_cob.columns)
+                _opt_none = ["(ninguna)"] + _all_cob
+                _ic1, _ic2, _ic3, _ic4 = st.columns(4)
+                with _ic1:
+                    _cc["camp"]      = st.selectbox("Campaña",          _all_cob, index=_all_cob.index(_cc["camp"])      if _cc["camp"]      in _all_cob else 0, key="cob_camp")
+                    _cc["division"]  = st.selectbox("División",          _all_cob, index=_all_cob.index(_cc["division"])  if _cc["division"]  in _all_cob else 0, key="cob_div")
+                    _cc["ruta"]      = st.selectbox("Ruta",              _all_cob, index=_all_cob.index(_cc["ruta"])      if _cc["ruta"]      in _all_cob else 0, key="cob_ruta")
+                with _ic2:
+                    _cc["zona"]      = st.selectbox("Zona",              _all_cob, index=_all_cob.index(_cc["zona"])      if _cc["zona"]      in _all_cob else 0, key="cob_zona")
+                    _cc["nodama"]    = st.selectbox("Número de Dama",    _all_cob, index=_all_cob.index(_cc["nodama"])    if _cc["nodama"]    in _all_cob else 0, key="cob_nodama")
+                    _cc["segmento"]  = st.selectbox("Segmento Mora",     _all_cob, index=_all_cob.index(_cc["segmento"])  if _cc["segmento"]  in _all_cob else 0, key="cob_seg")
+                with _ic3:
+                    _cc["saldo_asig"] = st.selectbox("Saldo Asignado",   _all_cob, index=_all_cob.index(_cc["saldo_asig"]) if _cc["saldo_asig"] in _all_cob else 0, key="cob_saldo")
+                    _cc["pago"]      = st.selectbox("Pago Aplicado",     _all_cob, index=_all_cob.index(_cc["pago"])      if _cc["pago"]      in _all_cob else 0, key="cob_pago")
+                    _cc["visita"]    = st.selectbox("Visita Realizada",  _all_cob, index=_all_cob.index(_cc["visita"])    if _cc["visita"]    in _all_cob else 0, key="cob_visita")
+                with _ic4:
+                    _cc["res_visita"] = st.selectbox("Resultado Visita", _all_cob, index=_all_cob.index(_cc["res_visita"]) if _cc["res_visita"] in _all_cob else 0, key="cob_resvis")
+                    _cc["dictam"]    = st.selectbox("Dictaminación",     _all_cob, index=_all_cob.index(_cc["dictam"])    if _cc["dictam"]    in _all_cob else 0, key="cob_dictam")
+                    _cc["estatus"]   = st.selectbox("Estatus Cuenta",    _all_cob, index=_all_cob.index(_cc["estatus"])   if _cc["estatus"]   in _all_cob else 0, key="cob_estatus")
+
+            # ── Normalizar numéricos ─────────────────────────────────────
+            for _num_col in ["saldo_asig", "pago"]:
+                _col = _cc[_num_col]
+                if _col and _col in _cob.columns:
+                    _cob[_col] = pd.to_numeric(_cob[_col], errors="coerce").fillna(0)
+
+            # ── Helper ──────────────────────────────────────────────────
+            def _safe(col):
+                return _cc.get(col) and _cc[col] in _cob.columns
+
+            def _grp_recovery(group_col):
+                if not _safe(group_col) or not _safe("saldo_asig"):
+                    return pd.DataFrame()
+                g = _cob.groupby(_cob[_cc[group_col]].astype(str)).agg(
+                    Asignado=(_cc["saldo_asig"], "sum"),
+                    **( {"Pagado": (_cc["pago"], "sum")} if _safe("pago") else {} ),
+                    Cuentas=(_cc["saldo_asig"], "count"),
+                ).reset_index()
+                g.columns.values[0] = group_col
+                if "Pagado" in g.columns:
+                    g["% Rec"] = (g["Pagado"] / g["Asignado"].replace(0, 1) * 100).round(1)
+                return g
+
+            saldo_tot  = _cob[_cc["saldo_asig"]].sum() if _safe("saldo_asig") else 0
+            pago_tot   = _cob[_cc["pago"]].sum()       if _safe("pago")       else 0
+            pct_rec    = pago_tot / saldo_tot * 100     if saldo_tot else 0
+            n_cuentas  = len(_cob)
+
+            def _pct_bool_col(col_key, true_vals=None):
+                if not _safe(col_key):
+                    return None, 0
+                _s = _cob[_cc[col_key]].astype(str).str.strip().str.lower()
+                if true_vals:
+                    mask = _s.isin({v.lower() for v in true_vals})
+                else:
+                    mask = _s.notna() & (_s != "") & (_s != "nan") & (_s != "no") & (_s != "0")
+                return int(mask.sum()), mask.sum() / len(_s) * 100 if len(_s) else 0
+
+            n_visitas, pct_visita     = _pct_bool_col("visita", ["sí", "si", "yes", "1", "true", "realizada", "efectuada"])
+            n_contacto, pct_contacto  = _pct_bool_col("res_visita", ["contacto", "localizada", "efectivo", "cobro"])
+            n_promesa, pct_promesa    = _pct_bool_col("estatus", ["promesa de pago", "promesa", "ppp", "compromiso"])
+
+            # ── Sub-tabs indicadores ─────────────────────────────────────
+            cob0, cob1, cob2, cob3, cob4 = st.tabs([
+                "📋 Ejecutivo", "📊 Por Segmento", "🗺️ Geográfico", "🚗 Gestión", "⚠️ Alertas"
+            ])
+
+            # ── cob0: EJECUTIVO ──────────────────────────────────────────
+            with cob0:
+                st.markdown(
+                    "<div class='kpi-banner' style='margin-bottom:1rem'>"
+                    "<h1 style='font-size:1.1rem'>📋 Indicadores Ejecutivos de Recuperación</h1>"
+                    "<p>Resumen gerencial de desempeño de cobranza</p></div>",
+                    unsafe_allow_html=True,
+                )
+                r1c1, r1c2, r1c3, r1c4 = st.columns(4)
+                with r1c1:
+                    st.metric("📂 Cuentas Asignadas", f"{n_cuentas:,}")
+                with r1c2:
+                    st.metric("💰 Saldo Asignado", fmt_currency(saldo_tot))
+                with r1c3:
+                    st.metric("✅ Saldo Recuperado", fmt_currency(pago_tot),
+                              delta=f"{pct_rec:.1f}% recuperación")
+                with r1c4:
+                    st.metric("📈 % Recuperación", f"{pct_rec:.1f}%")
+
+                st.markdown("<br>", unsafe_allow_html=True)
+                r2c1, r2c2, r2c3 = st.columns(3)
+                with r2c1:
+                    st.metric("🚗 Visitas Realizadas",
+                              f"{n_visitas:,}" if n_visitas is not None else "N/D",
+                              delta=f"{pct_visita:.1f}% de cuentas" if n_visitas else None)
+                with r2c2:
+                    st.metric("🤝 Contacto Efectivo",
+                              f"{n_contacto:,}" if n_contacto is not None else "N/D",
+                              delta=f"{pct_contacto:.1f}%" if n_contacto else None)
+                with r2c3:
+                    st.metric("💬 Promesas de Pago",
+                              f"{n_promesa:,}" if n_promesa is not None else "N/D",
+                              delta=f"{pct_promesa:.1f}%" if n_promesa else None)
+
+                st.markdown("<br>", unsafe_allow_html=True)
+
+                # Recuperación por División y Campaña lado a lado
+                ej_c1, ej_c2 = st.columns(2)
+                with ej_c1:
+                    _gd = _grp_recovery("division")
+                    if not _gd.empty and "Pagado" in _gd.columns:
+                        _gd = _gd.sort_values("% Rec", ascending=True)
+                        fig_div = go.Figure(go.Bar(
+                            y=_gd["division"].astype(str), x=_gd["% Rec"],
+                            orientation="h",
+                            marker_color=[COLORS["success"] if v >= 70 else COLORS["warning"] if v >= 40 else COLORS["danger"]
+                                          for v in _gd["% Rec"]],
+                            text=[f"{v:.1f}%" for v in _gd["% Rec"]],
+                            textposition="outside",
+                            hovertemplate="%{y}<br>%{x:.1f}% recuperación<extra></extra>",
+                        ))
+                        fig_div.update_layout(**{**PLOTLY_LAYOUT,
+                            "title": "% Recuperación por División",
+                            "height": 360,
+                            "xaxis": dict(**_AXIS_DEFAULTS, title="% Recuperado", range=[0, max(_gd["% Rec"].max() * 1.2, 10)]),
+                            "yaxis": dict(**_AXIS_DEFAULTS, automargin=True)})
+                        st.markdown("<div class='chart-card'>", unsafe_allow_html=True)
+                        st.plotly_chart(fig_div, use_container_width=True,
+                                        config={"displayModeBar": False}, key="cob_bar_div_ej")
+                        st.markdown("</div>", unsafe_allow_html=True)
+                    else:
+                        st.info("Configura la columna División para ver este gráfico.")
+
+                with ej_c2:
+                    _gc = _grp_recovery("camp")
+                    if not _gc.empty and "Pagado" in _gc.columns:
+                        _gc["_sort"] = _gc["camp"].apply(_camp_sort_key)
+                        _gc = _gc.sort_values("_sort")
+                        fig_camp = go.Figure(go.Scatter(
+                            x=_gc["camp"].astype(str), y=_gc["% Rec"],
+                            mode="lines+markers",
+                            line=dict(color=COLORS["accent"], width=2),
+                            marker=dict(size=8, color=COLORS["accent"]),
+                            text=[f"{v:.1f}%" for v in _gc["% Rec"]],
+                            textposition="top center",
+                            hovertemplate="Campaña %{x}<br>%{y:.1f}% recuperación<extra></extra>",
+                        ))
+                        fig_camp.update_layout(**{**PLOTLY_LAYOUT,
+                            "title": "Tendencia de Recuperación por Campaña",
+                            "height": 360,
+                            "xaxis": dict(**_AXIS_DEFAULTS, title="Campaña", type="category"),
+                            "yaxis": dict(**_AXIS_DEFAULTS, title="% Recuperado")})
+                        st.markdown("<div class='chart-card'>", unsafe_allow_html=True)
+                        st.plotly_chart(fig_camp, use_container_width=True,
+                                        config={"displayModeBar": False}, key="cob_line_camp_ej")
+                        st.markdown("</div>", unsafe_allow_html=True)
+                    else:
+                        st.info("Configura la columna Campaña para ver la tendencia.")
+
+            # ── cob1: POR SEGMENTO ───────────────────────────────────────
+            with cob1:
+                st.markdown(
+                    "<div class='kpi-banner' style='margin-bottom:1rem'>"
+                    "<h1 style='font-size:1.1rem'>📊 Recuperación por Segmento de Mora</h1>"
+                    "<p>Inactiva, Mora 1, Mora 2, Mora 3</p></div>",
+                    unsafe_allow_html=True,
+                )
+                if not _safe("segmento") or not _safe("saldo_asig"):
+                    st.warning("Configura las columnas Segmento Mora y Saldo Asignado.")
+                else:
+                    _seg_order = ["Inactiva", "Mora 1", "Mora 2", "Mora 3"]
+                    _seg_colors = {
+                        "Inactiva": COLORS["muted"],
+                        "Mora 1":   COLORS["warning"],
+                        "Mora 2":   COLORS["orange"],
+                        "Mora 3":   COLORS["danger"],
+                    }
+                    _gs = _cob.groupby(_cob[_cc["segmento"]].astype(str).str.strip()).agg(
+                        Cuentas=(_cc["saldo_asig"], "count"),
+                        Asignado=(_cc["saldo_asig"], "sum"),
+                        **( {"Pagado": (_cc["pago"], "sum")} if _safe("pago") else {} ),
+                    ).reset_index()
+                    _gs.columns.values[0] = "Segmento"
+                    if "Pagado" in _gs.columns:
+                        _gs["% Rec"] = (_gs["Pagado"] / _gs["Asignado"].replace(0, 1) * 100).round(1)
+
+                    # KPIs por segmento
+                    _seg_cols = st.columns(len(_gs))
+                    for _idx, (_sc, _row) in enumerate(zip(_seg_cols, _gs.itertuples())):
+                        with _sc:
+                            _seg_pct = getattr(_row, "_Rec", 0) if hasattr(_row, "_Rec") else 0
+                            st.metric(
+                                str(_row.Segmento),
+                                f"{int(_row.Cuentas):,} cuentas",
+                                delta=f"{_seg_pct:.1f}% rec." if "Pagado" in _gs.columns else fmt_currency(_row.Asignado),
+                            )
+
+                    st.markdown("<br>", unsafe_allow_html=True)
+                    seg_c1, seg_c2 = st.columns(2)
+
+                    with seg_c1:
+                        _bar_colors = [_seg_colors.get(str(s), COLORS["accent"]) for s in _gs["Segmento"]]
+                        _y_pct = _gs["% Rec"].tolist() if "% Rec" in _gs.columns else [0]*len(_gs)
+                        fig_seg_pct = go.Figure(go.Bar(
+                            x=_gs["Segmento"].astype(str),
+                            y=_y_pct,
+                            marker_color=_bar_colors,
+                            text=[f"{v:.1f}%" for v in _y_pct],
+                            textposition="outside",
+                            hovertemplate="%{x}<br>%{y:.1f}% recuperación<extra></extra>",
+                        ))
+                        fig_seg_pct.update_layout(**{**PLOTLY_LAYOUT,
+                            "title": "% Recuperación por Segmento",
+                            "height": 340,
+                            "xaxis": dict(**_AXIS_DEFAULTS, type="category"),
+                            "yaxis": dict(**_AXIS_DEFAULTS, title="% Recuperado")})
+                        st.markdown("<div class='chart-card'>", unsafe_allow_html=True)
+                        st.plotly_chart(fig_seg_pct, use_container_width=True,
+                                        config={"displayModeBar": False}, key="cob_bar_seg_pct")
+                        st.markdown("</div>", unsafe_allow_html=True)
+
+                    with seg_c2:
+                        fig_seg_saldo = go.Figure()
+                        fig_seg_saldo.add_trace(go.Bar(
+                            name="Asignado", x=_gs["Segmento"].astype(str), y=_gs["Asignado"],
+                            marker_color=COLORS["muted"],
+                            hovertemplate="%{x}<br>Asignado: $%{y:,.0f}<extra></extra>",
+                        ))
+                        if "Pagado" in _gs.columns:
+                            fig_seg_saldo.add_trace(go.Bar(
+                                name="Recuperado", x=_gs["Segmento"].astype(str), y=_gs["Pagado"],
+                                marker_color=COLORS["success"],
+                                hovertemplate="%{x}<br>Recuperado: $%{y:,.0f}<extra></extra>",
+                            ))
+                        fig_seg_saldo.update_layout(**{**PLOTLY_LAYOUT,
+                            "title": "Saldo Asignado vs Recuperado por Segmento",
+                            "height": 340, "barmode": "group",
+                            "xaxis": dict(**_AXIS_DEFAULTS, type="category"),
+                            "yaxis": dict(**_AXIS_DEFAULTS, title="Monto $")})
+                        st.markdown("<div class='chart-card'>", unsafe_allow_html=True)
+                        st.plotly_chart(fig_seg_saldo, use_container_width=True,
+                                        config={"displayModeBar": False}, key="cob_bar_seg_saldo")
+                        st.markdown("</div>", unsafe_allow_html=True)
+
+                    st.markdown("**Detalle por segmento**")
+                    _display_seg = _gs.copy()
+                    _display_seg["Asignado"] = _display_seg["Asignado"].map(lambda x: fmt_currency(x))
+                    if "Pagado" in _display_seg.columns:
+                        _display_seg["Pagado"] = _display_seg["Pagado"].map(lambda x: fmt_currency(x))
+                        _display_seg["% Rec"] = _display_seg["% Rec"].map(lambda x: f"{x:.1f}%")
+                    st.dataframe(_display_seg, use_container_width=True, hide_index=True)
+
+            # ── cob2: GEOGRÁFICO ─────────────────────────────────────────
+            with cob2:
+                st.markdown(
+                    "<div class='kpi-banner' style='margin-bottom:1rem'>"
+                    "<h1 style='font-size:1.1rem'>🗺️ Recuperación Geográfica</h1>"
+                    "<p>Por Ruta, División y Top/Bottom 10 Zonas</p></div>",
+                    unsafe_allow_html=True,
+                )
+                geo_c1, geo_c2 = st.columns(2)
+
+                with geo_c1:
+                    _gr = _grp_recovery("ruta")
+                    if not _gr.empty and "Pagado" in _gr.columns:
+                        _gr = _gr.sort_values("% Rec", ascending=True).tail(15)
+                        fig_ruta = go.Figure(go.Bar(
+                            y=_gr["ruta"].astype(str), x=_gr["% Rec"],
+                            orientation="h",
+                            marker_color=[COLORS["success"] if v >= 70 else COLORS["warning"] if v >= 40 else COLORS["danger"]
+                                          for v in _gr["% Rec"]],
+                            text=[f"{v:.1f}%" for v in _gr["% Rec"]],
+                            textposition="outside",
+                            hovertemplate="Ruta %{y}<br>%{x:.1f}% recuperación<extra></extra>",
+                        ))
+                        fig_ruta.update_layout(**{**PLOTLY_LAYOUT,
+                            "title": "% Recuperación por Ruta (Top 15)",
+                            "height": 420,
+                            "xaxis": dict(**_AXIS_DEFAULTS, title="% Recuperado"),
+                            "yaxis": dict(**_AXIS_DEFAULTS, automargin=True)})
+                        st.markdown("<div class='chart-card'>", unsafe_allow_html=True)
+                        st.plotly_chart(fig_ruta, use_container_width=True,
+                                        config={"displayModeBar": False}, key="cob_bar_ruta")
+                        st.markdown("</div>", unsafe_allow_html=True)
+                    else:
+                        st.info("Configura la columna Ruta para ver este gráfico.")
+
+                with geo_c2:
+                    _gd2 = _grp_recovery("division")
+                    if not _gd2.empty and "Pagado" in _gd2.columns:
+                        _gd2 = _gd2.sort_values("% Rec", ascending=False)
+                        fig_div2 = go.Figure(go.Bar(
+                            x=_gd2["division"].astype(str), y=_gd2["% Rec"],
+                            marker_color=[COLORS["success"] if v >= 70 else COLORS["warning"] if v >= 40 else COLORS["danger"]
+                                          for v in _gd2["% Rec"]],
+                            text=[f"{v:.1f}%" for v in _gd2["% Rec"]],
+                            textposition="outside",
+                            hovertemplate="División %{x}<br>%{y:.1f}% recuperación<extra></extra>",
+                        ))
+                        fig_div2.update_layout(**{**PLOTLY_LAYOUT,
+                            "title": "% Recuperación por División",
+                            "height": 420,
+                            "xaxis": dict(**_AXIS_DEFAULTS, type="category", automargin=True),
+                            "yaxis": dict(**_AXIS_DEFAULTS, title="% Recuperado")})
+                        st.markdown("<div class='chart-card'>", unsafe_allow_html=True)
+                        st.plotly_chart(fig_div2, use_container_width=True,
+                                        config={"displayModeBar": False}, key="cob_bar_div2")
+                        st.markdown("</div>", unsafe_allow_html=True)
+                    else:
+                        st.info("Configura la columna División para ver este gráfico.")
+
+                st.markdown("---")
+                st.markdown("**🏆 Top 10 y Bottom 10 Zonas**")
+
+                _gz = _grp_recovery("zona")
+                if not _gz.empty and "Pagado" in _gz.columns and len(_gz) >= 2:
+                    _top10 = _gz.nlargest(10, "% Rec")
+                    _bot10 = _gz.nsmallest(10, "% Rec")
+
+                    top_c, bot_c = st.columns(2)
+                    with top_c:
+                        fig_top = go.Figure(go.Bar(
+                            y=_top10["zona"].astype(str),
+                            x=_top10["% Rec"],
+                            orientation="h",
+                            marker_color=COLORS["success"],
+                            text=[f"{v:.1f}%" for v in _top10["% Rec"]],
+                            textposition="outside",
+                            hovertemplate="Zona %{y}<br>%{x:.1f}%<extra></extra>",
+                        ))
+                        fig_top.update_layout(**{**PLOTLY_LAYOUT,
+                            "title": "🏆 Top 10 Zonas",
+                            "height": 360,
+                            "xaxis": dict(**_AXIS_DEFAULTS, title="% Recuperado"),
+                            "yaxis": dict(**_AXIS_DEFAULTS, automargin=True)})
+                        st.markdown("<div class='chart-card'>", unsafe_allow_html=True)
+                        st.plotly_chart(fig_top, use_container_width=True,
+                                        config={"displayModeBar": False}, key="cob_top10")
+                        st.markdown("</div>", unsafe_allow_html=True)
+
+                    with bot_c:
+                        fig_bot = go.Figure(go.Bar(
+                            y=_bot10["zona"].astype(str),
+                            x=_bot10["% Rec"],
+                            orientation="h",
+                            marker_color=COLORS["danger"],
+                            text=[f"{v:.1f}%" for v in _bot10["% Rec"]],
+                            textposition="outside",
+                            hovertemplate="Zona %{y}<br>%{x:.1f}%<extra></extra>",
+                        ))
+                        fig_bot.update_layout(**{**PLOTLY_LAYOUT,
+                            "title": "⚠️ Bottom 10 Zonas",
+                            "height": 360,
+                            "xaxis": dict(**_AXIS_DEFAULTS, title="% Recuperado"),
+                            "yaxis": dict(**_AXIS_DEFAULTS, automargin=True)})
+                        st.markdown("<div class='chart-card'>", unsafe_allow_html=True)
+                        st.plotly_chart(fig_bot, use_container_width=True,
+                                        config={"displayModeBar": False}, key="cob_bot10")
+                        st.markdown("</div>", unsafe_allow_html=True)
+                else:
+                    st.info("Configura la columna Zona para ver el ranking Top/Bottom 10.")
+
+            # ── cob3: GESTIÓN ────────────────────────────────────────────
+            with cob3:
+                st.markdown(
+                    "<div class='kpi-banner' style='margin-bottom:1rem'>"
+                    "<h1 style='font-size:1.1rem'>🚗 Indicadores de Gestión</h1>"
+                    "<p>Visitas, Dictaminación y Contacto efectivo</p></div>",
+                    unsafe_allow_html=True,
+                )
+                gest_c1, gest_c2 = st.columns(2)
+
+                with gest_c1:
+                    # Distribución de Estatus de Cuenta
+                    if _safe("estatus"):
+                        _est_counts = (
+                            _cob[_cc["estatus"]].astype(str).str.strip()
+                            .value_counts().reset_index()
+                        )
+                        _est_counts.columns = ["Estatus", "Cuentas"]
+                        _est_pct = _est_counts["Cuentas"] / _est_counts["Cuentas"].sum() * 100
+                        fig_est = go.Figure(go.Pie(
+                            labels=_est_counts["Estatus"],
+                            values=_est_counts["Cuentas"],
+                            hole=0.45,
+                            textinfo="percent+label",
+                            hovertemplate="%{label}<br>%{value:,} cuentas (%{percent})<extra></extra>",
+                        ))
+                        fig_est.update_layout(**{**PLOTLY_LAYOUT,
+                            "title": "Distribución de Estatus de Cuenta",
+                            "height": 380, "showlegend": False})
+                        st.markdown("<div class='chart-card'>", unsafe_allow_html=True)
+                        st.plotly_chart(fig_est, use_container_width=True,
+                                        config={"displayModeBar": False}, key="cob_pie_estatus")
+                        st.markdown("</div>", unsafe_allow_html=True)
+                    else:
+                        st.info("Configura la columna Estatus Cuenta.")
+
+                with gest_c2:
+                    # Distribución de Dictaminación
+                    if _safe("dictam"):
+                        _dict_counts = (
+                            _cob[_cc["dictam"]].astype(str).str.strip()
+                            .value_counts().reset_index()
+                        )
+                        _dict_counts.columns = ["Dictaminación", "Cuentas"]
+                        fig_dict = go.Figure(go.Pie(
+                            labels=_dict_counts["Dictaminación"],
+                            values=_dict_counts["Cuentas"],
+                            hole=0.45,
+                            textinfo="percent+label",
+                            hovertemplate="%{label}<br>%{value:,} cuentas (%{percent})<extra></extra>",
+                        ))
+                        fig_dict.update_layout(**{**PLOTLY_LAYOUT,
+                            "title": "Contacto por Dictaminación",
+                            "height": 380, "showlegend": False})
+                        st.markdown("<div class='chart-card'>", unsafe_allow_html=True)
+                        st.plotly_chart(fig_dict, use_container_width=True,
+                                        config={"displayModeBar": False}, key="cob_pie_dictam")
+                        st.markdown("</div>", unsafe_allow_html=True)
+                    else:
+                        st.info("Configura la columna Dictaminación.")
+
+                st.markdown("<br>", unsafe_allow_html=True)
+
+                # Resultado de visitas y recuperación por visita
+                gest_c3, gest_c4 = st.columns(2)
+
+                with gest_c3:
+                    if _safe("res_visita"):
+                        _rv_counts = (
+                            _cob[_cc["res_visita"]].astype(str).str.strip()
+                            .value_counts().reset_index()
+                        )
+                        _rv_counts.columns = ["Resultado", "Cuentas"]
+                        fig_rv = go.Figure(go.Bar(
+                            y=_rv_counts["Resultado"], x=_rv_counts["Cuentas"],
+                            orientation="h",
+                            marker_color=COLORS["accent"],
+                            text=_rv_counts["Cuentas"],
+                            textposition="outside",
+                            hovertemplate="%{y}<br>%{x:,} cuentas<extra></extra>",
+                        ))
+                        fig_rv.update_layout(**{**PLOTLY_LAYOUT,
+                            "title": "Contacto por Resultado de Visita",
+                            "height": 360,
+                            "xaxis": _AXIS_DEFAULTS,
+                            "yaxis": dict(**_AXIS_DEFAULTS, automargin=True)})
+                        st.markdown("<div class='chart-card'>", unsafe_allow_html=True)
+                        st.plotly_chart(fig_rv, use_container_width=True,
+                                        config={"displayModeBar": False}, key="cob_bar_rv")
+                        st.markdown("</div>", unsafe_allow_html=True)
+                    else:
+                        st.info("Configura la columna Resultado Visita.")
+
+                with gest_c4:
+                    # % Recuperación por Zona (scatter)
+                    _gz2 = _grp_recovery("zona")
+                    if not _gz2.empty and "Pagado" in _gz2.columns and _safe("saldo_asig"):
+                        fig_zona_scatter = go.Figure(go.Scatter(
+                            x=_gz2["Asignado"],
+                            y=_gz2["% Rec"],
+                            mode="markers+text",
+                            text=_gz2["zona"].astype(str),
+                            textposition="top center",
+                            marker=dict(
+                                size=10,
+                                color=_gz2["% Rec"],
+                                colorscale="RdYlGn",
+                                showscale=True,
+                                colorbar=dict(title="% Rec"),
+                            ),
+                            hovertemplate="Zona %{text}<br>Asignado: $%{x:,.0f}<br>%{y:.1f}% rec.<extra></extra>",
+                        ))
+                        fig_zona_scatter.update_layout(**{**PLOTLY_LAYOUT,
+                            "title": "% Recuperación por Zona (tamaño = saldo asignado)",
+                            "height": 360,
+                            "xaxis": dict(**_AXIS_DEFAULTS, title="Saldo Asignado"),
+                            "yaxis": dict(**_AXIS_DEFAULTS, title="% Recuperado")})
+                        st.markdown("<div class='chart-card'>", unsafe_allow_html=True)
+                        st.plotly_chart(fig_zona_scatter, use_container_width=True,
+                                        config={"displayModeBar": False}, key="cob_scatter_zona")
+                        st.markdown("</div>", unsafe_allow_html=True)
+                    else:
+                        st.info("Configura las columnas Zona y Saldo Asignado.")
+
+            # ── cob4: ALERTAS ────────────────────────────────────────────
+            with cob4:
+                st.markdown(
+                    "<div class='kpi-banner' style='margin-bottom:1rem'>"
+                    "<h1 style='font-size:1.1rem'>⚠️ Alertas de Bajo Desempeño</h1>"
+                    "<p>Zonas, rutas y segmentos que requieren atención</p></div>",
+                    unsafe_allow_html=True,
+                )
+
+                _threshold = st.slider("Umbral de alerta (% recuperación)", 0, 100, 30, 5,
+                                       key="cob_alert_thresh",
+                                       help="Se marcan como alerta las unidades con recuperación por debajo de este valor")
+
+                alertas_encontradas = False
+
+                # Alertas por zona
+                _gz3 = _grp_recovery("zona")
+                if not _gz3.empty and "Pagado" in _gz3.columns:
+                    _alertas_zona = _gz3[_gz3["% Rec"] < _threshold].sort_values("% Rec")
+                    if not _alertas_zona.empty:
+                        alertas_encontradas = True
+                        st.error(f"🚨 **{len(_alertas_zona)} zonas** con recuperación < {_threshold}%")
+                        _alertas_zona_disp = _alertas_zona.copy()
+                        _alertas_zona_disp["Asignado"] = _alertas_zona_disp["Asignado"].map(fmt_currency)
+                        _alertas_zona_disp["Pagado"]   = _alertas_zona_disp["Pagado"].map(fmt_currency)
+                        _alertas_zona_disp["% Rec"]    = _alertas_zona_disp["% Rec"].map(lambda x: f"{x:.1f}%")
+                        st.dataframe(_alertas_zona_disp.rename(columns={"zona": "Zona"}),
+                                     use_container_width=True, hide_index=True)
+
+                # Alertas por ruta
+                _gr2 = _grp_recovery("ruta")
+                if not _gr2.empty and "Pagado" in _gr2.columns:
+                    _alertas_ruta = _gr2[_gr2["% Rec"] < _threshold].sort_values("% Rec")
+                    if not _alertas_ruta.empty:
+                        alertas_encontradas = True
+                        st.warning(f"⚠️ **{len(_alertas_ruta)} rutas** con recuperación < {_threshold}%")
+                        _ar_disp = _alertas_ruta.copy()
+                        _ar_disp["Asignado"] = _ar_disp["Asignado"].map(fmt_currency)
+                        _ar_disp["Pagado"]   = _ar_disp["Pagado"].map(fmt_currency)
+                        _ar_disp["% Rec"]    = _ar_disp["% Rec"].map(lambda x: f"{x:.1f}%")
+                        st.dataframe(_ar_disp.rename(columns={"ruta": "Ruta"}),
+                                     use_container_width=True, hide_index=True)
+
+                # Alertas por segmento
+                if _safe("segmento") and _safe("saldo_asig"):
+                    _gs2 = _cob.groupby(_cob[_cc["segmento"]].astype(str).str.strip()).agg(
+                        Asignado=(_cc["saldo_asig"], "sum"),
+                        **( {"Pagado": (_cc["pago"], "sum")} if _safe("pago") else {} ),
+                    ).reset_index()
+                    _gs2.columns.values[0] = "Segmento"
+                    if "Pagado" in _gs2.columns:
+                        _gs2["% Rec"] = (_gs2["Pagado"] / _gs2["Asignado"].replace(0, 1) * 100).round(1)
+                        _alertas_seg = _gs2[_gs2["% Rec"] < _threshold]
+                        if not _alertas_seg.empty:
+                            alertas_encontradas = True
+                            st.warning(f"📊 Segmentos con recuperación < {_threshold}%: "
+                                       + ", ".join(f"**{r.Segmento}** ({r._Rec:.1f}%)" for r in _alertas_seg.itertuples()))
+
+                if not alertas_encontradas:
+                    st.success(f"✅ No hay alertas — todas las unidades tienen recuperación ≥ {_threshold}%")
+
 
 # ─────────────────────────────────────────────
 #  MAIN
@@ -3942,8 +4539,8 @@ def main():
     for key, default in [
         ("data", None), ("df_cartera", None), ("df_saldos", None),
         ("mapping", None), ("file_names", (None, None)), ("df_moras", None),
-        ("df_tel", None), ("df_campo", None),
-        ("int_tel_names", []), ("int_campo_names", []),
+        ("df_tel", None), ("df_campo", None), ("df_cobranza", None),
+        ("int_tel_names", []), ("int_campo_names", []), ("int_cob_names", []),
     ]:
         if key not in st.session_state:
             st.session_state[key] = default
