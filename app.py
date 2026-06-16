@@ -4545,7 +4545,7 @@ def tab_indicadores(df):
         "nodama":   _find_col(df, ["nodama", "dama"]),
         "segmento": _find_col(df, ["morosidad", "mora", "segmento"]),
         "saldo":    _find_col(df, ["saldodama", "saldo"]),
-        "pago":     _find_col(df, ["pago aplicado", "pago_aplicado", "cobrado", "recuperado", "pago "]),
+        "pago":     _find_col(df, ["pago aplicado", "pago_aplicado", "pago "]),
         "visita":   _find_col(df, ["visitas gestor", "visita"]),
         "dictam":   _find_col(df, ["dictaminacion", "dictam"]),
         "situacion": _find_col(df, ["descsituacion", "situacion", "estatus"]),
@@ -4570,7 +4570,7 @@ def tab_indicadores(df):
         with _i3:
             _sel("Segmento Mora",  "ind_c_seg",  "segmento", _i3)
             _sel("Saldo Asignado", "ind_c_sal",  "saldo",    _i3)
-            _sel("Pago Aplicado",  "ind_c_pago_v2", "pago",     _i3)
+            _sel("Pago Aplicado",  "ind_c_pago_v3", "pago",     _i3)
         with _i4:
             _sel("Visita/Resultado","ind_c_vis",  "visita",   _i4)
             _sel("Dictaminación",  "ind_c_dic",  "dictam",   _i4)
