@@ -4570,7 +4570,7 @@ def tab_indicadores(df):
         with _i3:
             _sel("Segmento Mora",  "ind_c_seg",  "segmento", _i3)
             _sel("Saldo Asignado", "ind_c_sal",  "saldo",    _i3)
-            _sel("Pago Aplicado",  "ind_c_pago", "pago",     _i3)
+            _sel("Pago Aplicado",  "ind_c_pago_v2", "pago",     _i3)
         with _i4:
             _sel("Visita/Resultado","ind_c_vis",  "visita",   _i4)
             _sel("Dictaminación",  "ind_c_dic",  "dictam",   _i4)
