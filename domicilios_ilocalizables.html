@@ -1,0 +1,1382 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Domicilios Ilocalizables · Arabela Campaña 13</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+/* ============================================================
+   VARIABLES Y RESET
+   ============================================================ */
+:root{
+  --bg:#0B0F1A;
+  --card:#1A2236;
+  --border:#243054;
+  --green:#10B981;
+  --amber:#F59E0B;
+  --red:#EF4444;
+  --blue:#3B82F6;
+  --purple:#8B5CF6;
+  --text:#E2E8F0;
+  --text-dim:#94A3B8;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{
+  background:var(--bg);
+  color:var(--text);
+  font-family:'Inter',sans-serif;
+  min-height:100vh;
+}
+::-webkit-scrollbar{width:8px;height:8px;}
+::-webkit-scrollbar-track{background:var(--bg);}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:4px;}
+
+/* ============================================================
+   PANTALLA DE CARGA
+   ============================================================ */
+#upload-screen{
+  min-height:100vh;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  gap:1.5rem;
+  padding:2rem;
+}
+.upload-card{
+  background:var(--card);
+  border:1px solid var(--border);
+  border-radius:16px;
+  padding:2.5rem 3rem;
+  text-align:center;
+  max-width:520px;
+  width:100%;
+}
+.upload-card h1{
+  font-size:1.5rem;
+  font-weight:800;
+  margin-bottom:0.4rem;
+  background:linear-gradient(135deg,var(--blue),var(--purple));
+  -webkit-background-clip:text;
+  background-clip:text;
+  -webkit-text-fill-color:transparent;
+}
+.upload-card p{color:var(--text-dim);font-size:0.88rem;margin-bottom:1.5rem;}
+.drop-zone{
+  border:2px dashed var(--border);
+  border-radius:12px;
+  padding:2.5rem 1.5rem;
+  cursor:pointer;
+  transition:all .2s ease;
+}
+.drop-zone:hover, .drop-zone.dragover{
+  border-color:var(--blue);
+  background:rgba(59,130,246,0.06);
+}
+.drop-zone .icon{font-size:2.4rem;margin-bottom:0.6rem;}
+.drop-zone .main-text{font-weight:600;font-size:0.95rem;}
+.drop-zone .sub-text{color:var(--text-dim);font-size:0.78rem;margin-top:0.3rem;}
+#file-input{display:none;}
+
+.progress-wrap{
+  width:100%;
+  max-width:520px;
+  display:none;
+}
+.progress-wrap.active{display:block;}
+.progress-bar-bg{
+  width:100%;
+  height:8px;
+  background:var(--border);
+  border-radius:99px;
+  overflow:hidden;
+}
+.progress-bar-fill{
+  height:100%;
+  width:0%;
+  background:linear-gradient(90deg,var(--blue),var(--purple));
+  transition:width .25s ease;
+}
+.progress-label{
+  font-size:0.8rem;
+  color:var(--text-dim);
+  margin-top:0.5rem;
+  text-align:center;
+}
+
+/* ============================================================
+   APP PRINCIPAL
+   ============================================================ */
+#app{display:none;min-height:100vh;}
+#app.active{display:block;}
+
+header.topbar{
+  background:var(--card);
+  border-bottom:1px solid var(--border);
+  padding:1rem 1.6rem;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  flex-wrap:wrap;
+  gap:1rem;
+  position:sticky;
+  top:0;
+  z-index:50;
+}
+.brand{display:flex;align-items:center;gap:0.7rem;}
+.brand .logo{
+  width:38px;height:38px;border-radius:10px;
+  background:linear-gradient(135deg,var(--blue),var(--purple));
+  display:flex;align-items:center;justify-content:center;
+  font-size:1.2rem;
+}
+.brand h2{font-size:1.05rem;font-weight:700;}
+.brand span{color:var(--text-dim);font-size:0.75rem;display:block;}
+
+.topbar-actions{display:flex;gap:0.6rem;align-items:center;}
+.btn{
+  background:var(--border);
+  color:var(--text);
+  border:none;
+  border-radius:8px;
+  padding:0.55rem 1rem;
+  font-size:0.82rem;
+  font-weight:600;
+  cursor:pointer;
+  display:flex;
+  align-items:center;
+  gap:0.4rem;
+  transition:all .15s ease;
+  font-family:inherit;
+}
+.btn:hover{background:#2c3a63;transform:translateY(-1px);}
+.btn-primary{background:linear-gradient(135deg,var(--blue),var(--purple));color:#fff;}
+.btn-primary:hover{filter:brightness(1.1);}
+
+nav.tabs{
+  display:flex;
+  gap:0.3rem;
+  padding:0 1.6rem;
+  background:var(--card);
+  border-bottom:1px solid var(--border);
+  overflow-x:auto;
+  position:sticky;
+  top:70px;
+  z-index:49;
+}
+nav.tabs button{
+  background:transparent;
+  border:none;
+  color:var(--text-dim);
+  font-family:inherit;
+  font-size:0.85rem;
+  font-weight:600;
+  padding:0.85rem 1.1rem;
+  cursor:pointer;
+  border-bottom:3px solid transparent;
+  white-space:nowrap;
+  transition:all .15s ease;
+}
+nav.tabs button:hover{color:var(--text);}
+nav.tabs button.active{color:var(--blue);border-bottom-color:var(--blue);}
+
+main.content{padding:1.6rem;max-width:1500px;margin:0 auto;}
+.tab-panel{display:none;}
+.tab-panel.active{display:block;animation:fadeIn .25s ease;}
+@keyframes fadeIn{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:translateY(0);}}
+
+/* ============================================================
+   KPI CARDS
+   ============================================================ */
+.kpi-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(180px,1fr));
+  gap:1rem;
+  margin-bottom:1.6rem;
+}
+.kpi-card{
+  background:var(--card);
+  border:1px solid var(--border);
+  border-radius:14px;
+  padding:1.1rem 1.3rem;
+  transition:transform .2s ease,box-shadow .2s ease;
+}
+.kpi-card:hover{transform:translateY(-2px);box-shadow:0 8px 24px rgba(0,0,0,0.35);}
+.kpi-card .kpi-label{
+  font-size:0.72rem;
+  color:var(--text-dim);
+  text-transform:uppercase;
+  letter-spacing:0.05em;
+  font-weight:600;
+  margin-bottom:0.45rem;
+  display:flex;align-items:center;gap:0.35rem;
+}
+.kpi-card .kpi-value{font-size:1.7rem;font-weight:800;}
+.kpi-card .kpi-sub{font-size:0.74rem;color:var(--text-dim);margin-top:0.3rem;}
+
+/* ============================================================
+   PANELES / CARDS GENERALES
+   ============================================================ */
+.panel{
+  background:var(--card);
+  border:1px solid var(--border);
+  border-radius:14px;
+  padding:1.3rem 1.4rem;
+  margin-bottom:1.4rem;
+}
+.panel h3{font-size:0.95rem;font-weight:700;margin-bottom:1rem;display:flex;align-items:center;gap:0.5rem;}
+.panel h3 .count-badge{
+  background:var(--border);
+  color:var(--text-dim);
+  font-size:0.7rem;
+  padding:0.15rem 0.55rem;
+  border-radius:99px;
+  font-weight:600;
+}
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:1.4rem;}
+.grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:1.4rem;}
+@media(max-width:900px){.grid-2,.grid-3{grid-template-columns:1fr;}}
+
+.chart-box{position:relative;height:300px;}
+.chart-box.tall{height:380px;}
+
+/* ============================================================
+   BARRAS DE PROGRESO (división / estado)
+   ============================================================ */
+.bar-row{margin-bottom:0.85rem;}
+.bar-row .bar-top{
+  display:flex;justify-content:space-between;
+  font-size:0.8rem;margin-bottom:0.3rem;
+}
+.bar-row .bar-top .name{font-weight:600;color:var(--text);}
+.bar-row .bar-top .val{color:var(--text-dim);}
+.bar-track{
+  width:100%;height:8px;background:var(--border);
+  border-radius:99px;overflow:hidden;
+}
+.bar-fill{height:100%;border-radius:99px;transition:width .4s ease;}
+
+/* ============================================================
+   TABLAS
+   ============================================================ */
+table.data-table{width:100%;border-collapse:collapse;font-size:0.82rem;}
+table.data-table thead th{
+  text-align:left;
+  color:var(--text-dim);
+  font-weight:600;
+  font-size:0.72rem;
+  text-transform:uppercase;
+  letter-spacing:0.04em;
+  padding:0.6rem 0.7rem;
+  border-bottom:1px solid var(--border);
+  position:sticky;top:0;background:var(--card);
+}
+table.data-table tbody td{
+  padding:0.6rem 0.7rem;
+  border-bottom:1px solid rgba(36,48,84,0.5);
+  vertical-align:middle;
+}
+table.data-table tbody tr:hover{background:rgba(59,130,246,0.05);}
+.table-scroll{overflow-x:auto;max-height:640px;overflow-y:auto;}
+
+/* ============================================================
+   PILLS
+   ============================================================ */
+.pill{
+  display:inline-flex;align-items:center;gap:0.3rem;
+  padding:0.22rem 0.65rem;border-radius:99px;
+  font-size:0.7rem;font-weight:700;white-space:nowrap;
+}
+.pill-green{background:rgba(16,185,129,0.15);color:var(--green);}
+.pill-amber{background:rgba(245,158,11,0.15);color:var(--amber);}
+.pill-red{background:rgba(239,68,68,0.15);color:var(--red);}
+.pill-blue{background:rgba(59,130,246,0.15);color:var(--blue);}
+.pill-purple{background:rgba(139,92,246,0.15);color:var(--purple);}
+.pill-gray{background:rgba(148,163,184,0.15);color:var(--text-dim);}
+
+/* ============================================================
+   FILTROS / BUSQUEDA (sección tabla)
+   ============================================================ */
+.filters-bar{
+  display:flex;gap:0.7rem;flex-wrap:wrap;
+  margin-bottom:1.2rem;align-items:center;
+}
+.filters-bar input[type="text"]{
+  flex:1;min-width:220px;
+  background:var(--bg);border:1px solid var(--border);
+  color:var(--text);border-radius:8px;
+  padding:0.6rem 0.9rem;font-size:0.85rem;font-family:inherit;
+}
+.filters-bar select{
+  background:var(--bg);border:1px solid var(--border);
+  color:var(--text);border-radius:8px;
+  padding:0.6rem 0.8rem;font-size:0.82rem;font-family:inherit;
+  cursor:pointer;
+}
+.filters-bar input:focus,.filters-bar select:focus{outline:1px solid var(--blue);}
+.results-count{font-size:0.78rem;color:var(--text-dim);margin-bottom:0.8rem;}
+
+.pagination{
+  display:flex;justify-content:center;align-items:center;
+  gap:0.5rem;margin-top:1.2rem;flex-wrap:wrap;
+}
+.pagination button{
+  background:var(--border);color:var(--text);border:none;
+  border-radius:6px;padding:0.4rem 0.75rem;font-size:0.78rem;
+  cursor:pointer;font-family:inherit;font-weight:600;
+}
+.pagination button:hover:not(:disabled){background:#2c3a63;}
+.pagination button:disabled{opacity:0.35;cursor:not-allowed;}
+.pagination button.active{background:var(--blue);}
+.pagination .page-info{font-size:0.78rem;color:var(--text-dim);padding:0 0.4rem;}
+
+/* ============================================================
+   DUPLICADOS — CARDS TOP 15
+   ============================================================ */
+.dup-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:1rem;}
+.dup-card{
+  background:var(--bg);border:1px solid var(--border);
+  border-radius:12px;padding:1rem 1.1rem;border-left:4px solid var(--amber);
+}
+.dup-card.sev-high{border-left-color:var(--red);}
+.dup-card.sev-mid{border-left-color:var(--amber);}
+.dup-card.sev-low{border-left-color:var(--blue);}
+.dup-card .dup-count{font-size:1.4rem;font-weight:800;}
+.dup-card .dup-addr{font-size:0.78rem;color:var(--text-dim);margin:0.4rem 0;line-height:1.4;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+.dup-card .dup-meta{font-size:0.72rem;color:var(--text-dim);display:flex;gap:0.6rem;flex-wrap:wrap;}
+
+/* ============================================================
+   ALERTAS
+   ============================================================ */
+.alert-list{display:flex;flex-direction:column;gap:0.7rem;}
+.alert-item{
+  background:var(--bg);border:1px solid var(--border);
+  border-radius:10px;padding:0.9rem 1.1rem;
+  display:flex;gap:0.8rem;align-items:flex-start;
+}
+.alert-item .emoji{font-size:1.3rem;line-height:1;}
+.alert-item .alert-title{font-weight:700;font-size:0.88rem;margin-bottom:0.2rem;}
+.alert-item .alert-desc{font-size:0.8rem;color:var(--text-dim);line-height:1.5;}
+
+footer.app-footer{
+  text-align:center;padding:1.5rem;color:var(--text-dim);font-size:0.75rem;
+}
+
+@media(max-width:700px){
+  .grid-2,.grid-3{grid-template-columns:1fr;}
+  main.content{padding:1rem;}
+}
+</style>
+</head>
+<body>
+
+<!-- ============================================================
+     PANTALLA DE CARGA DE ARCHIVO
+     ============================================================ -->
+<div id="upload-screen">
+  <div class="upload-card">
+    <h1>📍 Domicilios Ilocalizables</h1>
+    <p>Arabela · Campaña 13 — Análisis de localización de domicilios</p>
+    <div class="drop-zone" id="drop-zone">
+      <div class="icon">📂</div>
+      <div class="main-text">Arrastra tu archivo Excel aquí</div>
+      <div class="sub-text">o haz clic para seleccionar (.xlsx)</div>
+    </div>
+    <input type="file" id="file-input" accept=".xlsx,.xls">
+  </div>
+  <div class="progress-wrap" id="progress-wrap">
+    <div class="progress-bar-bg"><div class="progress-bar-fill" id="progress-fill"></div></div>
+    <div class="progress-label" id="progress-label">Procesando…</div>
+  </div>
+</div>
+
+<!-- ============================================================
+     APP PRINCIPAL
+     ============================================================ -->
+<div id="app">
+  <header class="topbar">
+    <div class="brand">
+      <div class="logo">📍</div>
+      <div>
+        <h2>Domicilios Ilocalizables</h2>
+        <span id="file-name-label">Arabela · Campaña 13</span>
+      </div>
+    </div>
+    <div class="topbar-actions">
+      <button class="btn" id="btn-reload">🔄 Cargar otro archivo</button>
+      <button class="btn btn-primary" id="btn-export">⬇️ Descargar Reporte HTML</button>
+    </div>
+  </header>
+
+  <nav class="tabs">
+    <button class="tab-btn active" data-tab="resumen">📊 Resumen</button>
+    <button class="tab-btn" data-tab="division">🏢 Por División</button>
+    <button class="tab-btn" data-tab="estado">🗺️ Por Estado</button>
+    <button class="tab-btn" data-tab="duplicados">🧬 Duplicados</button>
+    <button class="tab-btn" data-tab="tabla">📋 Tabla</button>
+    <button class="tab-btn" data-tab="alertas">🚨 Alertas</button>
+  </nav>
+
+  <main class="content">
+    <div class="tab-panel active" id="panel-resumen"></div>
+    <div class="tab-panel" id="panel-division"></div>
+    <div class="tab-panel" id="panel-estado"></div>
+    <div class="tab-panel" id="panel-duplicados"></div>
+    <div class="tab-panel" id="panel-tabla"></div>
+    <div class="tab-panel" id="panel-alertas"></div>
+  </main>
+
+  <footer class="app-footer">Análisis de Domicilios Ilocalizables · Arabela Campaña 13</footer>
+</div>
+
+<script>
+/* ============================================================
+   ESTADO GLOBAL
+   ============================================================ */
+const STATE = {
+  rawRows: [],       // filas crudas del Excel
+  records: [],        // registros procesados
+  fileName: "",
+  filters: { search: "", tipo: "", viab: "", division: "", dup: "" },
+  page: 1,
+  pageSize: 50,
+};
+
+const COLORS = {
+  green:"#10B981", amber:"#F59E0B", red:"#EF4444",
+  blue:"#3B82F6", purple:"#8B5CF6", gray:"#94A3B8",
+};
+
+/* ============================================================
+   NORMALIZACIÓN DE TEXTO
+   ============================================================ */
+function quitarAcentos(s){
+  return s.normalize("NFD").replace(/[̀-ͯ]/g, "");
+}
+
+const CORRECCIONES_TIPO = [
+  [/\bAMPLIACIN\b/g, "AMPLIACION"],
+  [/\bJIMNEZ\b/g, "JIMENEZ"],
+  [/\bGONZLEZ\b/g, "GONZALEZ"],
+  [/\bMARTN\b/g, "MARTIN"],
+  [/\bHERNNDEZ\b/g, "HERNANDEZ"],
+  [/\bRODRGUZ\b/g, "RODRIGUEZ"],
+  [/\bZAVADA\b/g, "ZAVALA"],
+  [/\bBRUBO\b/g, "BRUNO"],
+  [/\bAIR3S\b/g, "AIRES"],
+  [/\bAIR3Z\b/g, "AIRES"],
+  [/\bEJRCITO\b/g, "EJERCITO"],
+  [/\bPROLONGACIN\b/g, "PROLONGACION"],
+];
+
+function normalizarTexto(valor){
+  if (valor === null || valor === undefined) return "";
+  let s = String(valor).trim().toUpperCase();
+  s = quitarAcentos(s);
+  s = s.replace(/\s+/g, " ");
+  CORRECCIONES_TIPO.forEach(([re, rep]) => { s = s.replace(re, rep); });
+  return s.trim();
+}
+
+/* Estandariza variantes de "Sin Número" → "No S/N" */
+function estandarizarSN(s){
+  return s
+    .replace(/\bNO\s*S\s*N\b/g, "No S/N")
+    .replace(/\bNUM\s*S\s*N\b/g, "No S/N")
+    .replace(/\bNO\.?\s*S\/N\b/g, "No S/N")
+    .replace(/\bS\/N\b/g, "S/N");
+}
+
+/* Estandariza Mza S/N, Lt S/N, Int S/N */
+function estandarizarMzaLtInt(s){
+  return s
+    .replace(/\bMZA\.?\s*S\s*\/?\s*N\b/g, "Mza S/N")
+    .replace(/\bMANZANA\.?\s*S\s*\/?\s*N\b/g, "Mza S/N")
+    .replace(/\bLT\.?\s*S\s*\/?\s*N\b/g, "Lt S/N")
+    .replace(/\bLOTE\.?\s*S\s*\/?\s*N\b/g, "Lt S/N")
+    .replace(/\bINT\.?\s*S\s*\/?\s*N\b/g, "Int S/N")
+    .replace(/\bINTERIOR\.?\s*S\s*\/?\s*N\b/g, "Int S/N");
+}
+
+function limpiarColonia(valor){
+  let s = normalizarTexto(valor);
+  s = s.replace(/^COL\.?\s+/, "");
+  s = s.replace(/^COLONIA\s+/, "");
+  s = s.replace(/^FRACC\.?\s+/, "");
+  s = s.replace(/^FRACCIONAMIENTO\s+/, "");
+  return s.trim();
+}
+
+/* ============================================================
+   EXTRACCIÓN DE NÚMERO / MZA / LT DE LA DIRECCIÓN
+   ============================================================ */
+function extraerComponentes(direccionNorm){
+  const d = direccionNorm;
+
+  // Número exterior real: NO/NUM seguido de dígitos (no S/N)
+  let numMatch = d.match(/\b(?:NO|NUM|NUMERO|#)\.?\s*(\d+[A-Z]?)\b/);
+  let tieneNumero = false, numero = null;
+  if (numMatch) {
+    tieneNumero = true;
+    numero = numMatch[1];
+  } else {
+    // patrón "CALLE X 123" — número suelto después del nombre de la calle
+    let sueltoMatch = d.match(/\b(\d{1,5})\b(?!\s*(?:MZA|LT|INT|CP))/);
+    if (sueltoMatch && !/S\/N/.test(d)) {
+      tieneNumero = true;
+      numero = sueltoMatch[1];
+    }
+  }
+
+  // MZA con valor real (no S/N)
+  let mzaMatch = d.match(/\bMZA\.?\s*(\d+[A-Z]?)\b/) || d.match(/\bMANZANA\.?\s*(\d+[A-Z]?)\b/);
+  const mzaReal = !!mzaMatch;
+  const mzaVal = mzaMatch ? mzaMatch[1] : null;
+
+  // LT con valor real (no S/N)
+  let ltMatch = d.match(/\bLT\.?\s*(\d+[A-Z]?)\b/) || d.match(/\bLOTE\.?\s*(\d+[A-Z]?)\b/);
+  const ltReal = !!ltMatch;
+  const ltVal = ltMatch ? ltMatch[1] : null;
+
+  const esSN = /S\/N/.test(d) || /\bSIN NUMERO\b/.test(d);
+
+  return { tieneNumero, numero, mzaReal, mzaVal, ltReal, ltVal, esSN };
+}
+
+/* ============================================================
+   LIMPIEZA FINAL DE DIRECCIÓN (quita Mza/Lt/Int S/N redundantes)
+   ============================================================ */
+function limpiarDireccionFinal(direccionNorm){
+  let s = direccionNorm;
+  s = s.replace(/\bMza S\/N\b/g, "").replace(/\bLt S\/N\b/g, "").replace(/\bInt S\/N\b/g, "");
+  s = s.replace(/\s+/g, " ").replace(/\s*,\s*,/g, ",").trim();
+  s = s.replace(/^,|,$/g, "").trim();
+  return s;
+}
+
+/* ============================================================
+   CLASIFICACIÓN — 5 REGLAS EN ORDEN
+   ============================================================ */
+function clasificarDomicilio(comp){
+  const { tieneNumero, mzaReal, ltReal, esSN } = comp;
+
+  // R1: número real (no S/N)
+  if (tieneNumero) {
+    return { tipo: "DOMICILIO CON NÚMERO", prioridad: "P1 INMEDIATA" };
+  }
+  // R2: sin número pero MZA + LT reales
+  if (!tieneNumero && mzaReal && ltReal) {
+    return { tipo: "DOMICILIO CON NÚMERO (MZA+LT)", prioridad: "P1 INMEDIATA" };
+  }
+  // R3: calle/andador + número vial + mza + lt reales (cubierto arriba por tieneNumero,
+  //      pero si el número viene como "vial" sin matchear R1 se intenta aquí también)
+  if (mzaReal && ltReal) {
+    return { tipo: "DOMICILIO CON NÚMERO", prioridad: "P1 INMEDIATA" };
+  }
+  // R4: sólo MZA o sólo LT (no ambos), sin número
+  if (!tieneNumero && (mzaReal !== ltReal)) {
+    return { tipo: "DOMICILIO INCOMPLETO", prioridad: "P3 NO VIABLE", viabForce: "BAJA" };
+  }
+  // R5: sin número, sin mza ni lt reales
+  return { tipo: "SIN NÚMERO (S/N)", prioridad: "P2 VERIFICAR" };
+}
+
+/* ============================================================
+   VIABILIDAD (score 0-5)
+   ============================================================ */
+function calcularViabilidad(comp, cls, rec){
+  if (cls.viabForce) return cls.viabForce;
+
+  let score = 0;
+  if (comp.tieneNumero || (comp.mzaReal && comp.ltReal)) score += 2;
+  if (rec.CP && rec.CP.trim() !== "") score += 1;
+  if (rec.Colonia && rec.Colonia.trim() !== "") score += 1;
+  if (rec.Poblacion && rec.Poblacion.trim() !== "") score += 1;
+
+  if (score >= 4) return "ALTA";
+  if (score >= 2) return "MEDIA";
+  return "BAJA";
+}
+
+/* ============================================================
+   PROCESAMIENTO DE UNA FILA → REGISTRO NORMALIZADO
+   ============================================================ */
+function procesarFila(row, idx){
+  const get = (k) => row[k] !== undefined && row[k] !== null ? row[k] : "";
+
+  const direccionRaw = get("Direccion") || get("Dirección") || "";
+  let direccionNorm = normalizarTexto(direccionRaw);
+  direccionNorm = estandarizarSN(direccionNorm);
+  direccionNorm = estandarizarMzaLtInt(direccionNorm);
+
+  const comp = extraerComponentes(direccionNorm);
+  const direccionFinal = limpiarDireccionFinal(direccionNorm);
+
+  const cls = clasificarDomicilio(comp);
+
+  const rec = {
+    idx,
+    Status: get("Status"),
+    Region: normalizarTexto(get("Region")),
+    Division: normalizarTexto(get("Division")) || "SIN DIVISIÓN",
+    Ruta: normalizarTexto(get("Ruta")),
+    Zona: normalizarTexto(get("Zona")) || "SIN ZONA",
+    Campania: get("Campaña") || get("Campania") || "",
+    NumReferencia: get("Referencia de Pago") || "",
+    NoDama: get("No. Dama") || get("NoDama") || "",
+    Nombre: normalizarTexto(get("Nombre")),
+    DireccionOriginal: String(direccionRaw),
+    DireccionCorregida: direccionFinal,
+    CP: String(get("CP") || "").trim(),
+    Colonia: limpiarColonia(get("Colonia")),
+    Poblacion: normalizarTexto(get("Poblacion") || get("Población")),
+    Estado: normalizarTexto(get("Estado")) || "SIN ESTADO",
+    Tipo: cls.tipo,
+    Prioridad: cls.prioridad,
+    MzaVal: comp.mzaVal,
+    LtVal: comp.ltVal,
+  };
+
+  rec.Viabilidad = calcularViabilidad(comp, cls, rec);
+  return rec;
+}
+
+/* ============================================================
+   DETECCIÓN DE DUPLICADOS (por DireccionCorregida)
+   ============================================================ */
+function detectarDuplicados(records){
+  const grupos = {};
+  records.forEach(r => {
+    const key = r.DireccionCorregida || "(SIN DIRECCION)";
+    if (!grupos[key]) grupos[key] = [];
+    grupos[key].push(r);
+  });
+
+  const gruposDuplicados = [];
+  Object.entries(grupos).forEach(([direccion, recs]) => {
+    const esDup = recs.length > 1 && direccion !== "(SIN DIRECCION)" && direccion.trim() !== "";
+    recs.forEach(r => { r.Duplicado = esDup ? "DUPLICADO" : "UNICO"; r.GrupoTam = recs.length; });
+    if (esDup) {
+      gruposDuplicados.push({
+        direccion,
+        cantidad: recs.length,
+        registros: recs,
+        division: recs[0].Division,
+        zona: recs[0].Zona,
+      });
+    }
+  });
+  gruposDuplicados.sort((a,b) => b.cantidad - a.cantidad);
+  return gruposDuplicados;
+}
+
+/* ============================================================
+   CARGA DEL ARCHIVO EXCEL
+   ============================================================ */
+const dropZone = document.getElementById("drop-zone");
+const fileInput = document.getElementById("file-input");
+const progressWrap = document.getElementById("progress-wrap");
+const progressFill = document.getElementById("progress-fill");
+const progressLabel = document.getElementById("progress-label");
+
+dropZone.addEventListener("click", () => fileInput.click());
+dropZone.addEventListener("dragover", (e) => { e.preventDefault(); dropZone.classList.add("dragover"); });
+dropZone.addEventListener("dragleave", () => dropZone.classList.remove("dragover"));
+dropZone.addEventListener("drop", (e) => {
+  e.preventDefault();
+  dropZone.classList.remove("dragover");
+  if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+});
+fileInput.addEventListener("change", (e) => {
+  if (e.target.files.length) handleFile(e.target.files[0]);
+});
+
+function setProgress(pct, label){
+  progressFill.style.width = pct + "%";
+  progressLabel.textContent = label;
+}
+
+function handleFile(file){
+  STATE.fileName = file.name;
+  progressWrap.classList.add("active");
+  setProgress(8, "Leyendo archivo…");
+
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    setProgress(28, "Interpretando hojas de Excel…");
+    setTimeout(() => {
+      try {
+        const data = new Uint8Array(e.target.result);
+        const wb = XLSX.read(data, { type: "array" });
+        const sheetName = wb.SheetNames[0];
+        const sheet = wb.Sheets[sheetName];
+        const rows = XLSX.utils.sheet_to_json(sheet, { defval: "" });
+        STATE.rawRows = rows;
+        setProgress(48, `Normalizando ${rows.length.toLocaleString()} registros…`);
+        setTimeout(() => runAnalysis(rows), 150);
+      } catch (err) {
+        setProgress(0, "Error leyendo el archivo: " + err.message);
+      }
+    }, 120);
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function runAnalysis(rows){
+  const records = rows.map((row, idx) => procesarFila(row, idx));
+  setProgress(72, "Detectando domicilios duplicados…");
+
+  setTimeout(() => {
+    const dupGroups = detectarDuplicados(records);
+    STATE.records = records;
+    STATE.dupGroups = dupGroups;
+    setProgress(92, "Construyendo dashboard…");
+
+    setTimeout(() => {
+      setProgress(100, "¡Listo!");
+      setTimeout(() => {
+        document.getElementById("upload-screen").style.display = "none";
+        document.getElementById("app").classList.add("active");
+        document.getElementById("file-name-label").textContent =
+          `${STATE.fileName} · ${records.length.toLocaleString()} registros`;
+        renderAll();
+      }, 250);
+    }, 200);
+  }, 150);
+}
+
+document.getElementById("btn-reload").addEventListener("click", () => {
+  document.getElementById("app").classList.remove("active");
+  document.getElementById("upload-screen").style.display = "flex";
+  progressWrap.classList.remove("active");
+  setProgress(0, "Procesando…");
+  fileInput.value = "";
+});
+
+/* ============================================================
+   NAVEGACIÓN DE PESTAÑAS
+   ============================================================ */
+const chartInstances = {};
+function destroyChart(id){
+  if (chartInstances[id]) { chartInstances[id].destroy(); delete chartInstances[id]; }
+}
+
+document.querySelectorAll(".tab-btn").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+    document.querySelectorAll(".tab-panel").forEach(p => p.classList.remove("active"));
+    btn.classList.add("active");
+    document.getElementById("panel-" + btn.dataset.tab).classList.add("active");
+  });
+});
+
+function renderAll(){
+  renderResumen();
+  renderDivision();
+  renderEstado();
+  renderDuplicados();
+  renderTabla();
+  renderAlertas();
+}
+
+/* ============================================================
+   HELPERS DE AGREGACIÓN
+   ============================================================ */
+function contarPor(records, campo){
+  const out = {};
+  records.forEach(r => { const k = r[campo] || "N/D"; out[k] = (out[k]||0)+1; });
+  return out;
+}
+
+function pillTipo(tipo){
+  if (tipo === "DOMICILIO CON NÚMERO" || tipo === "DOMICILIO CON NÚMERO (MZA+LT)")
+    return `<span class="pill pill-green">✅ ${tipo}</span>`;
+  if (tipo === "SIN NÚMERO (S/N)")
+    return `<span class="pill pill-amber">⚠️ ${tipo}</span>`;
+  return `<span class="pill pill-red">⛔ ${tipo}</span>`;
+}
+function pillViab(v){
+  if (v === "ALTA") return `<span class="pill pill-green">${v}</span>`;
+  if (v === "MEDIA") return `<span class="pill pill-amber">${v}</span>`;
+  return `<span class="pill pill-red">${v}</span>`;
+}
+function pillPrioridad(p){
+  if (p.startsWith("P1")) return `<span class="pill pill-blue">${p}</span>`;
+  if (p.startsWith("P2")) return `<span class="pill pill-amber">${p}</span>`;
+  return `<span class="pill pill-red">${p}</span>`;
+}
+function pillDup(d){
+  return d === "DUPLICADO"
+    ? `<span class="pill pill-purple">🧬 DUPLICADO</span>`
+    : `<span class="pill pill-gray">ÚNICO</span>`;
+}
+
+/* ============================================================
+   SECCIÓN 1 — RESUMEN
+   ============================================================ */
+function renderResumen(){
+  const recs = STATE.records;
+  const total = recs.length;
+  const conNum = recs.filter(r => r.Tipo.startsWith("DOMICILIO CON NÚMERO")).length;
+  const sinNum = recs.filter(r => r.Tipo === "SIN NÚMERO (S/N)").length;
+  const incompleto = recs.filter(r => r.Tipo === "DOMICILIO INCOMPLETO").length;
+  const duplicados = recs.filter(r => r.Duplicado === "DUPLICADO").length;
+  const viabAlta = recs.filter(r => r.Viabilidad === "ALTA").length;
+  const viabMedia = recs.filter(r => r.Viabilidad === "MEDIA").length;
+  const viabBaja = recs.filter(r => r.Viabilidad === "BAJA").length;
+
+  const pct = (n) => total ? ((n/total)*100).toFixed(1) : "0.0";
+
+  const panel = document.getElementById("panel-resumen");
+  panel.innerHTML = `
+    <div class="kpi-grid">
+      <div class="kpi-card"><div class="kpi-label">📦 Total Cuentas</div><div class="kpi-value">${total.toLocaleString()}</div></div>
+      <div class="kpi-card"><div class="kpi-label">✅ Con Número</div><div class="kpi-value" style="color:${COLORS.green}">${conNum.toLocaleString()}</div><div class="kpi-sub">${pct(conNum)}%</div></div>
+      <div class="kpi-card"><div class="kpi-label">⚠️ Sin Número S/N</div><div class="kpi-value" style="color:${COLORS.amber}">${sinNum.toLocaleString()}</div><div class="kpi-sub">${pct(sinNum)}%</div></div>
+      <div class="kpi-card"><div class="kpi-label">⛔ Incompletos</div><div class="kpi-value" style="color:${COLORS.red}">${incompleto.toLocaleString()}</div><div class="kpi-sub">${pct(incompleto)}%</div></div>
+      <div class="kpi-card"><div class="kpi-label">🧬 Duplicados</div><div class="kpi-value" style="color:${COLORS.purple}">${duplicados.toLocaleString()}</div><div class="kpi-sub">${pct(duplicados)}%</div></div>
+      <div class="kpi-card"><div class="kpi-label">🟢 Viab. Alta</div><div class="kpi-value" style="color:${COLORS.green}">${viabAlta.toLocaleString()}</div><div class="kpi-sub">${pct(viabAlta)}%</div></div>
+      <div class="kpi-card"><div class="kpi-label">🟡 Viab. Media</div><div class="kpi-value" style="color:${COLORS.amber}">${viabMedia.toLocaleString()}</div><div class="kpi-sub">${pct(viabMedia)}%</div></div>
+      <div class="kpi-card"><div class="kpi-label">🔴 Viab. Baja</div><div class="kpi-value" style="color:${COLORS.red}">${viabBaja.toLocaleString()}</div><div class="kpi-sub">${pct(viabBaja)}%</div></div>
+    </div>
+
+    <div class="grid-2">
+      <div class="panel">
+        <h3>📊 Distribución por Tipo de Problema</h3>
+        <div class="chart-box"><canvas id="chart-tipo-donut"></canvas></div>
+      </div>
+      <div class="panel">
+        <h3>🎯 Distribución de Viabilidad</h3>
+        <div class="chart-box"><canvas id="chart-viab-donut"></canvas></div>
+      </div>
+    </div>
+
+    <div class="grid-2">
+      <div class="panel">
+        <h3>🏢 Por División <span class="count-badge">${Object.keys(contarPor(recs,"Division")).length}</span></h3>
+        <div id="bars-division"></div>
+      </div>
+      <div class="panel">
+        <h3>🗺️ Por Estado <span class="count-badge">${Object.keys(contarPor(recs,"Estado")).length}</span></h3>
+        <div id="bars-estado"></div>
+      </div>
+    </div>
+  `;
+
+  destroyChart("tipo-donut");
+  const tipoCounts = contarPor(recs, "Tipo");
+  chartInstances["tipo-donut"] = new Chart(document.getElementById("chart-tipo-donut"), {
+    type: "doughnut",
+    data: {
+      labels: Object.keys(tipoCounts),
+      datasets: [{
+        data: Object.values(tipoCounts),
+        backgroundColor: Object.keys(tipoCounts).map(t =>
+          t.startsWith("DOMICILIO CON NÚMERO") ? COLORS.green :
+          t === "SIN NÚMERO (S/N)" ? COLORS.amber : COLORS.red),
+        borderWidth: 0,
+      }]
+    },
+    options: { plugins:{ legend:{ position:"bottom", labels:{ color:"#E2E8F0", font:{size:11} } } }, maintainAspectRatio:false }
+  });
+
+  destroyChart("viab-donut");
+  const viabCounts = { ALTA: viabAlta, MEDIA: viabMedia, BAJA: viabBaja };
+  chartInstances["viab-donut"] = new Chart(document.getElementById("chart-viab-donut"), {
+    type: "doughnut",
+    data: {
+      labels: Object.keys(viabCounts),
+      datasets: [{
+        data: Object.values(viabCounts),
+        backgroundColor: [COLORS.green, COLORS.amber, COLORS.red],
+        borderWidth: 0,
+      }]
+    },
+    options: { plugins:{ legend:{ position:"bottom", labels:{ color:"#E2E8F0", font:{size:11} } } }, maintainAspectRatio:false }
+  });
+
+  renderBarsList("bars-division", contarPor(recs, "Division"), total);
+  renderBarsList("bars-estado", contarPor(recs, "Estado"), total);
+}
+
+function renderBarsList(containerId, counts, total){
+  const entries = Object.entries(counts).sort((a,b) => b[1]-a[1]).slice(0, 12);
+  const max = entries.length ? entries[0][1] : 1;
+  const el = document.getElementById(containerId);
+  el.innerHTML = entries.map(([name, n]) => `
+    <div class="bar-row">
+      <div class="bar-top"><span class="name">${name}</span><span class="val">${n.toLocaleString()} (${((n/total)*100).toFixed(1)}%)</span></div>
+      <div class="bar-track"><div class="bar-fill" style="width:${(n/max)*100}%;background:linear-gradient(90deg,${COLORS.blue},${COLORS.purple})"></div></div>
+    </div>
+  `).join("");
+}
+
+/* ============================================================
+   AGRUPACIÓN GENÉRICA POR CAMPO CON DESGLOSE DE TIPO/VIAB
+   ============================================================ */
+function agruparPorCampo(records, campo){
+  const grupos = {};
+  records.forEach(r => {
+    const k = r[campo] || "N/D";
+    if (!grupos[k]) grupos[k] = { total:0, conNum:0, sinNum:0, incompleto:0, duplicados:0, viabAlta:0 };
+    const g = grupos[k];
+    g.total++;
+    if (r.Tipo.startsWith("DOMICILIO CON NÚMERO")) g.conNum++;
+    else if (r.Tipo === "SIN NÚMERO (S/N)") g.sinNum++;
+    else g.incompleto++;
+    if (r.Duplicado === "DUPLICADO") g.duplicados++;
+    if (r.Viabilidad === "ALTA") g.viabAlta++;
+  });
+  return grupos;
+}
+
+/* ============================================================
+   SECCIÓN 2 — POR DIVISIÓN
+   ============================================================ */
+function renderDivision(){
+  const grupos = agruparPorCampo(STATE.records, "Division");
+  const nombres = Object.keys(grupos).sort((a,b) => grupos[b].total - grupos[a].total);
+
+  const panel = document.getElementById("panel-division");
+  panel.innerHTML = `
+    <div class="panel">
+      <h3>🏢 Distribución de Problemas por División</h3>
+      <div class="chart-box tall"><canvas id="chart-division-stack"></canvas></div>
+    </div>
+    <div class="panel">
+      <h3>📋 Detalle por División</h3>
+      <div class="table-scroll">
+        <table class="data-table">
+          <thead><tr>
+            <th>División</th><th>Total</th><th>Con Número</th><th>S/N</th>
+            <th>Incompleto</th><th>Duplicados</th><th>% Alta</th>
+          </tr></thead>
+          <tbody>
+            ${nombres.map(n => {
+              const g = grupos[n];
+              const pctAlta = g.total ? ((g.viabAlta/g.total)*100).toFixed(1) : "0.0";
+              return `<tr>
+                <td><b>${n}</b></td>
+                <td>${g.total.toLocaleString()}</td>
+                <td style="color:${COLORS.green}">${g.conNum.toLocaleString()}</td>
+                <td style="color:${COLORS.amber}">${g.sinNum.toLocaleString()}</td>
+                <td style="color:${COLORS.red}">${g.incompleto.toLocaleString()}</td>
+                <td style="color:${COLORS.purple}">${g.duplicados.toLocaleString()}</td>
+                <td>${pctAlta}%</td>
+              </tr>`;
+            }).join("")}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `;
+
+  destroyChart("division-stack");
+  chartInstances["division-stack"] = new Chart(document.getElementById("chart-division-stack"), {
+    type: "bar",
+    data: {
+      labels: nombres,
+      datasets: [
+        { label:"Con Número", data: nombres.map(n=>grupos[n].conNum), backgroundColor: COLORS.green },
+        { label:"S/N", data: nombres.map(n=>grupos[n].sinNum), backgroundColor: COLORS.amber },
+        { label:"Incompleto", data: nombres.map(n=>grupos[n].incompleto), backgroundColor: COLORS.red },
+      ]
+    },
+    options: {
+      maintainAspectRatio:false,
+      scales: {
+        x: { stacked:true, ticks:{color:"#94A3B8"}, grid:{color:"#243054"} },
+        y: { stacked:true, ticks:{color:"#94A3B8"}, grid:{color:"#243054"} },
+      },
+      plugins:{ legend:{ labels:{ color:"#E2E8F0" } } }
+    }
+  });
+}
+
+/* ============================================================
+   SECCIÓN 3 — POR ESTADO
+   ============================================================ */
+function renderEstado(){
+  const grupos = agruparPorCampo(STATE.records, "Estado");
+  const nombres = Object.keys(grupos).sort((a,b) => grupos[b].total - grupos[a].total).slice(0, 20);
+
+  const panel = document.getElementById("panel-estado");
+  panel.innerHTML = `
+    <div class="panel">
+      <h3>🗺️ Distribución Geográfica por Estado</h3>
+      <div class="chart-box tall"><canvas id="chart-estado-bar"></canvas></div>
+    </div>
+    <div class="panel">
+      <h3>📋 Detalle por Estado</h3>
+      <div class="table-scroll">
+        <table class="data-table">
+          <thead><tr>
+            <th>Estado</th><th>Total</th><th>Con Número</th><th>S/N</th>
+            <th>Incompleto</th><th>Duplicados</th><th>% Alta</th>
+          </tr></thead>
+          <tbody>
+            ${nombres.map(n => {
+              const g = grupos[n];
+              const pctAlta = g.total ? ((g.viabAlta/g.total)*100).toFixed(1) : "0.0";
+              return `<tr>
+                <td><b>${n}</b></td>
+                <td>${g.total.toLocaleString()}</td>
+                <td style="color:${COLORS.green}">${g.conNum.toLocaleString()}</td>
+                <td style="color:${COLORS.amber}">${g.sinNum.toLocaleString()}</td>
+                <td style="color:${COLORS.red}">${g.incompleto.toLocaleString()}</td>
+                <td style="color:${COLORS.purple}">${g.duplicados.toLocaleString()}</td>
+                <td>${pctAlta}%</td>
+              </tr>`;
+            }).join("")}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `;
+
+  destroyChart("estado-bar");
+  chartInstances["estado-bar"] = new Chart(document.getElementById("chart-estado-bar"), {
+    type: "bar",
+    data: {
+      labels: nombres,
+      datasets: [
+        { label:"Con Número", data: nombres.map(n=>grupos[n].conNum), backgroundColor: COLORS.green },
+        { label:"S/N", data: nombres.map(n=>grupos[n].sinNum), backgroundColor: COLORS.amber },
+        { label:"Incompleto", data: nombres.map(n=>grupos[n].incompleto), backgroundColor: COLORS.red },
+      ]
+    },
+    options: {
+      maintainAspectRatio:false,
+      scales: {
+        x: { ticks:{color:"#94A3B8"}, grid:{color:"#243054"} },
+        y: { ticks:{color:"#94A3B8"}, grid:{color:"#243054"} },
+      },
+      plugins:{ legend:{ labels:{ color:"#E2E8F0" } } }
+    }
+  });
+}
+
+/* ============================================================
+   SECCIÓN 4 — DUPLICADOS
+   ============================================================ */
+function renderDuplicados(){
+  const grupos = STATE.dupGroups || [];
+  const totalDup = grupos.reduce((s,g) => s + g.cantidad, 0);
+  const maxCuentas = grupos.length ? grupos[0].cantidad : 0;
+
+  const panel = document.getElementById("panel-duplicados");
+  panel.innerHTML = `
+    <div class="kpi-grid">
+      <div class="kpi-card"><div class="kpi-label">🧬 Total Duplicados</div><div class="kpi-value" style="color:${COLORS.purple}">${totalDup.toLocaleString()}</div></div>
+      <div class="kpi-card"><div class="kpi-label">📍 Grupos Únicos</div><div class="kpi-value">${grupos.length.toLocaleString()}</div></div>
+      <div class="kpi-card"><div class="kpi-label">🔥 Máx. Cuentas/Domicilio</div><div class="kpi-value" style="color:${COLORS.red}">${maxCuentas}</div></div>
+    </div>
+    <div class="panel">
+      <h3>🏆 Top 15 Domicilios con Más Cuentas</h3>
+      <div class="dup-cards">
+        ${grupos.slice(0,15).map(g => {
+          const sev = g.cantidad >= 10 ? "sev-high" : g.cantidad >= 5 ? "sev-mid" : "sev-low";
+          return `<div class="dup-card ${sev}">
+            <div class="dup-count">${g.cantidad} cuentas</div>
+            <div class="dup-addr">${g.direccion || "(sin dirección)"}</div>
+            <div class="dup-meta">
+              <span>🏢 ${g.division}</span>
+              <span>📍 ${g.zona}</span>
+            </div>
+          </div>`;
+        }).join("")}
+      </div>
+    </div>
+  `;
+}
+
+/* ============================================================
+   SECCIÓN 5 — TABLA (búsqueda, filtros, paginación)
+   ============================================================ */
+function getFilteredRecords(){
+  const f = STATE.filters;
+  return STATE.records.filter(r => {
+    if (f.search) {
+      const s = f.search.toLowerCase();
+      const hay = (r.Nombre + " " + r.NoDama + " " + r.DireccionCorregida).toLowerCase();
+      if (!hay.includes(s)) return false;
+    }
+    if (f.tipo && r.Tipo !== f.tipo) return false;
+    if (f.viab && r.Viabilidad !== f.viab) return false;
+    if (f.division && r.Division !== f.division) return false;
+    if (f.dup && r.Duplicado !== f.dup) return false;
+    return true;
+  });
+}
+
+function renderTabla(){
+  const recs = STATE.records;
+  const tipos = [...new Set(recs.map(r => r.Tipo))].sort();
+  const divisiones = [...new Set(recs.map(r => r.Division))].sort();
+
+  const panel = document.getElementById("panel-tabla");
+  panel.innerHTML = `
+    <div class="panel">
+      <div class="filters-bar">
+        <input type="text" id="f-search" placeholder="🔍 Buscar por nombre, No. Dama o dirección…">
+        <select id="f-tipo"><option value="">Todos los tipos</option>${tipos.map(t=>`<option value="${t}">${t}</option>`).join("")}</select>
+        <select id="f-viab"><option value="">Toda viabilidad</option><option value="ALTA">ALTA</option><option value="MEDIA">MEDIA</option><option value="BAJA">BAJA</option></select>
+        <select id="f-division"><option value="">Todas las divisiones</option>${divisiones.map(d=>`<option value="${d}">${d}</option>`).join("")}</select>
+        <select id="f-dup"><option value="">Dup. y únicos</option><option value="DUPLICADO">Sólo duplicados</option><option value="UNICO">Sólo únicos</option></select>
+      </div>
+      <div class="results-count" id="results-count"></div>
+      <div class="table-scroll">
+        <table class="data-table">
+          <thead><tr>
+            <th>No. Dama</th><th>Nombre</th><th>División</th><th>Zona</th>
+            <th>Dirección Corregida</th><th>Núm. Ref.</th><th>Tipo</th><th>Viabilidad</th><th>Prioridad</th><th>Duplicado</th>
+          </tr></thead>
+          <tbody id="tabla-body"></tbody>
+        </table>
+      </div>
+      <div class="pagination" id="tabla-pagination"></div>
+    </div>
+  `;
+
+  document.getElementById("f-search").addEventListener("input", (e) => { STATE.filters.search = e.target.value; STATE.page = 1; renderTablaBody(); });
+  document.getElementById("f-tipo").addEventListener("change", (e) => { STATE.filters.tipo = e.target.value; STATE.page = 1; renderTablaBody(); });
+  document.getElementById("f-viab").addEventListener("change", (e) => { STATE.filters.viab = e.target.value; STATE.page = 1; renderTablaBody(); });
+  document.getElementById("f-division").addEventListener("change", (e) => { STATE.filters.division = e.target.value; STATE.page = 1; renderTablaBody(); });
+  document.getElementById("f-dup").addEventListener("change", (e) => { STATE.filters.dup = e.target.value; STATE.page = 1; renderTablaBody(); });
+
+  renderTablaBody();
+}
+
+function renderTablaBody(){
+  const filtered = getFilteredRecords();
+  const total = filtered.length;
+  const pageSize = STATE.pageSize;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  if (STATE.page > totalPages) STATE.page = totalPages;
+  const start = (STATE.page - 1) * pageSize;
+  const pageRecords = filtered.slice(start, start + pageSize);
+
+  document.getElementById("results-count").textContent =
+    `${total.toLocaleString()} resultado(s) encontrado(s)`;
+
+  document.getElementById("tabla-body").innerHTML = pageRecords.map(r => `
+    <tr>
+      <td>${r.NoDama}</td>
+      <td>${r.Nombre}</td>
+      <td>${r.Division}</td>
+      <td>${r.Zona}</td>
+      <td>${r.DireccionCorregida}</td>
+      <td>${r.NumReferencia}</td>
+      <td>${pillTipo(r.Tipo)}</td>
+      <td>${pillViab(r.Viabilidad)}</td>
+      <td>${pillPrioridad(r.Prioridad)}</td>
+      <td>${pillDup(r.Duplicado)}</td>
+    </tr>
+  `).join("") || `<tr><td colspan="10" style="text-align:center;color:var(--text-dim);padding:2rem">Sin resultados</td></tr>`;
+
+  renderPagination(totalPages);
+}
+
+function renderPagination(totalPages){
+  const cur = STATE.page;
+  let html = "";
+  html += `<button ${cur===1?"disabled":""} onclick="goToPage(${cur-1})">‹ Anterior</button>`;
+
+  const pages = new Set([1, totalPages, cur, cur-1, cur+1].filter(p => p>=1 && p<=totalPages));
+  const sorted = [...pages].sort((a,b)=>a-b);
+  let prev = 0;
+  sorted.forEach(p => {
+    if (p - prev > 1) html += `<span class="page-info">…</span>`;
+    html += `<button class="${p===cur?'active':''}" onclick="goToPage(${p})">${p}</button>`;
+    prev = p;
+  });
+
+  html += `<button ${cur===totalPages?"disabled":""} onclick="goToPage(${cur+1})">Siguiente ›</button>`;
+  html += `<span class="page-info">Página ${cur} de ${totalPages}</span>`;
+  document.getElementById("tabla-pagination").innerHTML = html;
+}
+
+function goToPage(p){
+  STATE.page = p;
+  renderTablaBody();
+}
+
+/* ============================================================
+   SECCIÓN 6 — ALERTAS
+   ============================================================ */
+function renderAlertas(){
+  const recs = STATE.records;
+  const total = recs.length;
+  const incompleto = recs.filter(r => r.Tipo === "DOMICILIO INCOMPLETO").length;
+  const sinNum = recs.filter(r => r.Tipo === "SIN NÚMERO (S/N)").length;
+  const viabBaja = recs.filter(r => r.Viabilidad === "BAJA").length;
+  const duplicados = recs.filter(r => r.Duplicado === "DUPLICADO").length;
+  const grupos = STATE.dupGroups || [];
+  const maxDup = grupos.length ? grupos[0] : null;
+
+  const grpDiv = agruparPorCampo(recs, "Division");
+  const peorDivision = Object.entries(grpDiv).sort((a,b) => {
+    const pa = a[1].total ? a[1].viabAlta/a[1].total : 1;
+    const pb = b[1].total ? b[1].viabAlta/b[1].total : 1;
+    return pa - pb;
+  })[0];
+
+  const alerts = [];
+
+  if (incompleto > 0) {
+    alerts.push({ emoji:"🔴", titulo:`${incompleto.toLocaleString()} domicilios incompletos (No Viables)`,
+      desc:`Representan el ${((incompleto/total)*100).toFixed(1)}% de la cartera. Estas cuentas requieren re-investigación de campo o actualización de datos antes de asignar gestión.` });
+  }
+  if (sinNum > 0) {
+    alerts.push({ emoji:"🟡", titulo:`${sinNum.toLocaleString()} domicilios sin número (S/N) por verificar`,
+      desc:`Necesitan verificación adicional (Mza/Lt, referencias o google maps) antes de visita en campo — prioridad P2.` });
+  }
+  if (duplicados > 0) {
+    alerts.push({ emoji:"🟣", titulo:`${duplicados.toLocaleString()} cuentas con domicilio duplicado`,
+      desc:`Agrupadas en ${grupos.length.toLocaleString()} domicilios distintos. Posible oportunidad de gestión conjunta o error de captura.` });
+  }
+  if (maxDup) {
+    alerts.push({ emoji:"🔵", titulo:`Domicilio con mayor concentración: ${maxDup.cantidad} cuentas`,
+      desc:`${maxDup.direccion} — División ${maxDup.division}, Zona ${maxDup.zona}.` });
+  }
+  if (peorDivision) {
+    const [nombre, g] = peorDivision;
+    const pct = g.total ? ((g.viabAlta/g.total)*100).toFixed(1) : "0.0";
+    alerts.push({ emoji:"🟢", titulo:`División con menor viabilidad alta: ${nombre}`,
+      desc:`Sólo ${pct}% de sus cuentas tienen viabilidad ALTA, de un total de ${g.total.toLocaleString()} cuentas.` });
+  }
+  if (viabBaja > 0) {
+    alerts.push({ emoji:"🔴", titulo:`${viabBaja.toLocaleString()} cuentas con viabilidad BAJA`,
+      desc:`Estas cuentas tienen muy baja probabilidad de localización exitosa con los datos actuales (${((viabBaja/total)*100).toFixed(1)}% del total).` });
+  }
+
+  const panel = document.getElementById("panel-alertas");
+  panel.innerHTML = `
+    <div class="panel">
+      <h3>🚨 Hallazgos Críticos <span class="count-badge">${alerts.length}</span></h3>
+      <div class="alert-list">
+        ${alerts.map(a => `
+          <div class="alert-item">
+            <div class="emoji">${a.emoji}</div>
+            <div>
+              <div class="alert-title">${a.titulo}</div>
+              <div class="alert-desc">${a.desc}</div>
+            </div>
+          </div>
+        `).join("")}
+      </div>
+    </div>
+  `;
+}
+
+/* ============================================================
+   EXPORTACIÓN — HTML AUTÓNOMO CON DATOS EMBEBIDOS
+   ============================================================ */
+function buildExportFunctionsSource(){
+  // Reutiliza el código ya cargado (toString) para no duplicar lógica.
+  const fns = [
+    COLORS, // se serializa como const abajo, no como función
+  ];
+  const fnNames = [
+    "destroyChart", "contarPor", "pillTipo", "pillViab", "pillPrioridad", "pillDup",
+    "renderResumen", "renderBarsList", "agruparPorCampo", "renderDivision", "renderEstado",
+    "renderDuplicados", "getFilteredRecords", "renderTabla", "renderTablaBody",
+    "renderPagination", "goToPage", "renderAlertas", "renderAll",
+  ];
+  let src = `const COLORS = ${JSON.stringify(COLORS)};\nconst chartInstances = {};\n`;
+  fnNames.forEach(name => { src += window[name].toString() + "\n"; });
+  return src;
+}
+
+function buildExportHTML(){
+  const cssText = document.querySelector("style").textContent;
+  const fnsSource = buildExportFunctionsSource();
+  const dataJSON = JSON.stringify({ records: STATE.records, dupGroups: STATE.dupGroups });
+  const fileLabel = `${STATE.fileName} · ${STATE.records.length.toLocaleString()} registros (reporte estático)`;
+
+  return `<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Reporte · Domicilios Ilocalizables · Arabela Campaña 13</title>
+${"<"}script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js">${"<"}/script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>${cssText}</style>
+</head>
+<body>
+<div id="app" class="active">
+  <header class="topbar">
+    <div class="brand">
+      <div class="logo">📍</div>
+      <div>
+        <h2>Domicilios Ilocalizables</h2>
+        <span id="file-name-label">${fileLabel}</span>
+      </div>
+    </div>
+  </header>
+  <nav class="tabs">
+    <button class="tab-btn active" data-tab="resumen">📊 Resumen</button>
+    <button class="tab-btn" data-tab="division">🏢 Por División</button>
+    <button class="tab-btn" data-tab="estado">🗺️ Por Estado</button>
+    <button class="tab-btn" data-tab="duplicados">🧬 Duplicados</button>
+    <button class="tab-btn" data-tab="tabla">📋 Tabla</button>
+    <button class="tab-btn" data-tab="alertas">🚨 Alertas</button>
+  </nav>
+  <main class="content">
+    <div class="tab-panel active" id="panel-resumen"></div>
+    <div class="tab-panel" id="panel-division"></div>
+    <div class="tab-panel" id="panel-estado"></div>
+    <div class="tab-panel" id="panel-duplicados"></div>
+    <div class="tab-panel" id="panel-tabla"></div>
+    <div class="tab-panel" id="panel-alertas"></div>
+  </main>
+  <footer class="app-footer">Reporte estático generado · Arabela Campaña 13</footer>
+</div>
+${"<"}script>
+const STATE = ${dataJSON};
+STATE.fileName = ${JSON.stringify(STATE.fileName)};
+STATE.filters = { search:"", tipo:"", viab:"", division:"", dup:"" };
+STATE.page = 1;
+STATE.pageSize = 50;
+
+${fnsSource}
+
+document.querySelectorAll(".tab-btn").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+    document.querySelectorAll(".tab-panel").forEach(p => p.classList.remove("active"));
+    btn.classList.add("active");
+    document.getElementById("panel-" + btn.dataset.tab).classList.add("active");
+  });
+});
+
+renderAll();
+${"<"}/script>
+</body>
+</html>`;
+}
+
+document.getElementById("btn-export").addEventListener("click", () => {
+  if (!STATE.records.length) return;
+  const html = buildExportHTML();
+  const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  const safeName = (STATE.fileName || "reporte").replace(/\.(xlsx|xls)$/i, "");
+  a.href = url;
+  a.download = `Reporte_Domicilios_Ilocalizables_${safeName}.html`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+});
+</script>
+</body>
+</html>
