@@ -4823,11 +4823,47 @@ def _detectar_duplicados(records: list) -> pd.DataFrame:
     return grupos
 
 
-def _procesar_domicilios(df_raw: pd.DataFrame) -> pd.DataFrame:
-    """Pipeline completo: normalización → clasificación → viabilidad → duplicados."""
+_DOM_COL_CANDIDATES = {
+    "Status":              ["status"],
+    "Region":              ["region", "región"],
+    "Division":            ["division", "división"],
+    "Ruta":                ["ruta"],
+    "Zona":                ["zona"],
+    "Campaña":             ["campaña", "campana", "campaña de trabajo"],
+    "Referencia de Pago":  ["referencia de pago", "referencia"],
+    "No. Dama":            ["no. dama", "no dama", "nodama", "dama"],
+    "Nombre":              ["nombre"],
+    "Direccion":           ["direccion", "dirección"],
+    "CP":                  ["cp", "c.p.", "codigo postal", "código postal"],
+    "Colonia":             ["colonia"],
+    "Poblacion":           ["poblacion", "población"],
+    "Estado":              ["estado"],
+}
+
+
+def _detectar_columnas_domicilios(df_raw: pd.DataFrame) -> dict:
+    """Auto-detecta las columnas reales del archivo (nombres/orden pueden variar)."""
+    used = set()
+    mapping = {}
+    for canon, candidates in _DOM_COL_CANDIDATES.items():
+        col = _find_col(df_raw.drop(columns=list(used), errors="ignore"), candidates)
+        if col:
+            mapping[canon] = col
+            used.add(col)
+    return mapping
+
+
+def _procesar_domicilios(df_raw: pd.DataFrame, col_overrides: dict | None = None) -> pd.DataFrame:
+    """Pipeline completo: detección de columnas → normalización → clasificación → viabilidad → duplicados."""
+    col_map = _detectar_columnas_domicilios(df_raw)
+    if col_overrides:
+        col_map.update({k: v for k, v in col_overrides.items() if v})
+    rename_map = {real: canon for canon, real in col_map.items()}
+    df = df_raw.rename(columns=rename_map)
+
     records = [
         _procesar_fila_domicilio(row, idx)
-        for idx, row in enumerate(df_raw.to_dict("records"))
+        for idx, row in enumerate(df.to_dict("records"))
     ]
     _detectar_duplicados(records)
     return pd.DataFrame(records)
@@ -5365,6 +5401,26 @@ def _dom_alert(level, title, desc):
     )
 
 
+def _dom_table_html(df: pd.DataFrame, max_rows: int = 300) -> str:
+    """Tabla HTML con tema oscuro — st.dataframe ignora el CSS de la página (se dibuja en canvas)."""
+    shown = df.head(max_rows)
+    head = "".join(f"<th>{c}</th>" for c in shown.columns)
+    body = "".join(
+        "<tr>" + "".join(f"<td>{'' if pd.isna(v) else v}</td>" for v in row) + "</tr>"
+        for row in shown.itertuples(index=False)
+    )
+    note = (
+        f"<div style='font-size:11px;color:#64748B;margin-top:8px'>"
+        f"Mostrando {max_rows:,} de {len(df):,} registros — descarga el CSV completo abajo.</div>"
+        if len(df) > max_rows else ""
+    )
+    return (
+        f"<div style='max-height:480px;overflow:auto'>"
+        f"<table class='dom-rank-table'><thead><tr>{head}</tr></thead>"
+        f"<tbody>{body}</tbody></table></div>{note}"
+    )
+
+
 def tab_domicilios(df_proc: pd.DataFrame):
     """Dashboard de análisis de Domicilios Ilocalizables (Campaña 13) — tema oscuro."""
     st.markdown("<div class='dom-dark-marker' style='display:none'></div>", unsafe_allow_html=True)
@@ -5437,7 +5493,7 @@ def tab_domicilios(df_proc: pd.DataFrame):
         fig = go.Figure(go.Bar(x=gdiv["Division"], y=gdiv["Total"], marker_color=_DOM_ACCENT[0]))
         fig.update_layout(**_DOM_PLOTLY_LAYOUT, height=360, xaxis=_DOM_AXIS, yaxis=_DOM_AXIS)
         st.plotly_chart(fig, use_container_width=True)
-        st.dataframe(gdiv, use_container_width=True, hide_index=True)
+        st.markdown(_dom_table_html(gdiv), unsafe_allow_html=True)
 
     with sub_estado:
         gest = df_proc.groupby("Estado").agg(
@@ -5449,7 +5505,7 @@ def tab_domicilios(df_proc: pd.DataFrame):
         fig = go.Figure(go.Bar(x=gest["Estado"], y=gest["Total"], marker_color=_DOM_ACCENT[4]))
         fig.update_layout(**_DOM_PLOTLY_LAYOUT, height=360, xaxis=_DOM_AXIS, yaxis=_DOM_AXIS)
         st.plotly_chart(fig, use_container_width=True)
-        st.dataframe(gest, use_container_width=True, hide_index=True)
+        st.markdown(_dom_table_html(gest), unsafe_allow_html=True)
 
     with sub_dup:
         df_dup = df_proc[df_proc["Duplicado"] == "DUPLICADO"].sort_values(
@@ -5494,10 +5550,15 @@ def tab_domicilios(df_proc: pd.DataFrame):
                            f"{n_g24} grupos con 2–4 damas. Máximo {max_damas} damas en un mismo domicilio."),
                 unsafe_allow_html=True,
             )
-            st.dataframe(
-                df_dup[["DireccionCorregida", "GrupoTam", "Division", "Zona", "Nombre",
-                        "NoDama", "Estado", "Viabilidad"]],
-                use_container_width=True, hide_index=True,
+            st.markdown(
+                _dom_table_html(df_dup[["DireccionCorregida", "GrupoTam", "Division", "Zona",
+                                         "Nombre", "NoDama", "Estado", "Viabilidad"]]),
+                unsafe_allow_html=True,
+            )
+            st.download_button(
+                "⬇️ Descargar duplicados (CSV)",
+                df_dup.to_csv(index=False).encode("utf-8-sig"),
+                "domicilios_duplicados.csv", "text/csv",
             )
 
     with sub_tabla:
@@ -5515,11 +5576,14 @@ def tab_domicilios(df_proc: pd.DataFrame):
             dft = dft[dft["Prioridad"].isin(f_prio)]
 
         st.caption(f"{len(dft):,} de {n_total:,} registros")
-        st.dataframe(
-            dft[["Nombre", "NoDama", "DireccionOriginal", "DireccionCorregida", "Colonia",
-                 "CP", "Poblacion", "Estado", "Division", "Zona", "Tipo", "Prioridad",
-                 "Viabilidad", "Duplicado"]],
-            use_container_width=True, hide_index=True, height=500,
+        _tabla_cols = ["Nombre", "NoDama", "DireccionOriginal", "DireccionCorregida", "Colonia",
+                       "CP", "Poblacion", "Estado", "Division", "Zona", "Tipo", "Prioridad",
+                       "Viabilidad", "Duplicado"]
+        st.markdown(_dom_table_html(dft[_tabla_cols]), unsafe_allow_html=True)
+        st.download_button(
+            "⬇️ Descargar tabla filtrada (CSV)",
+            dft[_tabla_cols].to_csv(index=False).encode("utf-8-sig"),
+            "domicilios_filtrados.csv", "text/csv",
         )
 
     with sub_alertas:
@@ -5583,7 +5647,7 @@ def _render_domicilios_standalone():
     )
 
     with st.expander("📂 Cargar archivo de Domicilios Ilocalizables",
-                     expanded=st.session_state.get("df_domicilios") is None):
+                     expanded=st.session_state.get("df_domicilios_raw") is None):
         _f = st.file_uploader(
             "Domicilios Ilocalizables", type=["xlsx", "xls"],
             label_visibility="collapsed", key="up_domicilios"
@@ -5591,14 +5655,14 @@ def _render_domicilios_standalone():
         if _f:
             if [_f.name] != st.session_state.get("int_domicilios_name", []):
                 try:
-                    _df_raw = read_excel_safe(_f)
-                    st.session_state.df_domicilios = _procesar_domicilios(_df_raw)
+                    st.session_state.df_domicilios_raw = read_excel_safe(_f)
                     st.session_state.int_domicilios_name = [_f.name]
+                    st.session_state.dom_col_overrides = {}
                 except Exception as e:
                     st.error(f"Error al leer archivo: {e}")
-        if st.session_state.get("df_domicilios") is not None:
+        if st.session_state.get("df_domicilios_raw") is not None:
             _nm = st.session_state.int_domicilios_name
-            _nr = len(st.session_state.df_domicilios)
+            _nr = len(st.session_state.df_domicilios_raw)
             st.markdown(
                 f"<span style='background:#dcfce7;color:#16a34a;padding:2px 10px;"
                 f"border-radius:99px;font-size:0.78rem;font-weight:600'>"
@@ -5606,12 +5670,31 @@ def _render_domicilios_standalone():
                 unsafe_allow_html=True,
             )
 
-    if st.session_state.get("df_domicilios") is None:
+    if st.session_state.get("df_domicilios_raw") is None:
         st.info("⬆️ Sube el archivo de Domicilios Ilocalizables para ver el análisis.")
         return
 
+    df_raw = st.session_state.df_domicilios_raw
+    detected = _detectar_columnas_domicilios(df_raw)
+    overrides = st.session_state.get("dom_col_overrides", {})
+
+    with st.expander("⚙️ Ajustar columnas detectadas"):
+        _all = ["(auto)"] + list(df_raw.columns)
+        _cols4 = st.columns(4)
+        new_overrides = {}
+        for i, canon in enumerate(_DOM_COL_CANDIDATES.keys()):
+            current = overrides.get(canon) or detected.get(canon)
+            idx = _all.index(current) if current in _all else 0
+            val = _cols4[i % 4].selectbox(canon, _all, index=idx, key=f"dom_col_{canon}")
+            if val != "(auto)":
+                new_overrides[canon] = val
+        if new_overrides != overrides:
+            st.session_state.dom_col_overrides = new_overrides
+            st.rerun()
+
     try:
-        tab_domicilios(st.session_state.df_domicilios)
+        df_proc = _procesar_domicilios(df_raw, st.session_state.get("dom_col_overrides"))
+        tab_domicilios(df_proc)
     except Exception as _e:
         st.error(f"Error en Domicilios Ilocalizables: {_e}")
         import traceback
@@ -5630,7 +5713,8 @@ def main():
         ("df_tel", None), ("df_campo", None), ("df_cobranza", None),
         ("df_cartera_gral", None), ("int_cartera_gral_name", []),
         ("int_tel_names", []), ("int_campo_names", []), ("int_cob_names", []),
-        ("df_domicilios", None), ("int_domicilios_name", []),
+        ("df_domicilios_raw", None), ("int_domicilios_name", []),
+        ("dom_col_overrides", {}),
     ]:
         if key not in st.session_state:
             st.session_state[key] = default
