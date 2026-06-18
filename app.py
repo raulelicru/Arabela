@@ -30,7 +30,7 @@ st.set_page_config(
 # ─────────────────────────────────────────────
 CUSTOM_CSS = """
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700;800&display=swap');
 
 * { font-family: 'Inter', sans-serif; }
 
@@ -203,7 +203,9 @@ hr { border-color: #e5e9f0; }
 [data-testid="stTabContent"]:has(.dom-dark-marker) h1,
 [data-testid="stTabContent"]:has(.dom-dark-marker) h2,
 [data-testid="stTabContent"]:has(.dom-dark-marker) h3,
-[data-testid="stTabContent"]:has(.dom-dark-marker) h4 { color: #E2E8F0 !important; }
+[data-testid="stTabContent"]:has(.dom-dark-marker) h4 {
+    color: #E2E8F0 !important; font-family: 'Space Grotesk', sans-serif !important;
+}
 [data-testid="stTabContent"]:has(.dom-dark-marker) [data-testid="stMarkdownContainer"] p,
 [data-testid="stTabContent"]:has(.dom-dark-marker) [data-testid="stMarkdownContainer"] span,
 [data-testid="stTabContent"]:has(.dom-dark-marker) label,
@@ -229,25 +231,37 @@ hr { border-color: #e5e9f0; }
     background: #1A2236 !important; border: 1px solid #243054 !important; color: #E2E8F0 !important;
 }
 
-.dom-kpi-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 14px; margin-bottom: 18px; }
-.dom-kpi { background: #1A2236; border: 1px solid #243054; border-radius: 12px; padding: 16px 18px; position: relative; overflow: hidden; }
+.dom-page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; flex-wrap: wrap; gap: 10px; }
+.dom-page-header h1 { font-family: 'Space Grotesk', sans-serif; font-size: 22px; font-weight: 700; color: #E2E8F0; margin: 0; }
+.dom-page-header p { color: #64748B; font-size: 13px; margin: 2px 0 0; }
+.dom-badge-camp {
+    background: rgba(59,130,246,.15); border: 1px solid rgba(59,130,246,.35);
+    color: #3B82F6; font-size: 12px; font-weight: 600; padding: 4px 12px;
+    border-radius: 20px; white-space: nowrap;
+}
+.dom-kpi-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px; }
+.dom-kpi { background: #1A2236; border: 1px solid #243054; border-radius: 12px; padding: 20px 22px; position: relative; overflow: hidden; transition: transform .2s, border-color .2s; }
+.dom-kpi:hover { transform: translateY(-2px); border-color: #3B82F6; }
 .dom-kpi-accent { position: absolute; top: 0; left: 0; width: 4px; height: 100%; }
-.dom-kpi-label { font-size: 11px; font-weight: 600; letter-spacing: .07em; text-transform: uppercase; color: #64748B; margin-bottom: 8px; }
-.dom-kpi-value { font-size: 26px; font-weight: 800; line-height: 1; }
+.dom-kpi-label { font-size: 11px; font-weight: 600; letter-spacing: .07em; text-transform: uppercase; color: #64748B; margin-bottom: 10px; }
+.dom-kpi-value { font-family: 'Space Grotesk', sans-serif; font-size: 28px; font-weight: 700; line-height: 1; }
 .dom-kpi-sub { font-size: 11px; color: #64748B; margin-top: 6px; }
-.dom-card-title { font-size: 12px; font-weight: 700; color: #94A3B8; text-transform: uppercase; letter-spacing: .07em; margin-bottom: 10px; }
-.dom-alert-item { display: flex; align-items: flex-start; gap: 10px; padding: 12px 14px; border-radius: 10px; border: 1px solid; margin-bottom: 8px; }
-.dom-alert-red   { background: rgba(239,68,68,.08);  border-color: rgba(239,68,68,.25); }
-.dom-alert-amber { background: rgba(245,158,11,.08); border-color: rgba(245,158,11,.25); }
-.dom-alert-green { background: rgba(16,185,129,.08); border-color: rgba(16,185,129,.25); }
+.dom-card-title {
+    font-family: 'Space Grotesk', sans-serif; font-size: 13px; font-weight: 600;
+    color: #94A3B8; text-transform: uppercase; letter-spacing: .07em; margin-bottom: 18px;
+}
+.dom-alert-item { display: flex; align-items: flex-start; gap: 12px; padding: 14px 16px; border-radius: 10px; border: 1px solid; margin-bottom: 10px; }
+.dom-alert-red   { background: rgba(239,68,68,.07);  border-color: rgba(239,68,68,.2); }
+.dom-alert-amber { background: rgba(245,158,11,.07); border-color: rgba(245,158,11,.2); }
+.dom-alert-green { background: rgba(16,185,129,.07); border-color: rgba(16,185,129,.2); }
 .dom-alert-title { font-weight: 600; font-size: 13px; color: #E2E8F0; }
-.dom-alert-desc { font-size: 12px; color: #94A3B8; margin-top: 2px; }
+.dom-alert-desc { font-size: 12px; color: #64748B; margin-top: 2px; }
 .dom-rank-table { width: 100%; border-collapse: collapse; }
 .dom-rank-table th { font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #64748B; padding: 0 8px 10px; text-align: left; }
 .dom-rank-table td { padding: 7px 8px; border-top: 1px solid #243054; font-size: 13px; color: #E2E8F0; }
 .dom-rank-table td:last-child { text-align: right; }
 .dom-rank-badge { display: inline-block; width: 22px; height: 22px; border-radius: 50%; line-height: 22px; text-align: center; font-size: 11px; font-weight: 700; }
-.dom-pie-legend { display: flex; flex-wrap: wrap; gap: 8px 18px; margin-top: 12px; }
+.dom-pie-legend { display: flex; flex-wrap: wrap; gap: 8px 18px; margin-top: 14px; }
 .dom-pie-legend-item { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #94A3B8; }
 .dom-pie-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
 </style>
@@ -5561,12 +5575,10 @@ def _render_domicilios_standalone():
     """Tab independiente de Domicilios Ilocalizables (Campaña 13)."""
     st.markdown(
         "<div class='dom-dark-marker' style='display:none'></div>"
-        "<div style='background:linear-gradient(135deg,#0B0F1A 0%,#1A2236 100%);"
-        "border:1px solid #243054;border-radius:14px;padding:1.2rem 1.8rem;margin-bottom:1.2rem'>"
-        "<h1 style='color:#E2E8F0;font-size:1.4rem;margin:0'>📍 Domicilios Ilocalizables — Campaña 13</h1>"
-        "<p style='color:#94A3B8;margin:0.2rem 0 0;font-size:0.85rem'>Carga el archivo "
-        "CAMPAÑA_DE_TRABAJO_13_DOMICILIO_ILOCALIZABLES.xlsx para analizar y clasificar los domicilios</p>"
-        "</div>",
+        "<div class='dom-page-header'><div>"
+        "<h1>📍 Validación de Domicilios</h1>"
+        "<p>Detección de domicilios compartidos y duplicados — normalización inteligente</p>"
+        "</div><span class='dom-badge-camp'>Campaña 13</span></div>",
         unsafe_allow_html=True,
     )
 
