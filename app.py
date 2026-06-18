@@ -193,6 +193,63 @@ hr { border-color: #e5e9f0; }
     font-weight: 600;
     width: 100%;
 }
+
+/* ── Domicilios Ilocalizables — tema oscuro (scoped) ── */
+[data-testid="stTabContent"]:has(.dom-dark-marker) {
+    background: #0B0F1A;
+    border-radius: 16px;
+    padding: 18px 18px 4px;
+}
+[data-testid="stTabContent"]:has(.dom-dark-marker) h1,
+[data-testid="stTabContent"]:has(.dom-dark-marker) h2,
+[data-testid="stTabContent"]:has(.dom-dark-marker) h3,
+[data-testid="stTabContent"]:has(.dom-dark-marker) h4 { color: #E2E8F0 !important; }
+[data-testid="stTabContent"]:has(.dom-dark-marker) [data-testid="stMarkdownContainer"] p,
+[data-testid="stTabContent"]:has(.dom-dark-marker) [data-testid="stMarkdownContainer"] span,
+[data-testid="stTabContent"]:has(.dom-dark-marker) label,
+[data-testid="stTabContent"]:has(.dom-dark-marker) [data-testid="stCaptionContainer"] { color: #94A3B8 !important; }
+[data-testid="stTabContent"]:has(.dom-dark-marker) [data-testid="stTabs"] {
+    background: #131929; border: 1px solid #243054; box-shadow: none;
+}
+[data-testid="stTabContent"]:has(.dom-dark-marker) [data-testid="stTabs"] button { color: #64748B; }
+[data-testid="stTabContent"]:has(.dom-dark-marker) [data-testid="stTabs"] button:hover { color: #E2E8F0; background: #1A2236; }
+[data-testid="stTabContent"]:has(.dom-dark-marker) [data-testid="stTabs"] button[aria-selected="true"] {
+    color: #3B82F6 !important; border-bottom: 3px solid #3B82F6 !important; background: rgba(59,130,246,.12);
+}
+[data-testid="stTabContent"]:has(.dom-dark-marker) [data-testid="stExpander"] {
+    background: #1A2236; border: 1px solid #243054; border-radius: 12px;
+}
+[data-testid="stTabContent"]:has(.dom-dark-marker) [data-testid="stDataFrame"] {
+    background: #1A2236; border: 1px solid #243054; border-radius: 10px;
+}
+[data-testid="stTabContent"]:has(.dom-dark-marker) [data-testid="stFileUploader"] {
+    background: #1A2236; border: 2px dashed #243054;
+}
+[data-testid="stTabContent"]:has(.dom-dark-marker) [data-testid="stMultiSelect"] > div > div {
+    background: #1A2236 !important; border: 1px solid #243054 !important; color: #E2E8F0 !important;
+}
+
+.dom-kpi-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 14px; margin-bottom: 18px; }
+.dom-kpi { background: #1A2236; border: 1px solid #243054; border-radius: 12px; padding: 16px 18px; position: relative; overflow: hidden; }
+.dom-kpi-accent { position: absolute; top: 0; left: 0; width: 4px; height: 100%; }
+.dom-kpi-label { font-size: 11px; font-weight: 600; letter-spacing: .07em; text-transform: uppercase; color: #64748B; margin-bottom: 8px; }
+.dom-kpi-value { font-size: 26px; font-weight: 800; line-height: 1; }
+.dom-kpi-sub { font-size: 11px; color: #64748B; margin-top: 6px; }
+.dom-card-title { font-size: 12px; font-weight: 700; color: #94A3B8; text-transform: uppercase; letter-spacing: .07em; margin-bottom: 10px; }
+.dom-alert-item { display: flex; align-items: flex-start; gap: 10px; padding: 12px 14px; border-radius: 10px; border: 1px solid; margin-bottom: 8px; }
+.dom-alert-red   { background: rgba(239,68,68,.08);  border-color: rgba(239,68,68,.25); }
+.dom-alert-amber { background: rgba(245,158,11,.08); border-color: rgba(245,158,11,.25); }
+.dom-alert-green { background: rgba(16,185,129,.08); border-color: rgba(16,185,129,.25); }
+.dom-alert-title { font-weight: 600; font-size: 13px; color: #E2E8F0; }
+.dom-alert-desc { font-size: 12px; color: #94A3B8; margin-top: 2px; }
+.dom-rank-table { width: 100%; border-collapse: collapse; }
+.dom-rank-table th { font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #64748B; padding: 0 8px 10px; text-align: left; }
+.dom-rank-table td { padding: 7px 8px; border-top: 1px solid #243054; font-size: 13px; color: #E2E8F0; }
+.dom-rank-table td:last-child { text-align: right; }
+.dom-rank-badge { display: inline-block; width: 22px; height: 22px; border-radius: 50%; line-height: 22px; text-align: center; font-size: 11px; font-weight: 700; }
+.dom-pie-legend { display: flex; flex-wrap: wrap; gap: 8px 18px; margin-top: 12px; }
+.dom-pie-legend-item { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #94A3B8; }
+.dom-pie-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
 </style>
 """
 st.markdown(CUSTOM_CSS, unsafe_allow_html=True)
@@ -5263,16 +5320,51 @@ def _render_indicadores_standalone():
 #  DOMICILIOS ILOCALIZABLES — TAB STANDALONE
 # ─────────────────────────────────────────────
 
-_VIAB_COLOR = {"ALTA": "#16a34a", "MEDIA": "#d97706", "BAJA": "#dc2626"}
-_PRIOR_COLOR = {"P1 INMEDIATA": "#16a34a", "P2 VERIFICAR": "#d97706", "P3 NO VIABLE": "#dc2626"}
+_DOM_VIAB_COLOR = {"ALTA": "#10B981", "MEDIA": "#F59E0B", "BAJA": "#EF4444"}
+_DOM_PRIOR_COLOR = {"P1 INMEDIATA": "#10B981", "P2 VERIFICAR": "#F59E0B", "P3 NO VIABLE": "#EF4444"}
+_DOM_ACCENT = ["#3B82F6", "#10B981", "#F59E0B", "#EF4444", "#8B5CF6"]
+
+_DOM_PLOTLY_LAYOUT = dict(
+    paper_bgcolor="#1A2236",
+    plot_bgcolor="#1A2236",
+    font=dict(color="#E2E8F0", family="Inter, sans-serif", size=12),
+    margin=dict(l=10, r=10, t=40, b=10),
+    legend=dict(font=dict(color="#94A3B8")),
+)
+_DOM_AXIS = dict(gridcolor="#243054", zeroline=False, showline=False, color="#94A3B8")
+
+
+def _dom_kpi_card(label, value, sub, color):
+    return (
+        f"<div class='dom-kpi'><div class='dom-kpi-accent' style='background:{color}'></div>"
+        f"<div class='dom-kpi-label'>{label}</div>"
+        f"<div class='dom-kpi-value' style='color:{color}'>{value}</div>"
+        f"<div class='dom-kpi-sub'>{sub}</div></div>"
+    )
+
+
+def _dom_alert(level, title, desc):
+    icon = {"red": "🔴", "amber": "🟡", "green": "🟢"}[level]
+    return (
+        f"<div class='dom-alert-item dom-alert-{level}'><div style='font-size:16px'>{icon}</div>"
+        f"<div><div class='dom-alert-title'>{title}</div><div class='dom-alert-desc'>{desc}</div></div></div>"
+    )
 
 
 def tab_domicilios(df_proc: pd.DataFrame):
-    """Dashboard de análisis de Domicilios Ilocalizables (Campaña 13)."""
+    """Dashboard de análisis de Domicilios Ilocalizables (Campaña 13) — tema oscuro."""
+    st.markdown("<div class='dom-dark-marker' style='display:none'></div>", unsafe_allow_html=True)
+
     n_total = len(df_proc)
-    n_dup = int((df_proc["Duplicado"] == "DUPLICADO").sum())
+    n_dup_reg = int((df_proc["Duplicado"] == "DUPLICADO").sum())
+    n_unico_reg = n_total - n_dup_reg
     n_viab_alta = int((df_proc["Viabilidad"] == "ALTA").sum())
     n_p1 = int((df_proc["Prioridad"] == "P1 INMEDIATA").sum())
+    n_grupos_unicos = df_proc["DireccionCorregida"].replace("", pd.NA).nunique(dropna=True)
+    grp_sizes = df_proc[df_proc["Duplicado"] == "DUPLICADO"].groupby("DireccionCorregida")["idx"].count()
+    max_damas = int(grp_sizes.max()) if not grp_sizes.empty else 0
+    n_g5 = int((grp_sizes >= 5).sum())
+    n_g24 = int(((grp_sizes >= 2) & (grp_sizes <= 4)).sum())
 
     sub_resumen, sub_division, sub_estado, sub_dup, sub_tabla, sub_alertas = st.tabs([
         "📊 Resumen", "🏢 Por División", "🗺️ Por Estado",
@@ -5280,34 +5372,45 @@ def tab_domicilios(df_proc: pd.DataFrame):
     ])
 
     with sub_resumen:
-        c1, c2, c3, c4 = st.columns(4)
-        c1.metric("Total de domicilios", f"{n_total:,}")
-        c2.metric("Viabilidad ALTA", f"{n_viab_alta:,}", f"{n_viab_alta/n_total*100:.1f}%" if n_total else "0%")
-        c3.metric("Prioridad P1 Inmediata", f"{n_p1:,}", f"{n_p1/n_total*100:.1f}%" if n_total else "0%")
-        c4.metric("Duplicados", f"{n_dup:,}", f"{n_dup/n_total*100:.1f}%" if n_total else "0%")
+        st.markdown(
+            "<div class='dom-kpi-grid'>"
+            + _dom_kpi_card("Total de Domicilios", f"{n_total:,}", "Registros analizados", "#3B82F6")
+            + _dom_kpi_card("Mismo Domicilio", f"{n_dup_reg:,}",
+                            f"{n_dup_reg/n_total*100:.1f}% comparte dirección" if n_total else "0%", "#EF4444")
+            + _dom_kpi_card("Domicilio Único", f"{n_unico_reg:,}",
+                            f"{n_unico_reg/n_total*100:.1f}% con dirección exclusiva" if n_total else "0%", "#10B981")
+            + _dom_kpi_card("Grupos Únicos", f"{n_grupos_unicos:,}", "Direcciones físicas distintas", "#3B82F6")
+            + _dom_kpi_card("Máx. Damas/Domicilio", f"{max_damas:,}", "Posible GDC / error de captura", "#EF4444")
+            + _dom_kpi_card("Viabilidad ALTA", f"{n_viab_alta:,}",
+                             f"{n_viab_alta/n_total*100:.1f}% prioridad inmediata" if n_total else "0%", "#10B981")
+            + "</div>",
+            unsafe_allow_html=True,
+        )
 
         cc1, cc2 = st.columns(2)
         with cc1:
+            st.markdown("<div class='dom-card-title'>Domicilios por Tipo</div>", unsafe_allow_html=True)
             vc = df_proc["Tipo"].value_counts()
             fig = go.Figure(go.Bar(x=vc.values, y=vc.index, orientation="h",
-                                    marker_color="#6366f1"))
-            fig.update_layout(title="Domicilios por Tipo", height=350,
-                               margin=dict(l=10, r=10, t=40, b=10))
+                                    marker_color=_DOM_ACCENT[0]))
+            fig.update_layout(**_DOM_PLOTLY_LAYOUT, height=320,
+                               xaxis=_DOM_AXIS, yaxis=_DOM_AXIS)
             st.plotly_chart(fig, use_container_width=True)
         with cc2:
+            st.markdown("<div class='dom-card-title'>Viabilidad de Contacto</div>", unsafe_allow_html=True)
             vc2 = df_proc["Viabilidad"].value_counts()
-            colors = [_VIAB_COLOR.get(v, "#6366f1") for v in vc2.index]
+            colors = [_DOM_VIAB_COLOR.get(v, "#3B82F6") for v in vc2.index]
             fig2 = go.Figure(go.Pie(labels=vc2.index, values=vc2.values,
-                                     marker_colors=colors, hole=0.5))
-            fig2.update_layout(title="Viabilidad", height=350,
-                                margin=dict(l=10, r=10, t=40, b=10))
+                                     marker_colors=colors, hole=0.5,
+                                     textfont=dict(color="#E2E8F0")))
+            fig2.update_layout(**_DOM_PLOTLY_LAYOUT, height=320)
             st.plotly_chart(fig2, use_container_width=True)
 
+        st.markdown("<div class='dom-card-title'>Distribución por Prioridad</div>", unsafe_allow_html=True)
         vc3 = df_proc["Prioridad"].value_counts()
-        colors3 = [_PRIOR_COLOR.get(v, "#6366f1") for v in vc3.index]
+        colors3 = [_DOM_PRIOR_COLOR.get(v, "#3B82F6") for v in vc3.index]
         fig3 = go.Figure(go.Bar(x=vc3.index, y=vc3.values, marker_color=colors3))
-        fig3.update_layout(title="Distribución por Prioridad", height=320,
-                            margin=dict(l=10, r=10, t=40, b=10))
+        fig3.update_layout(**_DOM_PLOTLY_LAYOUT, height=300, xaxis=_DOM_AXIS, yaxis=_DOM_AXIS)
         st.plotly_chart(fig3, use_container_width=True)
 
     with sub_division:
@@ -5316,9 +5419,9 @@ def tab_domicilios(df_proc: pd.DataFrame):
             Viab_Alta=("Viabilidad", lambda s: (s == "ALTA").sum()),
             Duplicados=("Duplicado", lambda s: (s == "DUPLICADO").sum()),
         ).reset_index().sort_values("Total", ascending=False)
-        fig = go.Figure(go.Bar(x=gdiv["Division"], y=gdiv["Total"], marker_color="#6366f1"))
-        fig.update_layout(title="Domicilios por División", height=380,
-                           margin=dict(l=10, r=10, t=40, b=10))
+        st.markdown("<div class='dom-card-title'>Domicilios por División</div>", unsafe_allow_html=True)
+        fig = go.Figure(go.Bar(x=gdiv["Division"], y=gdiv["Total"], marker_color=_DOM_ACCENT[0]))
+        fig.update_layout(**_DOM_PLOTLY_LAYOUT, height=360, xaxis=_DOM_AXIS, yaxis=_DOM_AXIS)
         st.plotly_chart(fig, use_container_width=True)
         st.dataframe(gdiv, use_container_width=True, hide_index=True)
 
@@ -5328,9 +5431,9 @@ def tab_domicilios(df_proc: pd.DataFrame):
             Viab_Alta=("Viabilidad", lambda s: (s == "ALTA").sum()),
             Duplicados=("Duplicado", lambda s: (s == "DUPLICADO").sum()),
         ).reset_index().sort_values("Total", ascending=False)
-        fig = go.Figure(go.Bar(x=gest["Estado"], y=gest["Total"], marker_color="#0ea5e9"))
-        fig.update_layout(title="Domicilios por Estado", height=380,
-                           margin=dict(l=10, r=10, t=40, b=10))
+        st.markdown("<div class='dom-card-title'>Domicilios por Estado</div>", unsafe_allow_html=True)
+        fig = go.Figure(go.Bar(x=gest["Estado"], y=gest["Total"], marker_color=_DOM_ACCENT[4]))
+        fig.update_layout(**_DOM_PLOTLY_LAYOUT, height=360, xaxis=_DOM_AXIS, yaxis=_DOM_AXIS)
         st.plotly_chart(fig, use_container_width=True)
         st.dataframe(gest, use_container_width=True, hide_index=True)
 
@@ -5340,8 +5443,43 @@ def tab_domicilios(df_proc: pd.DataFrame):
         if df_dup.empty:
             st.success("✅ No se detectaron domicilios duplicados.")
         else:
+            cc1, cc2 = st.columns(2)
+            with cc1:
+                st.markdown("<div class='dom-card-title'>Composición — Únicos vs Compartidos</div>",
+                            unsafe_allow_html=True)
+                figp = go.Figure(go.Pie(labels=["Mismo Domicilio", "Domicilio Único"],
+                                         values=[n_dup_reg, n_unico_reg],
+                                         marker_colors=["#EF4444", "#10B981"], hole=0.5,
+                                         textfont=dict(color="#E2E8F0")))
+                figp.update_layout(**_DOM_PLOTLY_LAYOUT, height=300)
+                st.plotly_chart(figp, use_container_width=True)
+            with cc2:
+                st.markdown("<div class='dom-card-title'>Top 10 Domicilios — Mayor Concentración</div>",
+                            unsafe_allow_html=True)
+                top10 = (df_dup.groupby("DireccionCorregida")
+                         .agg(Damas=("idx", "count"), Division=("Division", "first"),
+                              Colonia=("Colonia", "first"))
+                         .reset_index().sort_values("Damas", ascending=False).head(10))
+                rows = "".join(
+                    f"<tr><td><span class='dom-rank-badge' style='background:rgba(239,68,68,.15);"
+                    f"color:#EF4444'>{i+1}</span></td><td>{r.DireccionCorregida[:34]}</td>"
+                    f"<td>{r.Damas}</td><td>{r.Colonia or r.Division}</td></tr>"
+                    for i, r in enumerate(top10.itertuples())
+                )
+                st.markdown(
+                    "<table class='dom-rank-table'><thead><tr><th>#</th><th>Domicilio</th>"
+                    "<th>Damas</th><th>Colonia/División</th></tr></thead>"
+                    f"<tbody>{rows}</tbody></table>",
+                    unsafe_allow_html=True,
+                )
+
             n_grupos = df_dup["DireccionCorregida"].nunique()
-            st.warning(f"⚠️ {n_grupos:,} direcciones duplicadas — {len(df_dup):,} registros afectados")
+            st.markdown(
+                _dom_alert("red", f"{n_grupos:,} direcciones duplicadas",
+                           f"{len(df_dup):,} registros afectados — {n_g5} grupos con 5+ damas, "
+                           f"{n_g24} grupos con 2–4 damas. Máximo {max_damas} damas en un mismo domicilio."),
+                unsafe_allow_html=True,
+            )
             st.dataframe(
                 df_dup[["DireccionCorregida", "GrupoTam", "Division", "Zona", "Nombre",
                         "NoDama", "Estado", "Viabilidad"]],
@@ -5374,33 +5512,60 @@ def tab_domicilios(df_proc: pd.DataFrame):
         n_incompleto = int((df_proc["Tipo"] == "DOMICILIO INCOMPLETO").sum())
         n_sn = int((df_proc["Tipo"] == "SIN NÚMERO (S/N)").sum())
         n_baja = int((df_proc["Viabilidad"] == "BAJA").sum())
-
-        if n_incompleto:
-            st.error(f"🚫 {n_incompleto:,} domicilios INCOMPLETOS (sólo Mza o sólo Lt) — no viables")
-        if n_sn:
-            st.warning(f"⚠️ {n_sn:,} domicilios SIN NÚMERO — requieren verificación en campo")
-        if n_baja:
-            st.warning(f"⚠️ {n_baja:,} domicilios con viabilidad BAJA")
-        if n_dup:
-            st.warning(f"🔁 {n_dup:,} registros con dirección duplicada")
-        if not any([n_incompleto, n_sn, n_baja, n_dup]):
-            st.success("✅ No se detectaron alertas — todos los domicilios son viables.")
-
         sin_cp = int((df_proc["CP"].fillna("") == "").sum())
         sin_col = int((df_proc["Colonia"].fillna("") == "").sum())
-        if sin_cp:
-            st.info(f"ℹ️ {sin_cp:,} registros sin Código Postal")
-        if sin_col:
-            st.info(f"ℹ️ {sin_col:,} registros sin Colonia")
+
+        alerts_html = ""
+        if max_damas >= 5:
+            alerts_html += _dom_alert(
+                "red", f"{max_damas} damas en un mismo domicilio",
+                "Probable domicilio de GDC/porteador o error sistémico de captura. Auditar de inmediato.",
+            )
+        if n_incompleto:
+            alerts_html += _dom_alert(
+                "red", f"{n_incompleto:,} domicilios INCOMPLETOS (sólo Mza o sólo Lt)",
+                "No viables para gestión de campo sin verificación previa de número exterior.",
+            )
+        if n_dup_reg and n_total:
+            alerts_html += _dom_alert(
+                "amber", f"{n_dup_reg/n_total*100:.1f}% de registros en domicilio compartido",
+                "Estrategia de visita 'efecto arrastre': una visita puede impactar múltiples cuentas.",
+            )
+        if n_sn:
+            alerts_html += _dom_alert(
+                "amber", f"{n_sn:,} domicilios SIN NÚMERO",
+                "Requieren verificación en campo antes de asignar prioridad de cobranza.",
+            )
+        if n_baja:
+            alerts_html += _dom_alert(
+                "amber", f"{n_baja:,} domicilios con viabilidad BAJA",
+                "Baja probabilidad de localización exitosa — revisar antes de despachar gestor.",
+            )
+        if sin_cp or sin_col:
+            alerts_html += _dom_alert(
+                "amber", f"{sin_cp:,} sin Código Postal · {sin_col:,} sin Colonia",
+                "Información incompleta que reduce la viabilidad de contacto.",
+            )
+        if n_viab_alta:
+            alerts_html += _dom_alert(
+                "green", f"{n_viab_alta:,} domicilios con viabilidad ALTA",
+                "Listos para gestión inmediata — número exterior y datos de ubicación completos.",
+            )
+        if not alerts_html:
+            alerts_html = _dom_alert("green", "Sin alertas", "Todos los domicilios son viables.")
+
+        st.markdown(alerts_html, unsafe_allow_html=True)
 
 
 def _render_domicilios_standalone():
     """Tab independiente de Domicilios Ilocalizables (Campaña 13)."""
     st.markdown(
-        "<div class='kpi-banner'>"
-        "<h1>📍 Domicilios Ilocalizables — Campaña 13</h1>"
-        "<p>Carga el archivo CAMPAÑA_DE_TRABAJO_13_DOMICILIO_ILOCALIZABLES.xlsx para analizar"
-        " y clasificar los domicilios</p>"
+        "<div class='dom-dark-marker' style='display:none'></div>"
+        "<div style='background:linear-gradient(135deg,#0B0F1A 0%,#1A2236 100%);"
+        "border:1px solid #243054;border-radius:14px;padding:1.2rem 1.8rem;margin-bottom:1.2rem'>"
+        "<h1 style='color:#E2E8F0;font-size:1.4rem;margin:0'>📍 Domicilios Ilocalizables — Campaña 13</h1>"
+        "<p style='color:#94A3B8;margin:0.2rem 0 0;font-size:0.85rem'>Carga el archivo "
+        "CAMPAÑA_DE_TRABAJO_13_DOMICILIO_ILOCALIZABLES.xlsx para analizar y clasificar los domicilios</p>"
         "</div>",
         unsafe_allow_html=True,
     )
