@@ -10,6 +10,8 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import warnings
 import io
+import re
+import unicodedata
 
 warnings.filterwarnings("ignore")
 
@@ -4531,6 +4533,236 @@ def _render_interno_tab():
 
 
 # ─────────────────────────────────────────────
+#  DOMICILIOS ILOCALIZABLES — MOTOR DE ANÁLISIS
+# ─────────────────────────────────────────────
+
+_CORRECCIONES_TIPO = [
+    (re.compile(r"\bAMPLIACIN\b"), "AMPLIACION"),
+    (re.compile(r"\bJIMNEZ\b"), "JIMENEZ"),
+    (re.compile(r"\bGONZLEZ\b"), "GONZALEZ"),
+    (re.compile(r"\bMARTN\b"), "MARTIN"),
+    (re.compile(r"\bHERNNDEZ\b"), "HERNANDEZ"),
+    (re.compile(r"\bRODRGUZ\b"), "RODRIGUEZ"),
+    (re.compile(r"\bZAVADA\b"), "ZAVALA"),
+    (re.compile(r"\bBRUBO\b"), "BRUNO"),
+    (re.compile(r"\bAIR3S\b"), "AIRES"),
+    (re.compile(r"\bAIR3Z\b"), "AIRES"),
+    (re.compile(r"\bEJRCITO\b"), "EJERCITO"),
+    (re.compile(r"\bPROLONGACIN\b"), "PROLONGACION"),
+]
+
+_RE_SN_1 = re.compile(r"\bNO\s*S\s*N\b")
+_RE_SN_2 = re.compile(r"\bNUM\s*S\s*N\b")
+_RE_SN_3 = re.compile(r"\bNO\.?\s*S/N\b")
+_RE_SN_4 = re.compile(r"\bS/N\b")
+
+_RE_MZA_SN_1 = re.compile(r"\bMZA\.?\s*S\s*/?\s*N\b")
+_RE_MZA_SN_2 = re.compile(r"\bMANZANA\.?\s*S\s*/?\s*N\b")
+_RE_LT_SN_1 = re.compile(r"\bLT\.?\s*S\s*/?\s*N\b")
+_RE_LT_SN_2 = re.compile(r"\bLOTE\.?\s*S\s*/?\s*N\b")
+_RE_INT_SN_1 = re.compile(r"\bINT\.?\s*S\s*/?\s*N\b")
+_RE_INT_SN_2 = re.compile(r"\bINTERIOR\.?\s*S\s*/?\s*N\b")
+
+_RE_COL_PREFIX = re.compile(r"^(COL\.?\s+|COLONIA\s+|FRACC\.?\s+|FRACCIONAMIENTO\s+)")
+
+_RE_NUM_1 = re.compile(r"\b(?:NO|NUM|NUMERO|#)\.?\s*(\d+[A-Z]?)\b")
+_RE_NUM_2 = re.compile(r"\b(\d{1,5})\b")
+_RE_NUM_2_LOOKAHEAD = re.compile(r"\b(\d{1,5})\b(?!\s*(?:MZA|LT|INT|CP))")
+_RE_MZA_VAL = re.compile(r"\bMZA\.?\s*(\d+[A-Z]?)\b")
+_RE_MANZANA_VAL = re.compile(r"\bMANZANA\.?\s*(\d+[A-Z]?)\b")
+_RE_LT_VAL = re.compile(r"\bLT\.?\s*(\d+[A-Z]?)\b")
+_RE_LOTE_VAL = re.compile(r"\bLOTE\.?\s*(\d+[A-Z]?)\b")
+_RE_SN_TEST = re.compile(r"S/N")
+_RE_SIN_NUMERO = re.compile(r"\bSIN NUMERO\b")
+
+_RE_MZA_SN_FINAL = re.compile(r"\bMza S/N\b")
+_RE_LT_SN_FINAL = re.compile(r"\bLt S/N\b")
+_RE_INT_SN_FINAL = re.compile(r"\bInt S/N\b")
+_RE_MULTI_SPACE = re.compile(r"\s+")
+_RE_DOUBLE_COMMA = re.compile(r"\s*,\s*,")
+_RE_EDGE_COMMA = re.compile(r"^,|,$")
+
+
+def _quitar_acentos(s: str) -> str:
+    nfd = unicodedata.normalize("NFD", s)
+    return "".join(c for c in nfd if not unicodedata.combining(c))
+
+
+def _normalizar_texto(valor) -> str:
+    if valor is None or (isinstance(valor, float) and pd.isna(valor)):
+        return ""
+    s = str(valor).strip().upper()
+    s = _quitar_acentos(s)
+    s = _RE_MULTI_SPACE.sub(" ", s)
+    for pat, rep in _CORRECCIONES_TIPO:
+        s = pat.sub(rep, s)
+    return s.strip()
+
+
+def _estandarizar_sn(s: str) -> str:
+    s = _RE_SN_1.sub("No S/N", s)
+    s = _RE_SN_2.sub("No S/N", s)
+    s = _RE_SN_3.sub("No S/N", s)
+    s = _RE_SN_4.sub("S/N", s)
+    return s
+
+
+def _estandarizar_mza_lt_int(s: str) -> str:
+    s = _RE_MZA_SN_1.sub("Mza S/N", s)
+    s = _RE_MZA_SN_2.sub("Mza S/N", s)
+    s = _RE_LT_SN_1.sub("Lt S/N", s)
+    s = _RE_LT_SN_2.sub("Lt S/N", s)
+    s = _RE_INT_SN_1.sub("Int S/N", s)
+    s = _RE_INT_SN_2.sub("Int S/N", s)
+    return s
+
+
+def _limpiar_colonia(valor) -> str:
+    s = _normalizar_texto(valor)
+    s = _RE_COL_PREFIX.sub("", s)
+    return s.strip()
+
+
+def _extraer_componentes(direccion_norm: str) -> dict:
+    d = direccion_norm
+    tiene_numero, numero = False, None
+    m = _RE_NUM_1.search(d)
+    if m:
+        tiene_numero, numero = True, m.group(1)
+    else:
+        m2 = _RE_NUM_2_LOOKAHEAD.search(d)
+        if m2 and not _RE_SN_TEST.search(d):
+            tiene_numero, numero = True, m2.group(1)
+
+    mza_match = _RE_MZA_VAL.search(d) or _RE_MANZANA_VAL.search(d)
+    mza_real = bool(mza_match)
+    mza_val = mza_match.group(1) if mza_match else None
+
+    lt_match = _RE_LT_VAL.search(d) or _RE_LOTE_VAL.search(d)
+    lt_real = bool(lt_match)
+    lt_val = lt_match.group(1) if lt_match else None
+
+    es_sn = bool(_RE_SN_TEST.search(d)) or bool(_RE_SIN_NUMERO.search(d))
+
+    return {
+        "tieneNumero": tiene_numero, "numero": numero,
+        "mzaReal": mza_real, "mzaVal": mza_val,
+        "ltReal": lt_real, "ltVal": lt_val,
+        "esSN": es_sn,
+    }
+
+
+def _limpiar_direccion_final(direccion_norm: str) -> str:
+    s = direccion_norm
+    s = _RE_MZA_SN_FINAL.sub("", s)
+    s = _RE_LT_SN_FINAL.sub("", s)
+    s = _RE_INT_SN_FINAL.sub("", s)
+    s = _RE_MULTI_SPACE.sub(" ", s)
+    s = _RE_DOUBLE_COMMA.sub(",", s)
+    s = s.strip()
+    s = _RE_EDGE_COMMA.sub("", s)
+    return s.strip()
+
+
+def _clasificar_domicilio(comp: dict) -> dict:
+    tiene_numero, mza_real, lt_real = comp["tieneNumero"], comp["mzaReal"], comp["ltReal"]
+    if tiene_numero:
+        return {"tipo": "DOMICILIO CON NÚMERO", "prioridad": "P1 INMEDIATA"}
+    if not tiene_numero and mza_real and lt_real:
+        return {"tipo": "DOMICILIO CON NÚMERO (MZA+LT)", "prioridad": "P1 INMEDIATA"}
+    if mza_real and lt_real:
+        return {"tipo": "DOMICILIO CON NÚMERO", "prioridad": "P1 INMEDIATA"}
+    if not tiene_numero and (mza_real != lt_real):
+        return {"tipo": "DOMICILIO INCOMPLETO", "prioridad": "P3 NO VIABLE", "viabForce": "BAJA"}
+    return {"tipo": "SIN NÚMERO (S/N)", "prioridad": "P2 VERIFICAR"}
+
+
+def _calcular_viabilidad(comp: dict, cls: dict, rec: dict) -> str:
+    if cls.get("viabForce"):
+        return cls["viabForce"]
+    score = 0
+    if comp["tieneNumero"] or (comp["mzaReal"] and comp["ltReal"]):
+        score += 2
+    if rec.get("CP", "").strip():
+        score += 1
+    if rec.get("Colonia", "").strip():
+        score += 1
+    if rec.get("Poblacion", "").strip():
+        score += 1
+    if score >= 4:
+        return "ALTA"
+    if score >= 2:
+        return "MEDIA"
+    return "BAJA"
+
+
+def _procesar_fila_domicilio(row: dict, idx: int) -> dict:
+    def get(k):
+        v = row.get(k)
+        if v is None or (isinstance(v, float) and pd.isna(v)):
+            return ""
+        return v
+
+    direccion_raw = get("Direccion") or get("Dirección") or ""
+    d = _normalizar_texto(direccion_raw)
+    d = _estandarizar_sn(d)
+    d = _estandarizar_mza_lt_int(d)
+
+    comp = _extraer_componentes(d)
+    direccion_final = _limpiar_direccion_final(d)
+    cls = _clasificar_domicilio(comp)
+
+    rec = {
+        "idx": idx,
+        "Status": get("Status"),
+        "Region": _normalizar_texto(get("Region")),
+        "Division": _normalizar_texto(get("Division")) or "SIN DIVISIÓN",
+        "Ruta": _normalizar_texto(get("Ruta")),
+        "Zona": _normalizar_texto(get("Zona")) or "SIN ZONA",
+        "Campania": get("Campaña") or get("Campania") or "",
+        "NumReferencia": get("Referencia de Pago") or "",
+        "NoDama": get("No. Dama") or get("NoDama") or "",
+        "Nombre": _normalizar_texto(get("Nombre")),
+        "DireccionOriginal": str(direccion_raw),
+        "DireccionCorregida": direccion_final,
+        "CP": str(get("CP") or "").strip(),
+        "Colonia": _limpiar_colonia(get("Colonia")),
+        "Poblacion": _normalizar_texto(get("Poblacion") or get("Población")),
+        "Estado": _normalizar_texto(get("Estado")) or "SIN ESTADO",
+        "Tipo": cls["tipo"],
+        "Prioridad": cls["prioridad"],
+        "MzaVal": comp["mzaVal"],
+        "LtVal": comp["ltVal"],
+    }
+    rec["Viabilidad"] = _calcular_viabilidad(comp, cls, rec)
+    return rec
+
+
+def _detectar_duplicados(records: list) -> pd.DataFrame:
+    grupos = {}
+    for r in records:
+        key = r["DireccionCorregida"] or "(SIN DIRECCION)"
+        grupos.setdefault(key, []).append(r)
+
+    for direccion, recs in grupos.items():
+        es_dup = len(recs) > 1 and direccion != "(SIN DIRECCION)" and direccion.strip() != ""
+        for r in recs:
+            r["Duplicado"] = "DUPLICADO" if es_dup else "UNICO"
+            r["GrupoTam"] = len(recs)
+    return grupos
+
+
+def _procesar_domicilios(df_raw: pd.DataFrame) -> pd.DataFrame:
+    """Pipeline completo: normalización → clasificación → viabilidad → duplicados."""
+    records = [
+        _procesar_fila_domicilio(row, idx)
+        for idx, row in enumerate(df_raw.to_dict("records"))
+    ]
+    _detectar_duplicados(records)
+    return pd.DataFrame(records)
+
+
+# ─────────────────────────────────────────────
 #  INDICADORES DE RECUPERACIÓN — TAB STANDALONE
 # ─────────────────────────────────────────────
 
@@ -5028,6 +5260,188 @@ def _render_indicadores_standalone():
 
 
 # ─────────────────────────────────────────────
+#  DOMICILIOS ILOCALIZABLES — TAB STANDALONE
+# ─────────────────────────────────────────────
+
+_VIAB_COLOR = {"ALTA": "#16a34a", "MEDIA": "#d97706", "BAJA": "#dc2626"}
+_PRIOR_COLOR = {"P1 INMEDIATA": "#16a34a", "P2 VERIFICAR": "#d97706", "P3 NO VIABLE": "#dc2626"}
+
+
+def tab_domicilios(df_proc: pd.DataFrame):
+    """Dashboard de análisis de Domicilios Ilocalizables (Campaña 13)."""
+    n_total = len(df_proc)
+    n_dup = int((df_proc["Duplicado"] == "DUPLICADO").sum())
+    n_viab_alta = int((df_proc["Viabilidad"] == "ALTA").sum())
+    n_p1 = int((df_proc["Prioridad"] == "P1 INMEDIATA").sum())
+
+    sub_resumen, sub_division, sub_estado, sub_dup, sub_tabla, sub_alertas = st.tabs([
+        "📊 Resumen", "🏢 Por División", "🗺️ Por Estado",
+        "🔁 Duplicados", "📋 Tabla", "⚠️ Alertas",
+    ])
+
+    with sub_resumen:
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("Total de domicilios", f"{n_total:,}")
+        c2.metric("Viabilidad ALTA", f"{n_viab_alta:,}", f"{n_viab_alta/n_total*100:.1f}%" if n_total else "0%")
+        c3.metric("Prioridad P1 Inmediata", f"{n_p1:,}", f"{n_p1/n_total*100:.1f}%" if n_total else "0%")
+        c4.metric("Duplicados", f"{n_dup:,}", f"{n_dup/n_total*100:.1f}%" if n_total else "0%")
+
+        cc1, cc2 = st.columns(2)
+        with cc1:
+            vc = df_proc["Tipo"].value_counts()
+            fig = go.Figure(go.Bar(x=vc.values, y=vc.index, orientation="h",
+                                    marker_color="#6366f1"))
+            fig.update_layout(title="Domicilios por Tipo", height=350,
+                               margin=dict(l=10, r=10, t=40, b=10))
+            st.plotly_chart(fig, use_container_width=True)
+        with cc2:
+            vc2 = df_proc["Viabilidad"].value_counts()
+            colors = [_VIAB_COLOR.get(v, "#6366f1") for v in vc2.index]
+            fig2 = go.Figure(go.Pie(labels=vc2.index, values=vc2.values,
+                                     marker_colors=colors, hole=0.5))
+            fig2.update_layout(title="Viabilidad", height=350,
+                                margin=dict(l=10, r=10, t=40, b=10))
+            st.plotly_chart(fig2, use_container_width=True)
+
+        vc3 = df_proc["Prioridad"].value_counts()
+        colors3 = [_PRIOR_COLOR.get(v, "#6366f1") for v in vc3.index]
+        fig3 = go.Figure(go.Bar(x=vc3.index, y=vc3.values, marker_color=colors3))
+        fig3.update_layout(title="Distribución por Prioridad", height=320,
+                            margin=dict(l=10, r=10, t=40, b=10))
+        st.plotly_chart(fig3, use_container_width=True)
+
+    with sub_division:
+        gdiv = df_proc.groupby("Division").agg(
+            Total=("idx", "count"),
+            Viab_Alta=("Viabilidad", lambda s: (s == "ALTA").sum()),
+            Duplicados=("Duplicado", lambda s: (s == "DUPLICADO").sum()),
+        ).reset_index().sort_values("Total", ascending=False)
+        fig = go.Figure(go.Bar(x=gdiv["Division"], y=gdiv["Total"], marker_color="#6366f1"))
+        fig.update_layout(title="Domicilios por División", height=380,
+                           margin=dict(l=10, r=10, t=40, b=10))
+        st.plotly_chart(fig, use_container_width=True)
+        st.dataframe(gdiv, use_container_width=True, hide_index=True)
+
+    with sub_estado:
+        gest = df_proc.groupby("Estado").agg(
+            Total=("idx", "count"),
+            Viab_Alta=("Viabilidad", lambda s: (s == "ALTA").sum()),
+            Duplicados=("Duplicado", lambda s: (s == "DUPLICADO").sum()),
+        ).reset_index().sort_values("Total", ascending=False)
+        fig = go.Figure(go.Bar(x=gest["Estado"], y=gest["Total"], marker_color="#0ea5e9"))
+        fig.update_layout(title="Domicilios por Estado", height=380,
+                           margin=dict(l=10, r=10, t=40, b=10))
+        st.plotly_chart(fig, use_container_width=True)
+        st.dataframe(gest, use_container_width=True, hide_index=True)
+
+    with sub_dup:
+        df_dup = df_proc[df_proc["Duplicado"] == "DUPLICADO"].sort_values(
+            ["GrupoTam", "DireccionCorregida"], ascending=[False, True])
+        if df_dup.empty:
+            st.success("✅ No se detectaron domicilios duplicados.")
+        else:
+            n_grupos = df_dup["DireccionCorregida"].nunique()
+            st.warning(f"⚠️ {n_grupos:,} direcciones duplicadas — {len(df_dup):,} registros afectados")
+            st.dataframe(
+                df_dup[["DireccionCorregida", "GrupoTam", "Division", "Zona", "Nombre",
+                        "NoDama", "Estado", "Viabilidad"]],
+                use_container_width=True, hide_index=True,
+            )
+
+    with sub_tabla:
+        fc1, fc2, fc3 = st.columns(3)
+        f_div = fc1.multiselect("División", sorted(df_proc["Division"].dropna().unique()))
+        f_viab = fc2.multiselect("Viabilidad", sorted(df_proc["Viabilidad"].dropna().unique()))
+        f_prio = fc3.multiselect("Prioridad", sorted(df_proc["Prioridad"].dropna().unique()))
+
+        dft = df_proc.copy()
+        if f_div:
+            dft = dft[dft["Division"].isin(f_div)]
+        if f_viab:
+            dft = dft[dft["Viabilidad"].isin(f_viab)]
+        if f_prio:
+            dft = dft[dft["Prioridad"].isin(f_prio)]
+
+        st.caption(f"{len(dft):,} de {n_total:,} registros")
+        st.dataframe(
+            dft[["Nombre", "NoDama", "DireccionOriginal", "DireccionCorregida", "Colonia",
+                 "CP", "Poblacion", "Estado", "Division", "Zona", "Tipo", "Prioridad",
+                 "Viabilidad", "Duplicado"]],
+            use_container_width=True, hide_index=True, height=500,
+        )
+
+    with sub_alertas:
+        n_incompleto = int((df_proc["Tipo"] == "DOMICILIO INCOMPLETO").sum())
+        n_sn = int((df_proc["Tipo"] == "SIN NÚMERO (S/N)").sum())
+        n_baja = int((df_proc["Viabilidad"] == "BAJA").sum())
+
+        if n_incompleto:
+            st.error(f"🚫 {n_incompleto:,} domicilios INCOMPLETOS (sólo Mza o sólo Lt) — no viables")
+        if n_sn:
+            st.warning(f"⚠️ {n_sn:,} domicilios SIN NÚMERO — requieren verificación en campo")
+        if n_baja:
+            st.warning(f"⚠️ {n_baja:,} domicilios con viabilidad BAJA")
+        if n_dup:
+            st.warning(f"🔁 {n_dup:,} registros con dirección duplicada")
+        if not any([n_incompleto, n_sn, n_baja, n_dup]):
+            st.success("✅ No se detectaron alertas — todos los domicilios son viables.")
+
+        sin_cp = int((df_proc["CP"].fillna("") == "").sum())
+        sin_col = int((df_proc["Colonia"].fillna("") == "").sum())
+        if sin_cp:
+            st.info(f"ℹ️ {sin_cp:,} registros sin Código Postal")
+        if sin_col:
+            st.info(f"ℹ️ {sin_col:,} registros sin Colonia")
+
+
+def _render_domicilios_standalone():
+    """Tab independiente de Domicilios Ilocalizables (Campaña 13)."""
+    st.markdown(
+        "<div class='kpi-banner'>"
+        "<h1>📍 Domicilios Ilocalizables — Campaña 13</h1>"
+        "<p>Carga el archivo CAMPAÑA_DE_TRABAJO_13_DOMICILIO_ILOCALIZABLES.xlsx para analizar"
+        " y clasificar los domicilios</p>"
+        "</div>",
+        unsafe_allow_html=True,
+    )
+
+    with st.expander("📂 Cargar archivo de Domicilios Ilocalizables",
+                     expanded=st.session_state.get("df_domicilios") is None):
+        _f = st.file_uploader(
+            "Domicilios Ilocalizables", type=["xlsx", "xls"],
+            label_visibility="collapsed", key="up_domicilios"
+        )
+        if _f:
+            if [_f.name] != st.session_state.get("int_domicilios_name", []):
+                try:
+                    _df_raw = read_excel_safe(_f)
+                    st.session_state.df_domicilios = _procesar_domicilios(_df_raw)
+                    st.session_state.int_domicilios_name = [_f.name]
+                except Exception as e:
+                    st.error(f"Error al leer archivo: {e}")
+        if st.session_state.get("df_domicilios") is not None:
+            _nm = st.session_state.int_domicilios_name
+            _nr = len(st.session_state.df_domicilios)
+            st.markdown(
+                f"<span style='background:#dcfce7;color:#16a34a;padding:2px 10px;"
+                f"border-radius:99px;font-size:0.78rem;font-weight:600'>"
+                f"✓ {_nm[0] if _nm else 'Cargado'} — {_nr:,} registros</span>",
+                unsafe_allow_html=True,
+            )
+
+    if st.session_state.get("df_domicilios") is None:
+        st.info("⬆️ Sube el archivo de Domicilios Ilocalizables para ver el análisis.")
+        return
+
+    try:
+        tab_domicilios(st.session_state.df_domicilios)
+    except Exception as _e:
+        st.error(f"Error en Domicilios Ilocalizables: {_e}")
+        import traceback
+        st.code(traceback.format_exc())
+
+
+# ─────────────────────────────────────────────
 #  MAIN
 # ─────────────────────────────────────────────
 
@@ -5039,6 +5453,7 @@ def main():
         ("df_tel", None), ("df_campo", None), ("df_cobranza", None),
         ("df_cartera_gral", None), ("int_cartera_gral_name", []),
         ("int_tel_names", []), ("int_campo_names", []), ("int_cob_names", []),
+        ("df_domicilios", None), ("int_domicilios_name", []),
     ]:
         if key not in st.session_state:
             st.session_state[key] = default
@@ -5266,8 +5681,8 @@ h1, h2, h3, h4 {{
         # no return — fall through to tabs so Indicadores stays accessible
 
     # ── Tabs principales (siempre visibles) ───────────────────────────
-    arabela_tab, indicadores_tab, interno_tab = st.tabs([
-        "🌸 Arabela", "📊 Indicadores", "🏢 Interno"
+    arabela_tab, indicadores_tab, domicilios_tab, interno_tab = st.tabs([
+        "🌸 Arabela", "📊 Indicadores", "📍 Domicilios Ilocalizables", "🏢 Interno"
     ])
 
     with arabela_tab:
@@ -5313,6 +5728,14 @@ h1, h2, h3, h4 {{
 
     with indicadores_tab:
         _render_indicadores_standalone()
+
+    with domicilios_tab:
+        try:
+            _render_domicilios_standalone()
+        except Exception as _e:
+            st.error(f"Error en Domicilios Ilocalizables: {_e}")
+            import traceback
+            st.code(traceback.format_exc())
 
     with interno_tab:
         try:
