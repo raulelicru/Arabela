@@ -4853,6 +4853,37 @@ def _detectar_columnas_domicilios(df_raw: pd.DataFrame) -> dict:
     return mapping
 
 
+def _leer_excel_domicilios(file) -> pd.DataFrame:
+    """Lee el Excel probando varias filas de encabezado (algunos archivos traen un
+    título o fila vacía arriba de los encabezados reales) y se queda con la que
+    permite detectar más columnas conocidas."""
+    xl = pd.ExcelFile(file)
+    sheet = xl.sheet_names[0]
+    if len(xl.sheet_names) > 1:
+        best_rows = -1
+        for s in xl.sheet_names:
+            try:
+                n = len(xl.parse(s, header=0))
+            except Exception:
+                continue
+            if n > best_rows:
+                sheet, best_rows = s, n
+
+    best_df, best_score = None, -1
+    for header_row in range(0, 5):
+        try:
+            df = xl.parse(sheet, header=header_row)
+        except Exception:
+            continue
+        df.columns = [str(c).strip() for c in df.columns]
+        score = len(_detectar_columnas_domicilios(df))
+        if score > best_score:
+            best_df, best_score = df, score
+        if score == len(_DOM_COL_CANDIDATES):
+            break
+    return best_df if best_df is not None else xl.parse(sheet)
+
+
 def _procesar_domicilios(df_raw: pd.DataFrame, col_overrides: dict | None = None) -> pd.DataFrame:
     """Pipeline completo: detección de columnas → normalización → clasificación → viabilidad → duplicados."""
     col_map = _detectar_columnas_domicilios(df_raw)
@@ -5655,7 +5686,7 @@ def _render_domicilios_standalone():
         if _f:
             if [_f.name] != st.session_state.get("int_domicilios_name", []):
                 try:
-                    st.session_state.df_domicilios_raw = read_excel_safe(_f)
+                    st.session_state.df_domicilios_raw = _leer_excel_domicilios(_f)
                     st.session_state.int_domicilios_name = [_f.name]
                     st.session_state.dom_col_overrides = {}
                 except Exception as e:
@@ -5677,8 +5708,15 @@ def _render_domicilios_standalone():
     df_raw = st.session_state.df_domicilios_raw
     detected = _detectar_columnas_domicilios(df_raw)
     overrides = st.session_state.get("dom_col_overrides", {})
+    n_detected = len(set(detected) | set(overrides))
+    n_total = len(_DOM_COL_CANDIDATES)
+    if n_detected < n_total:
+        st.warning(
+            f"⚠️ Se detectaron {n_detected}/{n_total} columnas automáticamente. "
+            f"Revisa **'⚙️ Ajustar columnas detectadas'** abajo y asigna manualmente las que falten."
+        )
 
-    with st.expander("⚙️ Ajustar columnas detectadas"):
+    with st.expander("⚙️ Ajustar columnas detectadas", expanded=n_detected < n_total):
         _all = ["(auto)"] + list(df_raw.columns)
         _cols4 = st.columns(4)
         new_overrides = {}
