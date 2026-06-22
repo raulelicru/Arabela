@@ -5902,89 +5902,88 @@ h1, h2, h3, h4 {{
     else:
         st.markdown(f"<style>{_base_css}{_TAB_RIGHT_CSS}</style>", unsafe_allow_html=True)
 
-    # ── Carga de los 2 archivos Excel ─────────────────────────────────
-    with st.expander(
-        " Cargar archivos Excel",
-        expanded=st.session_state.data is None,
-    ):
-        col_up1, col_up2, col_up3 = st.columns(3)
-        with col_up1:
-            st.markdown("**Archivo 1 — Cartera**")
-            st.caption("Columna de Número de Dama + Año/Campaña de saldo")
-            file_cartera = st.file_uploader(
-                "Cartera", type=["xlsx", "xls"], label_visibility="collapsed", key="up_cartera"
-            )
-        with col_up2:
-            st.markdown("**Archivo 2 — Saldos Actualizados**")
-            st.caption("Columna de Número de Dama + Año Proceso + Campaña Proceso")
-            file_saldos = st.file_uploader(
-                "Saldos", type=["xlsx", "xls"], label_visibility="collapsed", key="up_saldos"
-            )
-        with col_up3:
-            st.markdown("**Archivo 3 — Moras** *(opcional)*")
-            st.caption("Columna NoDama para cruzar con damas pendientes")
-            file_moras = st.file_uploader(
-                "Moras", type=["xlsx", "xls"], label_visibility="collapsed", key="up_moras"
-            )
-            if file_moras:
-                try:
-                    st.session_state.df_moras = read_excel_safe(file_moras)
-                    st.success(f" Moras cargadas: {len(st.session_state.df_moras):,} registros")
-                except Exception as e:
-                    st.error(f" Error al leer moras: {e}")
-
-
-        if file_cartera and file_saldos:
-            new_names = (file_cartera.name, file_saldos.name)
-            # Solo re-leer si los archivos cambiaron realmente
-            if new_names != st.session_state.file_names:
-                try:
-                    st.session_state.df_cartera = read_excel_safe(file_cartera)
-                    st.session_state.df_saldos  = read_excel_safe(file_saldos)
-                    st.session_state.data        = None
-                    st.session_state.mapping     = None
-                    st.session_state.file_names  = new_names
-                except Exception as e:
-                    st.error(f" No se pudo leer el archivo: {e}")
-        elif file_cartera or file_saldos:
-            st.info(" Sube los **dos** archivos para continuar.")
-
-    # ── Mapeo de columnas ─────────────────────────────────────────────
-    if (st.session_state.df_cartera is not None
-            and st.session_state.df_saldos is not None
-            and st.session_state.data is None):
-
-        st.divider()
-        mapping = render_column_mapper(
-            st.session_state.df_cartera,
-            st.session_state.df_saldos,
-            st.session_state.df_moras,
-        )
-        if mapping:
-            with st.spinner("Cruzando Cartera × Saldos Actualizados…"):
-                try:
-                    st.session_state.data = load_and_clean_data(
-                        st.session_state.df_cartera,
-                        st.session_state.df_saldos,
-                        mapping,
-                    )
-                    st.session_state.mapping = mapping
-                    # Free the raw uploaded DataFrames — no longer needed after merge
-                    st.session_state.df_cartera = None
-                    st.session_state.df_saldos = None
-                    n = len(st.session_state.data["merged"])
-                    st.success(f" Cruce completado — **{n:,}** registros consolidados.")
-                    st.rerun()
-                except Exception as e:
-                    st.error(f" Error al cruzar datos: {e}")
-        # no return — fall through to tabs so Indicadores stays accessible
-
     # ── Tabs principales (siempre visibles) ───────────────────────────
     arabela_tab, indicadores_tab, domicilios_tab, interno_tab = st.tabs([
         "🌸 Arabela", "📊 Indicadores", "📍 Gestión de Moras", "🏢 Interno"
     ])
 
     with arabela_tab:
+        # ── Carga de los 2 archivos Excel ───────────────────────────
+        with st.expander(
+            " Cargar archivos Excel",
+            expanded=st.session_state.data is None,
+        ):
+            col_up1, col_up2, col_up3 = st.columns(3)
+            with col_up1:
+                st.markdown("**Archivo 1 — Cartera**")
+                st.caption("Columna de Número de Dama + Año/Campaña de saldo")
+                file_cartera = st.file_uploader(
+                    "Cartera", type=["xlsx", "xls"], label_visibility="collapsed", key="up_cartera"
+                )
+            with col_up2:
+                st.markdown("**Archivo 2 — Saldos Actualizados**")
+                st.caption("Columna de Número de Dama + Año Proceso + Campaña Proceso")
+                file_saldos = st.file_uploader(
+                    "Saldos", type=["xlsx", "xls"], label_visibility="collapsed", key="up_saldos"
+                )
+            with col_up3:
+                st.markdown("**Archivo 3 — Moras** *(opcional)*")
+                st.caption("Columna NoDama para cruzar con damas pendientes")
+                file_moras = st.file_uploader(
+                    "Moras", type=["xlsx", "xls"], label_visibility="collapsed", key="up_moras"
+                )
+                if file_moras:
+                    try:
+                        st.session_state.df_moras = read_excel_safe(file_moras)
+                        st.success(f" Moras cargadas: {len(st.session_state.df_moras):,} registros")
+                    except Exception as e:
+                        st.error(f" Error al leer moras: {e}")
+
+
+            if file_cartera and file_saldos:
+                new_names = (file_cartera.name, file_saldos.name)
+                # Solo re-leer si los archivos cambiaron realmente
+                if new_names != st.session_state.file_names:
+                    try:
+                        st.session_state.df_cartera = read_excel_safe(file_cartera)
+                        st.session_state.df_saldos  = read_excel_safe(file_saldos)
+                        st.session_state.data        = None
+                        st.session_state.mapping     = None
+                        st.session_state.file_names  = new_names
+                    except Exception as e:
+                        st.error(f" No se pudo leer el archivo: {e}")
+            elif file_cartera or file_saldos:
+                st.info(" Sube los **dos** archivos para continuar.")
+
+        # ── Mapeo de columnas ────────────────────────────────────────
+        if (st.session_state.df_cartera is not None
+                and st.session_state.df_saldos is not None
+                and st.session_state.data is None):
+
+            st.divider()
+            mapping = render_column_mapper(
+                st.session_state.df_cartera,
+                st.session_state.df_saldos,
+                st.session_state.df_moras,
+            )
+            if mapping:
+                with st.spinner("Cruzando Cartera × Saldos Actualizados…"):
+                    try:
+                        st.session_state.data = load_and_clean_data(
+                            st.session_state.df_cartera,
+                            st.session_state.df_saldos,
+                            mapping,
+                        )
+                        st.session_state.mapping = mapping
+                        # Free the raw uploaded DataFrames — no longer needed after merge
+                        st.session_state.df_cartera = None
+                        st.session_state.df_saldos = None
+                        n = len(st.session_state.data["merged"])
+                        st.success(f" Cruce completado — **{n:,}** registros consolidados.")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f" Error al cruzar datos: {e}")
+
         # Mapeo pendiente
         if (st.session_state.df_cartera is not None
                 and st.session_state.df_saldos is not None
