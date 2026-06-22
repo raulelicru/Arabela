@@ -5671,7 +5671,7 @@ def _render_domicilios_standalone():
     st.markdown(
         "<div class='dom-dark-marker' style='display:none'></div>"
         "<div class='dom-page-header'><div>"
-        "<h1>📍 Validación de Domicilios</h1>"
+        "<h1>📍 Gestión de Moras</h1>"
         "<p>Detección de domicilios compartidos y duplicados — normalización inteligente</p>"
         "</div><span class='dom-badge-camp'>Campaña 13</span></div>",
         unsafe_allow_html=True,
@@ -5981,7 +5981,7 @@ h1, h2, h3, h4 {{
 
     # ── Tabs principales (siempre visibles) ───────────────────────────
     arabela_tab, indicadores_tab, domicilios_tab, interno_tab = st.tabs([
-        "🌸 Arabela", "📊 Indicadores", "📍 Domicilios Ilocalizables", "🏢 Interno"
+        "🌸 Arabela", "📊 Indicadores", "📍 Gestión de Moras", "🏢 Interno"
     ])
 
     with arabela_tab:
