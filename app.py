@@ -5969,7 +5969,7 @@ h1, h2, h3, h4 {{
 
     # ── Tabs principales (siempre visibles) ───────────────────────────
     arabela_tab, indicadores_tab, domicilios_tab, interno_tab = st.tabs([
-        "🌸 Arabela", "📊 Indicadores", "📍 Gestión de Moras", "🏢 Interno"
+        "🌸 Arabela", "📊 Indicadores de Mora", "📍 Gestión de Moras", "🏢 Interno"
     ])
 
     with arabela_tab:
