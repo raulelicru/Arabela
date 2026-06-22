@@ -5770,13 +5770,78 @@ def main():
         f"{{ background-color: {_bg} !important; }}"
         f"h1, h2, h3, h4 {{ color: {_text_color} !important; }}"
     )
-    # Empuja el tab "Interno" (último botón en el primer stTabBar) a la derecha
-    _TAB_RIGHT_CSS = (
-        "[data-testid='stTabBar']:first-of-type "
-        "{ display:flex !important; width:100% !important; }"
-        "[data-testid='stTabBar']:first-of-type > div:last-child "
-        "{ margin-left:auto !important; }"
-    )
+    # Convierte las 4 pestañas principales (Arabela / Indicadores / Gestión de
+    # Moras / Interno) en 4 cuadros grandes y vistosos, sin afectar a ninguna
+    # de las sub-pestañas anidadas (que siguen usando el estilo genérico).
+    _TAB_RIGHT_CSS = """
+[data-testid='stTabs']:first-of-type {
+    background: transparent !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    margin-bottom: 1.6rem !important;
+}
+[data-testid='stTabBar']:first-of-type {
+    display: grid !important;
+    grid-template-columns: repeat(4, 1fr) !important;
+    gap: 16px !important;
+    width: 100% !important;
+    border-bottom: none !important;
+}
+[data-testid='stTabBar']:first-of-type button {
+    flex: none !important;
+    min-height: 96px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    text-align: center !important;
+    border-radius: 18px !important;
+    background: linear-gradient(155deg, #ffffff, #f2f5fc) !important;
+    border: 1px solid #e3e8f5 !important;
+    box-shadow: 0 6px 18px rgba(26,60,110,0.08) !important;
+    transition: transform .25s cubic-bezier(.34,1.56,.64,1),
+                box-shadow .25s ease, border-color .25s ease,
+                background .25s ease !important;
+}
+[data-testid='stTabBar']:first-of-type button p {
+    font-size: 1.08rem !important;
+    font-weight: 800 !important;
+    letter-spacing: -0.01em !important;
+}
+[data-testid='stTabBar']:first-of-type button:hover {
+    transform: translateY(-5px) scale(1.025) !important;
+    box-shadow: 0 16px 30px rgba(26,60,110,0.18) !important;
+    border-color: #c2cff2 !important;
+}
+[data-testid='stTabBar']:first-of-type button[aria-selected='true'] {
+    border: none !important;
+    box-shadow: 0 16px 32px rgba(0,0,0,0.20) !important;
+    transform: translateY(-3px) !important;
+}
+[data-testid='stTabBar']:first-of-type button[aria-selected='true'] p {
+    color: #ffffff !important;
+}
+[data-testid='stTabBar']:first-of-type button:nth-of-type(1)[aria-selected='true'] {
+    background: linear-gradient(135deg, #ff7fb0, #ff3d77) !important;
+}
+[data-testid='stTabBar']:first-of-type button:nth-of-type(2)[aria-selected='true'] {
+    background: linear-gradient(135deg, #5b9bff, #1a56db) !important;
+}
+[data-testid='stTabBar']:first-of-type button:nth-of-type(3)[aria-selected='true'] {
+    background: linear-gradient(135deg, #ff8a65, #e8403a) !important;
+}
+[data-testid='stTabBar']:first-of-type button:nth-of-type(4)[aria-selected='true'] {
+    background: linear-gradient(135deg, #2dd4bf, #0e8a78) !important;
+}
+[data-testid='stTabBar']:first-of-type [data-baseweb='tab-highlight'],
+[data-testid='stTabBar']:first-of-type [data-baseweb='tab-border'] {
+    display: none !important;
+}
+@media (max-width: 900px) {
+    [data-testid='stTabBar']:first-of-type {
+        grid-template-columns: repeat(2, 1fr) !important;
+    }
+}
+"""
 
     if _mode_3d:
         # Derive accent colors from bg for animated gradient
