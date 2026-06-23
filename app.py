@@ -5716,6 +5716,23 @@ def _render_domicilios_standalone():
             f"Revisa **'⚙️ Ajustar columnas detectadas'** abajo y asigna manualmente las que falten."
         )
 
+    _faltantes = [c for c in _DOM_COL_CANDIDATES if c not in detected and c not in overrides]
+    _reporte_lines = ["COLUMNAS DETECTADAS", "-" * 40]
+    for canon in _DOM_COL_CANDIDATES:
+        real = overrides.get(canon) or detected.get(canon)
+        _reporte_lines.append(f"{canon}: {real if real else '❌ NO DETECTADA'}")
+    _reporte_lines += ["", "COLUMNAS QUE FALTAN ASIGNAR", "-" * 40]
+    _reporte_lines += _faltantes if _faltantes else ["(ninguna — se detectaron todas)"]
+    _reporte_lines += ["", "COLUMNAS REALES EN TU ARCHIVO", "-" * 40]
+    _reporte_lines += [str(c) for c in df_raw.columns]
+    st.download_button(
+        "⬇️ Descargar reporte de columnas detectadas/faltantes (.txt)",
+        data="\n".join(_reporte_lines),
+        file_name="reporte_columnas_domicilios.txt",
+        mime="text/plain",
+        key="dl_reporte_columnas_dom",
+    )
+
     with st.expander("⚙️ Ajustar columnas detectadas", expanded=n_detected < n_total):
         _all = ["(auto)"] + list(df_raw.columns)
         _cols4 = st.columns(4)
